@@ -6,6 +6,7 @@ from sqlalchemy import func
 from app.config import settings
 from app.db import SessionLocal
 from app.models import (
+    AnnualMembershipTerm,
     CardBatch,
     IntegrationApiKey,
     Member,
@@ -96,6 +97,13 @@ def test_issue_member_creates_active_member_with_card(client, db):
     assert member.batch_id == batch.id
     assert member.signup_source == SignupSource.PIENISSIMO.value
     assert member.external_customer_id == payload["external_customer_id"]
+    annual_term = (
+        db.query(AnnualMembershipTerm)
+        .filter_by(member_id=member.id, membership_year=member.card_year)
+        .one()
+    )
+    assert annual_term.card_no == member.card_no
+    assert annual_term.valid_through.isoformat() == f"{member.card_year + 1}-01-01"
 
 
 def test_issue_member_is_idempotent_on_external_customer_id(client, db):
@@ -204,7 +212,12 @@ def test_issue_member_captures_html_email_with_verification_url(client, db, drai
         assert "Scarica tessera" in captured[0]["html_body"]
         assert "Aggiungi a Google Wallet (Android)" in captured[0]["html_body"]
         assert "/wallet/google/add" in (captured[0]["text_body"] or "")
-        assert "api.qrserver.com" in captured[0]["html_body"]
+        assert "api.qrserver.com" not in captured[0]["html_body"]
+        qr_image_url = (
+            f"/api/cards/{payload_out['card_verification_token']}/qr.png"
+        )
+        assert qr_image_url in captured[0]["html_body"]
+        assert "cid:card_verification_qr@assonam" in captured[0]["html_body"]
         assert (
             "logo-transparent.png" in captured[0]["html_body"]
             or "cid:card_front@assonam" in captured[0]["html_body"]
@@ -212,6 +225,12 @@ def test_issue_member_captures_html_email_with_verification_url(client, db, drai
         inline_images = captured[0].get("inline_images") or []
         if inline_images:
             assert any(img.get("cid") == "card_front@assonam" for img in inline_images)
+            assert any(
+                img.get("cid") == "card_verification_qr@assonam"
+                and img.get("content_type") == "image/png"
+                and int(img.get("size") or 0) > 500
+                for img in inline_images
+            )
     finally:
         settings.EMAIL_MODE = original_email_mode
         clear_captured_emails()

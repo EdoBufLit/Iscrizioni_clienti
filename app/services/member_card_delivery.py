@@ -26,6 +26,7 @@ from app.services.org_branding import (
     resolve_card_logo_url,
     resolve_club_display_name,
 )
+from app.services.qr_code import generate_qr_png_bytes
 from app.utils import generate_token, hash_token
 
 logger = logging.getLogger(__name__)
@@ -249,6 +250,7 @@ def _enqueue_member_card_ready_email(
         card_image_bytes = None
 
     card_image_cid: str | None = None
+    qr_image_cid: str | None = None
     inline_images: list[dict] = []
     if card_image_bytes:
         card_image_cid = "card_front@assonam"
@@ -258,6 +260,30 @@ def _enqueue_member_card_ready_email(
                 "content_type": "image/png",
                 "data": card_image_bytes,
                 "filename": "tessera.png",
+            }
+        )
+
+    qr_image_url = (
+        f"{backend_base_url}/api/cards/"
+        f"{access_payload['card_verification_token']}/qr.png"
+    )
+    try:
+        qr_image_bytes = generate_qr_png_bytes(verification_url)
+    except Exception:
+        logger.exception(
+            "Unable to generate inline verification QR for member_id=%s org_id=%s",
+            member.id,
+            member.org_id,
+        )
+        qr_image_bytes = None
+    if qr_image_bytes:
+        qr_image_cid = "card_verification_qr@assonam"
+        inline_images.append(
+            {
+                "cid": qr_image_cid,
+                "content_type": "image/png",
+                "data": qr_image_bytes,
+                "filename": "verifica-tessera.png",
             }
         )
 
@@ -274,6 +300,8 @@ def _enqueue_member_card_ready_email(
         assonam_logo_url=assonam_logo_url,
         organization_logo_url=organization_logo_url,
         card_image_cid=card_image_cid,
+        qr_image_url=qr_image_url,
+        qr_image_cid=qr_image_cid,
         header_title=header_title,
         header_subtitle=header_subtitle,
         access_email_hint=member.email,

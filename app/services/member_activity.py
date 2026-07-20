@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import and_, or_
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.models import Member, MemberStatus
+from app.services.annual_memberships import as_rome_datetime
 from app.services.member_membership import is_member_membership_expired
 
 MEMBER_INACTIVE_REASON_DELETED = "deleted"
@@ -91,27 +92,55 @@ def member_inactive_reason_label(reason: str) -> str:
 
 def member_active_filters(now: datetime | None = None) -> tuple[ColumnElement[bool], ...]:
     current_time = now or datetime.utcnow()
+    local_today = as_rome_datetime(current_time).date()
+    database_current_time = (
+        current_time
+        if current_time.tzinfo is None
+        else current_time.astimezone(timezone.utc).replace(tzinfo=None)
+    )
+    minimum_annual_year = (
+        local_today.year - 1
+        if (local_today.month, local_today.day) == (1, 1)
+        else local_today.year
+    )
     return (
         Member.deleted_at.is_(None),
         Member.status == MemberStatus.ACTIVE,
         Member.card_no.isnot(None),
         Member.card_year.isnot(None),
         or_(
-            and_(Member.valid_until.isnot(None), Member.valid_until >= current_time),
-            and_(Member.valid_until.is_(None), Member.card_year >= current_time.year),
+            and_(
+                Member.valid_until.isnot(None),
+                Member.valid_until >= database_current_time,
+            ),
+            and_(Member.valid_until.is_(None), Member.card_year >= minimum_annual_year),
         ),
     )
 
 
 def member_expired_filters(now: datetime | None = None) -> tuple[ColumnElement[bool], ...]:
     current_time = now or datetime.utcnow()
+    local_today = as_rome_datetime(current_time).date()
+    database_current_time = (
+        current_time
+        if current_time.tzinfo is None
+        else current_time.astimezone(timezone.utc).replace(tzinfo=None)
+    )
+    minimum_annual_year = (
+        local_today.year - 1
+        if (local_today.month, local_today.day) == (1, 1)
+        else local_today.year
+    )
     return (
         Member.deleted_at.is_(None),
         Member.card_no.isnot(None),
         Member.card_year.isnot(None),
         or_(
             Member.status == MemberStatus.EXPIRED,
-            and_(Member.valid_until.isnot(None), Member.valid_until < current_time),
-            and_(Member.valid_until.is_(None), Member.card_year < current_time.year),
+            and_(
+                Member.valid_until.isnot(None),
+                Member.valid_until < database_current_time,
+            ),
+            and_(Member.valid_until.is_(None), Member.card_year < minimum_annual_year),
         ),
     )

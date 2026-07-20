@@ -23,6 +23,7 @@ type OrgAdminCtx = {
 
 type IconName =
   | "accounting"
+  | "audit"
   | "billing"
   | "calendar"
   | "cards"
@@ -73,6 +74,13 @@ function MiniIcon({ name, className = "h-4 w-4" }: { name: IconName; className?:
       <>
         <path d="M5 19V5h14v14" />
         <path d="M8 9h8M8 13h3M14 13h2M8 16h3M14 16h2" />
+      </>
+    ),
+    audit: (
+      <>
+        <path d="M6 4h12v16H6z" />
+        <path d="M9 8h6M9 12h6M9 16h4" />
+        <path d="M4 7V2h5" />
       </>
     ),
     billing: (
@@ -285,6 +293,7 @@ const OrgAdminLayout = () => {
         items: [
           { to: "/org-admin/soci", label: "Soci", match: ["/org-admin/soci"], icon: "users" },
           { to: "/org-admin/tessere", label: "Tessere", match: ["/org-admin/tessere"], icon: "cards" },
+          { to: "/org-admin/quote", label: "Quote e rinnovi", match: ["/org-admin/quote"], icon: "renew" },
           { to: "/org-admin/inviti", label: "Inviti", match: ["/org-admin/inviti"], icon: "renew" },
         ],
       },
@@ -298,7 +307,11 @@ const OrgAdminLayout = () => {
       },
       {
         label: "Impostazioni",
-        items: [{ to: "/org-admin/associazione", label: "Associazione", match: ["/org-admin/associazione"], icon: "settings" }],
+        items: [
+          { to: "/org-admin/associazione", label: "Associazione", match: ["/org-admin/associazione"], icon: "settings" },
+          { to: "/org-admin/sicurezza", label: "Sicurezza", match: ["/org-admin/sicurezza"], icon: "settings" },
+          { to: "/org-admin/registro-attivita", label: "Registro attività", match: ["/org-admin/registro-attivita"], icon: "audit" },
+        ],
       },
     ];
   }, [admin?.organization?.accounting_enabled, capabilities?.stripeConnectDemoEnabled]);
@@ -318,7 +331,10 @@ const OrgAdminLayout = () => {
       { key: "communications", label: "Comunicazioni", to: "/org-admin/comunicazioni", activeMatch: ["/org-admin/comunicazioni"], icon: "book" as const },
       { key: "documents", label: "Documenti", to: "/org-admin/documenti", activeMatch: ["/org-admin/documenti"], icon: "docs" as const },
       { key: "invites", label: "Inviti", to: "/org-admin/inviti", activeMatch: ["/org-admin/inviti"], icon: "book" as const },
+      { key: "quote", label: "Quote e rinnovi", to: "/org-admin/quote", activeMatch: ["/org-admin/quote"], icon: "chart" as const },
       { key: "association", label: "Associazione", to: "/org-admin/associazione", activeMatch: ["/org-admin/associazione"], icon: "building" as const },
+      { key: "security", label: "Sicurezza", to: "/org-admin/sicurezza", activeMatch: ["/org-admin/sicurezza"], icon: "building" as const },
+      { key: "audit", label: "Registro attività", to: "/org-admin/registro-attivita", activeMatch: ["/org-admin/registro-attivita"], icon: "book" as const },
     ];
     if (admin?.organization?.accounting_enabled) {
       items.splice(1, 0, {

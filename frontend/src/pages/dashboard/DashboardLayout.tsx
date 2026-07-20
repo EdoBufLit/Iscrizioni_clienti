@@ -31,6 +31,10 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
     label: "In verifica",
     color: "border-blue-200 bg-blue-50 text-blue-700",
   },
+  expired: {
+    label: "Da rinnovare",
+    color: "border-rose-200 bg-rose-50 text-rose-700",
+  },
 };
 
 const NAV_ITEMS = [

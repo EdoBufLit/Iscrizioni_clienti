@@ -2,14 +2,19 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AuthError,
+  createOrgAdminCardReplenishment,
   fetchCardMovements,
   fetchCardStock,
+  fetchOrgAdminCardReplenishments,
   fetchOrgAdminMembers,
   fetchOrgAdminMembershipSettings,
   fetchOrgAdminMetrics,
   patchOrgAdminMembershipSettings,
   uploadOrgAdminCardAssets,
   type CardMovement,
+  type CardReplenishmentCapability,
+  type CardReplenishmentRequest,
+  type CardReplenishmentSummary,
   type CardStock,
   type OrgAdminCardStyle,
   type OrgAdminMembershipSettings,
@@ -140,6 +145,19 @@ function formatDateTime(value: string | null | undefined) {
   });
 }
 
+function formatMoneyCents(value: number, currency = "EUR") {
+  return new Intl.NumberFormat("it-IT", {
+    style: "currency",
+    currency,
+  }).format(value / 100);
+}
+
+function replenishmentBillingLabel(status: CardReplenishmentRequest["billing_status"]) {
+  if (status === "paid") return "Pagato";
+  if (status === "unpaid") return "Da pagare";
+  return "Storico";
+}
+
 const OrgAdminCards = () => {
   const { admin, loading: adminLoading } = useOrgAdmin();
   const navigate = useNavigate();
@@ -160,6 +178,17 @@ const OrgAdminCards = () => {
   const [membershipSettingsError, setMembershipSettingsError] = useState("");
   const [movementStatusFilter, setMovementStatusFilter] = useState("");
   const [movementIdFilter, setMovementIdFilter] = useState("");
+  const [replenishments, setReplenishments] = useState<CardReplenishmentRequest[]>([]);
+  const [replenishmentSummary, setReplenishmentSummary] = useState<CardReplenishmentSummary | null>(null);
+  const [replenishmentCapability, setReplenishmentCapability] = useState<CardReplenishmentCapability | null>(null);
+  const [replenishmentQuantity, setReplenishmentQuantity] = useState(100);
+  const [replenishmentYear, setReplenishmentYear] = useState(new Date().getFullYear());
+  const [replenishmentNotes, setReplenishmentNotes] = useState("");
+  const [replenishmentIdempotencyKey, setReplenishmentIdempotencyKey] = useState("");
+  const [replenishmentLoading, setReplenishmentLoading] = useState(true);
+  const [replenishmentSubmitting, setReplenishmentSubmitting] = useState(false);
+  const [replenishmentError, setReplenishmentError] = useState("");
+  const [replenishmentSuccess, setReplenishmentSuccess] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -197,6 +226,76 @@ const OrgAdminCards = () => {
       })
       .finally(() => setLoading(false));
   }, [admin, adminLoading, navigate]);
+
+  async function loadReplenishments() {
+    if (!admin) return;
+    setReplenishmentLoading(true);
+    setReplenishmentError("");
+    try {
+      const response = await fetchOrgAdminCardReplenishments();
+      setReplenishments(response.items);
+      setReplenishmentSummary(response.summary);
+      setReplenishmentCapability(response.capability);
+      setReplenishmentYear((current) =>
+        response.capability.allowed_years.includes(current)
+          ? current
+          : response.capability.default_year,
+      );
+    } catch (err) {
+      if (err instanceof AuthError) {
+        navigate("/org-admin/login", { replace: true });
+        return;
+      }
+      setReplenishmentError(err instanceof Error ? err.message : "Errore nel caricamento delle richieste.");
+    } finally {
+      setReplenishmentLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (adminLoading || !admin) return;
+    void loadReplenishments();
+  }, [admin, adminLoading]);
+
+  async function handleReplenishmentSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!replenishmentCapability?.can_auto_allocate) return;
+    setReplenishmentSubmitting(true);
+    setReplenishmentError("");
+    setReplenishmentSuccess("");
+    const generatedKey =
+      replenishmentIdempotencyKey ||
+      (typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `cards-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    setReplenishmentIdempotencyKey(generatedKey);
+    try {
+      const response = await createOrgAdminCardReplenishment(
+        {
+          requested_cards: replenishmentQuantity,
+          requested_year: replenishmentYear,
+          notes: replenishmentNotes.trim() || null,
+        },
+        generatedKey,
+      );
+      setReplenishmentSuccess(
+        response.created
+          ? `Richiesta #${response.item.id} registrata. Il lotto ${response.item.requested_year} e gia disponibile e il debito e ${formatMoneyCents(response.item.amount_due_cents)}.`
+          : `La richiesta #${response.item.id} era gia stata registrata: non e stato creato alcun duplicato.`,
+      );
+      setReplenishmentNotes("");
+      setReplenishmentIdempotencyKey("");
+      await Promise.all([loadReplenishments(), fetchCardStock().then(setStock), fetchCardMovements().then((data) => {
+        setMovements(data.items);
+        setMovementsTotal(data.total);
+        setMovementsYear(data.current_year ?? null);
+      })]);
+    } catch (err) {
+      setReplenishmentError(err instanceof Error ? err.message : "Impossibile inviare la richiesta.");
+    } finally {
+      setReplenishmentSubmitting(false);
+    }
+  }
 
   async function handleMembershipSettingsSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -326,6 +425,169 @@ const OrgAdminCards = () => {
               Limite tessere raggiunto. Contatta ASSONAM per richiedere l'estensione del pacchetto tessere.
             </div>
           ) : null}
+
+          <SectionPanel title="Rifornimento tessere" eyebrow="1 tessera = 1 euro">
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.4fr)]">
+              <form className="space-y-4" onSubmit={handleReplenishmentSubmit}>
+                <p className="text-sm leading-6 text-slate-600">
+                  La richiesta crea un lotto completo e registra il relativo importo come da pagare.
+                  Non viene eseguito alcun pagamento online.
+                </p>
+
+                {replenishmentCapability && !replenishmentCapability.can_auto_allocate ? (
+                  <div role="alert" className="rounded-[0.85rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    {replenishmentCapability.blocked_reason}
+                  </div>
+                ) : null}
+
+                <label className="block" htmlFor="card-replenishment-year">
+                  <span className="text-sm font-semibold text-slate-700">Anno tessere</span>
+                  <select
+                    id="card-replenishment-year"
+                    className="premium-select mt-2 w-full"
+                    value={replenishmentYear}
+                    onChange={(event) => setReplenishmentYear(Number(event.target.value))}
+                    required
+                  >
+                    {(replenishmentCapability?.allowed_years ?? [replenishmentYear]).map((year) => (
+                      <option key={year} value={year}>{year}</option>
+                    ))}
+                  </select>
+                  <span className="mt-1 block text-xs text-slate-500">
+                    Puoi preparare il lotto dell'anno corrente o del successivo.
+                  </span>
+                </label>
+
+                <label className="block" htmlFor="card-replenishment-quantity">
+                  <span className="text-sm font-semibold text-slate-700">Numero di tessere</span>
+                  <input
+                    id="card-replenishment-quantity"
+                    className="mt-2 h-11 w-full rounded-[0.75rem] border border-slate-200 bg-white px-4 text-sm tabular-nums focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+                    type="number"
+                    min={replenishmentCapability?.min_quantity ?? 1}
+                    max={replenishmentCapability?.max_quantity ?? 5000}
+                    value={replenishmentQuantity}
+                    onChange={(event) => setReplenishmentQuantity(Number(event.target.value))}
+                    required
+                  />
+                </label>
+
+                <label className="block" htmlFor="card-replenishment-notes">
+                  <span className="text-sm font-semibold text-slate-700">Nota (facoltativa)</span>
+                  <textarea
+                    id="card-replenishment-notes"
+                    className="mt-2 min-h-[88px] w-full rounded-[0.75rem] border border-slate-200 bg-white px-4 py-3 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+                    maxLength={1000}
+                    value={replenishmentNotes}
+                    onChange={(event) => setReplenishmentNotes(event.target.value)}
+                    placeholder="Indicazioni utili per ASSONAM"
+                  />
+                </label>
+
+                <div className="rounded-[0.85rem] border border-blue-200 bg-blue-50 px-4 py-3">
+                  <div className="flex items-center justify-between gap-4 text-sm text-blue-900">
+                    <span>Importo registrato</span>
+                    <strong className="text-lg tabular-nums">
+                      {formatMoneyCents(
+                        Math.max(0, replenishmentQuantity) * (replenishmentCapability?.unit_price_cents ?? 100),
+                        replenishmentCapability?.currency ?? "EUR",
+                      )}
+                    </strong>
+                  </div>
+                  <p className="mt-1 text-xs text-blue-700">Stato iniziale: da pagare. Il Super Admin potra aggiornarlo.</p>
+                </div>
+
+                <div aria-live="polite" className="space-y-2">
+                  {replenishmentError ? <p role="alert" className="text-sm font-medium text-rose-700">{replenishmentError}</p> : null}
+                  {replenishmentSuccess ? <p className="text-sm font-medium text-emerald-700">{replenishmentSuccess}</p> : null}
+                </div>
+
+                <button
+                  type="submit"
+                  className="btn-primary w-full justify-center sm:w-auto"
+                  disabled={
+                    replenishmentSubmitting ||
+                    replenishmentLoading ||
+                    !replenishmentCapability?.can_auto_allocate ||
+                    !replenishmentCapability.allowed_years.includes(replenishmentYear) ||
+                    replenishmentQuantity < 1 ||
+                    replenishmentQuantity > 5000
+                  }
+                >
+                  {replenishmentSubmitting ? "Registrazione..." : "Richiedi e registra il lotto"}
+                </button>
+              </form>
+
+              <div className="min-w-0">
+                <div className="mb-4 grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-[0.8rem] border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Richieste</p>
+                    <p className="mt-2 text-2xl font-semibold tabular-nums text-slate-950">{replenishmentSummary?.total ?? 0}</p>
+                  </div>
+                  <div className="rounded-[0.8rem] border border-amber-200 bg-amber-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-700">Da pagare</p>
+                    <p className="mt-2 text-2xl font-semibold tabular-nums text-amber-950">
+                      {formatMoneyCents(replenishmentSummary?.outstanding_cents ?? 0)}
+                    </p>
+                  </div>
+                  <div className="rounded-[0.8rem] border border-emerald-200 bg-emerald-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">Pagate</p>
+                    <p className="mt-2 text-2xl font-semibold tabular-nums text-emerald-950">{replenishmentSummary?.paid ?? 0}</p>
+                  </div>
+                </div>
+
+                <div className="overflow-hidden rounded-[0.85rem] border border-slate-200 bg-white">
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[780px] text-left">
+                      <thead className="border-b border-slate-200 bg-slate-50">
+                        <tr>
+                          <th className={thClass}>Richiesta</th>
+                          <th className={thClass}>Tessere</th>
+                          <th className={thClass}>Anno</th>
+                          <th className={thClass}>Lotto</th>
+                          <th className={thClass}>Importo</th>
+                          <th className={thClass}>Contabilita</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {replenishmentLoading ? (
+                          <tr><td className={tdClass} colSpan={6}>Caricamento richieste...</td></tr>
+                        ) : replenishments.length === 0 ? (
+                          <tr><td className={tdClass} colSpan={6}>Nessuna richiesta di rifornimento registrata.</td></tr>
+                        ) : (
+                          replenishments.slice(0, 10).map((item) => (
+                            <tr key={item.id} className="border-t border-slate-100 first:border-t-0">
+                              <td className={tdClass}>
+                                <strong className="block text-slate-950">#{item.id}</strong>
+                                <span className="text-xs text-slate-500">{formatDateTime(item.created_at)}</span>
+                              </td>
+                              <td className={`${tdClass} tabular-nums`}>{item.requested_cards}</td>
+                              <td className={`${tdClass} tabular-nums`}>{item.requested_year}</td>
+                              <td className={tdClass}>
+                                {item.card_batch_id ? (
+                                  <span className="font-medium text-slate-900">#{item.card_batch_id}</span>
+                                ) : (
+                                  <StatusChip tone="warning">In attesa</StatusChip>
+                                )}
+                              </td>
+                              <td className={`${tdClass} font-semibold tabular-nums text-slate-950`}>
+                                {formatMoneyCents(item.amount_due_cents, item.currency)}
+                              </td>
+                              <td className={tdClass}>
+                                <StatusChip tone={item.billing_status === "paid" ? "success" : "warning"}>
+                                  {replenishmentBillingLabel(item.billing_status)}
+                                </StatusChip>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </SectionPanel>
 
           <div className="space-y-5">
             <SectionPanel title="Registro movimenti tessere" eyebrow={movementsYear ? `Anno ${movementsYear}` : "Lotti"} className="org-admin-mobile-filter-panel">

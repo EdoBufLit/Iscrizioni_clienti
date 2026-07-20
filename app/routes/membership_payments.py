@@ -515,6 +515,7 @@ async def create_membership_payment_checkout(
             .filter(
                 MembershipPayment.org_id == org.id,
                 MembershipPayment.socio_id == preexisting_member.id,
+                MembershipPayment.payment_kind == "initial",
             )
             .order_by(
                 MembershipPayment.created_at.desc(),
@@ -569,6 +570,7 @@ async def create_membership_payment_checkout(
         .filter(
             MembershipPayment.org_id == org.id,
             MembershipPayment.socio_id == member.id,
+            MembershipPayment.payment_kind == "initial",
         )
         .order_by(MembershipPayment.created_at.desc(), MembershipPayment.id.desc())
         .first()
@@ -612,6 +614,8 @@ async def create_membership_payment_checkout(
     payment = MembershipPayment(
         org_id=org.id,
         socio_id=member.id,
+        membership_year=datetime.utcnow().year,
+        payment_kind="initial",
         provider="sumup",
         payment_reason=normalize_membership_payment_reason(org),
         amount=(

@@ -25,6 +25,7 @@ from app.models import (
     OrganizationPaymentProvider,
 )
 from app.services.card_allocation import allocate_next_card
+from app.services.annual_memberships import sync_annual_membership_term
 from app.services.member_membership import (
     MEMBERSHIP_TYPE_ANNUAL,
     apply_membership_defaults,
@@ -276,7 +277,9 @@ def create_sumup_hosted_checkout(
     if not merchant_code:
         raise HTTPException(status_code=400, detail="Merchant code SumUp non disponibile.")
 
-    amount = Decimal(org.membership_fee_amount).quantize(Decimal("0.01"))
+    # The payment row is the immutable financial snapshot. This matters for
+    # renewals created before an association changes the following year's fee.
+    amount = Decimal(payment.amount).quantize(Decimal("0.01"))
     payload = {
         "checkout_reference": payment.checkout_reference,
         "amount": float(amount),
@@ -428,6 +431,7 @@ def maybe_fulfill_member_card(
     if getattr(member, "valid_from", None) is None:
         member.valid_from = member.joined_at
     member.status = MemberStatus.ACTIVE
+    sync_annual_membership_term(db, member, source="membership_payment")
 
     if request is not None:
         try:
@@ -478,12 +482,38 @@ def apply_membership_payment_completion(
     if member is None:
         return FulfillmentResult(issued_card=False, reason="member_missing")
 
+    if (
+        getattr(payment, "payment_kind", None) == "renewal"
+        and getattr(payment, "annual_term_id", None) is not None
+    ):
+        from app.services.renewals import complete_renewal_payment
+
+        issued = complete_renewal_payment(db, payment=payment)
+        term = payment.annual_term
+        return FulfillmentResult(
+            issued_card=issued,
+            reason=(
+                "fulfilled"
+                if issued
+                else "already_fulfilled"
+                if term is not None and term.card_no is not None
+                else "card_stock_exhausted"
+            ),
+        )
+
     member.payment_required = organization_requires_membership_payment(org)
     member.payment_status = MembershipPaymentStatus.COMPLETED.value
     if member.payment_completed_at is None:
         member.payment_completed_at = datetime.utcnow()
     sync_member_card_payment_flags(member, org)
-    return maybe_fulfill_member_card(db=db, member=member, org=org, request=request)
+    fulfillment = maybe_fulfill_member_card(db=db, member=member, org=org, request=request)
+    if member.card_year is not None:
+        payment.membership_year = int(member.card_year)
+        db.flush()
+        term = sync_annual_membership_term(db, member, source="membership_payment")
+        if term is not None:
+            payment.annual_term_id = term.id
+    return fulfillment
 
 
 def update_payment_state_from_sumup(
@@ -509,11 +539,15 @@ def update_payment_state_from_sumup(
         )
 
     payment.status = mapped_status
-    if member is not None and mapped_status in {
-        MembershipPaymentStatus.FAILED.value,
-        MembershipPaymentStatus.CANCELLED.value,
-        MembershipPaymentStatus.EXPIRED.value,
-    }:
+    if (
+        member is not None
+        and getattr(payment, "payment_kind", None) != "renewal"
+        and mapped_status in {
+            MembershipPaymentStatus.FAILED.value,
+            MembershipPaymentStatus.CANCELLED.value,
+            MembershipPaymentStatus.EXPIRED.value,
+        }
+    ):
         member.payment_required = organization_requires_membership_payment(org)
         member.payment_status = mapped_status
         sync_member_card_payment_flags(member, org)
@@ -548,6 +582,7 @@ def apply_manual_membership_payment(
         .filter(
             MembershipPayment.socio_id == member.id,
             MembershipPayment.org_id == org.id,
+            MembershipPayment.payment_kind == "initial",
             MembershipPayment.status.in_(list(PAID_MEMBERSHIP_STATUSES)),
         )
         .order_by(MembershipPayment.confirmed_at.desc(), MembershipPayment.id.desc())
@@ -566,6 +601,8 @@ def apply_manual_membership_payment(
     payment = MembershipPayment(
         org_id=org.id,
         socio_id=member.id,
+        membership_year=int(member.card_year) if member.card_year else datetime.utcnow().year,
+        payment_kind="initial",
         provider=OrganizationPaymentProvider.SUMUP.value,
         payment_reason=reason,
         amount=amount,
@@ -584,6 +621,12 @@ def apply_manual_membership_payment(
     sync_member_card_payment_flags(member, org)
 
     fulfillment = maybe_fulfill_member_card(db=db, member=member, org=org, request=request)
+    if member.card_year is not None:
+        payment.membership_year = int(member.card_year)
+        db.flush()
+        term = sync_annual_membership_term(db, member, source="membership_payment")
+        if term is not None:
+            payment.annual_term_id = term.id
     return payment, fulfillment, True
 
 

@@ -1,7 +1,14 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import Skeleton from "../../components/ui/Skeleton";
-import { changePassword } from "../../lib/api";
+import {
+  cancelMemberContactChange,
+  changePassword,
+  fetchMemberContactChanges,
+  requestMemberContactChange,
+  resendMemberContactChange,
+  type MemberContactChange,
+} from "../../lib/api";
 import type { DashboardContext } from "./DashboardLayout";
 
 const PERSONAL_FIELDS = [
@@ -13,7 +20,7 @@ const PERSONAL_FIELDS = [
 ] as const;
 
 const DashboardProfile = () => {
-  const { user, loading } = useOutletContext<DashboardContext>();
+  const { user, loading, reloadProfile } = useOutletContext<DashboardContext>();
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -132,9 +139,121 @@ const DashboardProfile = () => {
         )}
       </div>
 
+      {!loading && user ? (
+        <ContactChangeSection
+          email={user.email}
+          phone={user.phone}
+          reloadProfile={reloadProfile}
+        />
+      ) : null}
+
       {/* Password section */}
       {!loading && user && <ChangePasswordSection />}
     </div>
+  );
+};
+
+const ContactChangeSection = ({
+  email,
+  phone,
+  reloadProfile,
+}: {
+  email: string;
+  phone: string | null;
+  reloadProfile: () => Promise<void>;
+}) => {
+  const [field, setField] = useState<"email" | "phone">("email");
+  const [value, setValue] = useState("");
+  const [items, setItems] = useState<MemberContactChange[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const load = async () => {
+    try {
+      setItems(await fetchMemberContactChanges());
+    } catch {
+      // The profile remains usable if the request history is temporarily unavailable.
+    }
+  };
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!value.trim() || busy) return;
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      await requestMemberContactChange(field, value.trim());
+      setValue("");
+      setMessage(
+        field === "email"
+          ? "Controlla il nuovo indirizzo email e conferma dal link ricevuto."
+          : "Controlla l'email attuale e conferma il nuovo numero dal link ricevuto.",
+      );
+      await load();
+      await reloadProfile();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Richiesta non riuscita");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const act = async (action: "resend" | "cancel", id: number) => {
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      if (action === "resend") {
+        await resendMemberContactChange(id);
+        setMessage("Email di conferma inviata nuovamente.");
+      } else {
+        await cancelMemberContactChange(id);
+        setMessage("Richiesta annullata.");
+      }
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Operazione non riuscita");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const pending = items.filter((item) => item.status === "pending" || item.status === "expired");
+
+  return (
+    <section className="surface overflow-hidden border-neutral-200/60 shadow-premium-lg" aria-labelledby="contacts-heading">
+      <div className="border-b border-neutral-100 bg-neutral-50/50 px-7 py-5">
+        <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-neutral-400">Contatti verificati</p>
+        <h2 id="contacts-heading" className="mt-1 text-lg font-bold text-neutral-950">Modifica email o telefono</h2>
+      </div>
+      <div className="grid gap-7 p-7 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]">
+        <form className="space-y-4" onSubmit={submit}>
+          <p className="text-sm leading-6 text-neutral-600">Il dato attuale non cambia finché non confermi il link monouso ricevuto via email.</p>
+          <fieldset className="flex gap-2" disabled={busy}>
+            <legend className="sr-only">Contatto da modificare</legend>
+            <button type="button" aria-pressed={field === "email"} className={`rounded-lg border px-3 py-2 text-sm font-semibold ${field === "email" ? "border-brand bg-brand/5 text-brand" : "border-neutral-200 text-neutral-600"}`} onClick={() => { setField("email"); setValue(""); }}>Email</button>
+            <button type="button" aria-pressed={field === "phone"} className={`rounded-lg border px-3 py-2 text-sm font-semibold ${field === "phone" ? "border-brand bg-brand/5 text-brand" : "border-neutral-200 text-neutral-600"}`} onClick={() => { setField("phone"); setValue(""); }}>Telefono</button>
+          </fieldset>
+          <div>
+            <label className="text-sm font-semibold text-neutral-800" htmlFor="new-contact-value">Nuovo {field === "email" ? "indirizzo email" : "numero di telefono"}</label>
+            <input id="new-contact-value" className="premium-select mt-1 w-full !bg-white !px-4 !py-3" type={field === "email" ? "email" : "tel"} autoComplete={field === "email" ? "email" : "tel"} value={value} placeholder={field === "email" ? email : phone || "+39…"} onChange={(event) => setValue(event.target.value)} required />
+          </div>
+          {message ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800" role="status">{message}</p> : null}
+          {error ? <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">{error}</p> : null}
+          <button className="btn-primary px-5 py-3 text-sm" disabled={busy || !value.trim()} type="submit">{busy ? "Invio…" : "Invia conferma"}</button>
+        </form>
+        <div>
+          <h3 className="text-sm font-bold text-neutral-900">Richieste recenti</h3>
+          {pending.length ? <ul className="mt-3 space-y-3">{pending.map((item) => <li className="rounded-xl border border-neutral-200 p-3" key={item.id}><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold text-neutral-900">{item.field === "email" ? "Email" : "Telefono"}: {item.masked_new_value}</p><p className="mt-1 text-xs text-neutral-500">{item.status === "expired" ? "Link scaduto" : `Scade il ${item.expires_at ? new Date(item.expires_at).toLocaleString("it-IT") : "-"}`}</p></div><span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${item.status === "expired" ? "bg-neutral-100 text-neutral-600" : "bg-amber-50 text-amber-800"}`}>{item.status === "expired" ? "Scaduta" : "Da confermare"}</span></div><div className="mt-3 flex gap-3"><button className="text-xs font-semibold text-brand hover:underline" type="button" disabled={busy} onClick={() => void act("resend", item.id)}>Reinvia</button>{item.status === "pending" ? <button className="text-xs font-semibold text-red-700 hover:underline" type="button" disabled={busy} onClick={() => void act("cancel", item.id)}>Annulla</button> : null}</div></li>)}</ul> : <p className="mt-3 text-sm text-neutral-500">Nessuna modifica in attesa.</p>}
+        </div>
+      </div>
+    </section>
   );
 };
 

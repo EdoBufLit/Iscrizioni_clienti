@@ -11,6 +11,7 @@ import {
 } from "../../lib/api";
 import { useOrgAdmin } from "./OrgAdminLayout";
 import CreateMemberModal from "./components/CreateMemberModal";
+import MemberImportModal from "./components/MemberImportModal";
 import DebouncedSearchInput from "./components/DebouncedSearchInput";
 import MembersTable from "./components/MembersTable";
 import { DetailPanel, EmptyState, KpiCard, PageHeader, SectionPanel, StatusChip } from "./components/OrgAdminPrimitives";
@@ -103,6 +104,7 @@ const OrgAdminMembers = () => {
   const [page, setPage] = useState(Math.max(1, Number(searchParams.get("page") || 1) || 1));
 
   const [showModal, setShowModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [searchResetKey, setSearchResetKey] = useState(0);
   const [successMessage, setSuccessMessage] = useState("");
   const [createdMemberId, setCreatedMemberId] = useState<number | null>(null);
@@ -284,6 +286,17 @@ const OrgAdminMembers = () => {
               </svg>
               Aggiungi socio
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSuccessMessage("");
+                setCreatedMemberId(null);
+                setShowImportModal(true);
+              }}
+              className="btn-secondary"
+            >
+              Importa CSV
+            </button>
             <a
               href="/api/org-admin/members.csv"
               className="btn-ghost !px-4 !py-2 text-xs font-bold uppercase tracking-widest flex items-center gap-2"
@@ -424,6 +437,15 @@ const OrgAdminMembers = () => {
         onClose={() => setShowModal(false)}
         onCreated={handleCreated}
         membershipSettings={membershipSettings}
+      />
+      <MemberImportModal
+        open={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onCompleted={async (count) => {
+          setSuccessMessage(`${count} soci importati con successo.`);
+          setCreatedMemberId(null);
+          await Promise.all([loadMembers(), loadMetrics()]);
+        }}
       />
     </div>
   );

@@ -17,7 +17,6 @@ import {
   patchOrgCardLot,
   deleteOrgCardLot,
   fetchOrgBatches,
-  runAnnualMaintenance,
   uploadSuperAdminStatute,
   type SuperAdminOrganization,
   type OrgBatch,
@@ -228,9 +227,6 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
     remaining: number;
   } | null>(null);
   const [loadingBatches, setLoadingBatches] = useState(false);
-  const [maintenanceRunning, setMaintenanceRunning] = useState(false);
-  const [maintenanceMessage, setMaintenanceMessage] = useState("");
-  const [maintenanceConfirmOpen, setMaintenanceConfirmOpen] = useState(false);
   const [batchesCurrentYear, setBatchesCurrentYear] = useState<number | null>(null);
   const [nextResetAt, setNextResetAt] = useState<string | null>(null);
   const [editingBatch, setEditingBatch] = useState<OrgBatch | null>(null);
@@ -374,8 +370,6 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
     setSubmitError("");
     setBatches([]);
     setBatchesSummary(null);
-    setMaintenanceMessage("");
-    setMaintenanceConfirmOpen(false);
     setBatchesCurrentYear(null);
     setNextResetAt(null);
     setEditingBatch(null);
@@ -537,7 +531,6 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
       !open &&
       !editingBatch &&
       !deleteBatchTarget &&
-      !maintenanceConfirmOpen &&
       !numberingConfirmOpen
     ) {
       return;
@@ -555,10 +548,6 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
         closeEditBatchDialog();
         return;
       }
-      if (maintenanceConfirmOpen && !maintenanceRunning) {
-        setMaintenanceConfirmOpen(false);
-        return;
-      }
       if (numberingConfirmOpen && !submitting) {
         setNumberingConfirmOpen(false);
         return;
@@ -571,8 +560,6 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
   }, [
     deleteBatchTarget,
     editingBatch,
-    maintenanceConfirmOpen,
-    maintenanceRunning,
     numberingConfirmOpen,
     onClose,
     open,
@@ -774,30 +761,6 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
       return;
     }
     await saveOrganizationChanges();
-  };
-
-  const handleRunMaintenance = () => {
-    if (maintenanceRunning) return;
-    setMaintenanceConfirmOpen(true);
-  };
-
-  const confirmRunMaintenance = async () => {
-    setMaintenanceRunning(true);
-    setMaintenanceMessage("");
-    setSubmitError("");
-    try {
-      const result = await runAnnualMaintenance(true);
-      setMaintenanceMessage(
-        `Manutenzione completata: ${result.expired_count} soci scaduti, ${result.purged_count} soci purgati.`
-      );
-      if (selectedOrg) {
-        await refreshBatches(selectedOrg.id);
-      }
-    } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "Errore esecuzione manutenzione");
-    } finally {
-      setMaintenanceRunning(false);
-    }
   };
 
   const handleSaveBatch = async (event: FormEvent) => {
@@ -1310,18 +1273,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                       {batchesSummary?.remaining ?? 0}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    className="sa-btn sa-btn--success"
-                    onClick={handleRunMaintenance}
-                    disabled={maintenanceRunning}
-                  >
-                    {maintenanceRunning ? "Manutenzione..." : "Esegui manutenzione annuale"}
-                  </button>
                 </div>
-                {maintenanceMessage && (
-                  <p className="mt-2 text-xs text-emerald-700">{maintenanceMessage}</p>
-                )}
               </div>
 
               {loadingBatches ? (
@@ -2515,20 +2467,6 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
           </div>
         </div>
       )}
-      <ConfirmModal
-        open={maintenanceConfirmOpen}
-        title="Esegui manutenzione annuale"
-        description="Conferma l'esecuzione della manutenzione annuale. Verranno scaduti e purgati i soci con tessera di anni precedenti."
-        confirmLabel="Esegui manutenzione"
-        tone="danger"
-        confirmState={maintenanceRunning ? "loading" : "idle"}
-        onClose={() => {
-          if (!maintenanceRunning) {
-            setMaintenanceConfirmOpen(false);
-          }
-        }}
-        onConfirm={confirmRunMaintenance}
-      />
       <ConfirmModal
         open={numberingConfirmOpen}
         title="Conferma modifica numerazione"

@@ -1,12 +1,10 @@
 import html
-import io
-import base64
 import json
 import logging
 import os
 import re
 from pathlib import Path
-from datetime import date, datetime
+from datetime import date, datetime, time
 from time import monotonic
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse, FileResponse, Response, HTMLResponse
@@ -15,8 +13,12 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models import (
     AccountingShareLink,
+    AnnualMembershipTerm,
+    AnnualMembershipTermStatus,
     BookingEvent,
     Member,
+    MembershipPayment,
+    MembershipType,
     Organization,
     Form as AssociationForm,
 )
@@ -65,10 +67,12 @@ from app.services.booking_customer_actions import (
 )
 from app.services.member_activity import (
     MEMBER_INACTIVE_REASON_DELETED,
+    MEMBER_INACTIVE_REASON_EXPIRED,
     MEMBER_INACTIVE_REASON_NOT_APPROVED,
     get_member_inactive_reason,
     member_inactive_reason_label,
 )
+from app.services.annual_memberships import as_rome_datetime
 from app.services.member_membership import (
     membership_type_badge_label,
     membership_type_label,
@@ -87,6 +91,7 @@ from app.services.membership_payments import (
 )
 from app.services.card_pdf import generate_card_pdf_bytes
 from app.services.card_image import generate_card_image_bytes
+from app.services.qr_code import build_qr_data_uri, generate_qr_png_bytes
 from app.services.municipalities import search_municipalities
 
 router = APIRouter()
@@ -357,20 +362,7 @@ def _enforce_public_form_submit_rate_limit(
 
 def _build_qr_data_uri(value: str) -> str | None:
     try:
-        import qrcode
-
-        qr = qrcode.QRCode(
-            error_correction=qrcode.constants.ERROR_CORRECT_M,
-            box_size=8,
-            border=2,
-        )
-        qr.add_data(value)
-        qr.make(fit=True)
-        image = qr.make_image(fill_color="black", back_color="white")
-        buffer = io.BytesIO()
-        image.save(buffer, format="PNG")
-        encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
-        return f"data:image/png;base64,{encoded}"
+        return build_qr_data_uri(value)
     except Exception:
         logger.exception("Unable to generate QR data URI.")
         return None
@@ -1291,6 +1283,85 @@ def _render_card_download_html(
 </html>"""
 
 
+def _resolve_verification_membership(
+    db: Session,
+    *,
+    payload: dict,
+    checked_at: datetime,
+) -> tuple[Member | None, AnnualMembershipTerm | None, str]:
+    """Resolve a v1 token against annual history before legacy member fields.
+
+    This keeps the previous year's QR valid through 1 January while a renewed
+    card for the new year is already active. The public token and payload stay
+    byte-for-byte compatible.
+    """
+
+    member = (
+        db.query(Member)
+        .filter(
+            Member.id == payload["member_id"],
+            Member.org_id == payload["org_id"],
+        )
+        .first()
+    )
+    term = (
+        db.query(AnnualMembershipTerm)
+        .filter(
+            AnnualMembershipTerm.member_id == payload["member_id"],
+            AnnualMembershipTerm.org_id == payload["org_id"],
+            AnnualMembershipTerm.card_no == payload["card_number"],
+            AnnualMembershipTerm.card_year == payload["card_year"],
+        )
+        .first()
+    )
+    if member is None or member.deleted_at is not None:
+        return member, term, MEMBER_INACTIVE_REASON_DELETED
+
+    # Annual history extends a valid annual card across renewals; it must never
+    # override the member's real lifecycle state or a later conversion to a
+    # temporary membership.
+    member_inactive_reason = get_member_inactive_reason(member, now=checked_at)
+    current_membership_type = resolve_member_membership_type(member)
+    if current_membership_type != MembershipType.ANNUAL.value:
+        if member_inactive_reason == "" and (
+            member.card_no != payload["card_number"]
+            or member.card_year != payload["card_year"]
+        ):
+            member_inactive_reason = MEMBER_INACTIVE_REASON_NOT_APPROVED
+        return member, None, member_inactive_reason
+    if member_inactive_reason:
+        return member, term, member_inactive_reason
+
+    if term is None:
+        inactive_reason = member_inactive_reason
+        if inactive_reason == "" and (
+            member.card_no != payload["card_number"]
+            or member.card_year != payload["card_year"]
+        ):
+            inactive_reason = MEMBER_INACTIVE_REASON_NOT_APPROVED
+        return member, None, inactive_reason
+
+    local_today = as_rome_datetime(checked_at).date()
+    if term.status == AnnualMembershipTermStatus.EXPIRED.value or local_today > term.valid_through:
+        return member, term, MEMBER_INACTIVE_REASON_EXPIRED
+    if (
+        term.status
+        not in {
+            AnnualMembershipTermStatus.ACTIVE.value,
+            AnnualMembershipTermStatus.SCHEDULED.value,
+        }
+        or local_today < term.starts_on
+    ):
+        return member, term, MEMBER_INACTIVE_REASON_NOT_APPROVED
+    return member, term, ""
+
+
+def _term_valid_until(term: AnnualMembershipTerm | None, member: Member | None):
+    if term is not None:
+        return datetime.combine(term.valid_through, time.max)
+    return resolve_member_valid_until(member)
+
+
 @router.get("/api/cards/verify/{token}")
 def verify_member_card(request: Request, token: str, db: Session = Depends(get_db)):
     _enforce_public_card_rate_limit(db, request, bucket="verify")
@@ -1319,13 +1390,10 @@ def verify_member_card(request: Request, token: str, db: Session = Depends(get_d
             status_code=200,
         )
 
-    member = (
-        db.query(Member)
-        .filter(
-            Member.id == payload["member_id"],
-            Member.org_id == payload["org_id"],
-        )
-        .first()
+    member, annual_term, inactive_reason = _resolve_verification_membership(
+        db,
+        payload=payload,
+        checked_at=checked_at,
     )
     organization = (
         member.organization
@@ -1333,36 +1401,29 @@ def verify_member_card(request: Request, token: str, db: Session = Depends(get_d
         else db.query(Organization).filter(Organization.id == payload["org_id"]).first()
     )
 
-    inactive_reason = ""
-    if not member:
-        inactive_reason = MEMBER_INACTIVE_REASON_DELETED
-    else:
-        inactive_reason = get_member_inactive_reason(member, now=checked_at)
-        if inactive_reason == "" and (
-            member.card_no != payload["card_number"]
-            or member.card_year != payload["card_year"]
-        ):
-            inactive_reason = MEMBER_INACTIVE_REASON_NOT_APPROVED
-
     is_valid = inactive_reason == ""
     card_status = "attiva" if is_valid else "non_attiva"
-    card_number = (
-        member.card_no
-        if member and member.card_no is not None
-        else payload["card_number"]
-    )
-    card_year = (
-        member.card_year
-        if member and member.card_year is not None
-        else payload["card_year"]
-    )
+    card_number = annual_term.card_no if annual_term else payload["card_number"]
+    card_year = annual_term.card_year if annual_term else payload["card_year"]
 
     organization_display_name = resolve_club_display_name(organization) or (
         organization.name if organization else None
     )
-    membership_type = resolve_member_membership_type(member)
-    valid_until = resolve_member_valid_until(member)
-    is_paid = bool(member and payment_status_is_paid(member.payment_status))
+    membership_type = MembershipType.ANNUAL.value if annual_term else resolve_member_membership_type(member)
+    valid_until = _term_valid_until(annual_term, member)
+    term_payment = (
+        db.query(MembershipPayment)
+        .filter(MembershipPayment.annual_term_id == annual_term.id)
+        .order_by(MembershipPayment.id.desc())
+        .first()
+        if annual_term
+        else None
+    )
+    is_paid = (
+        payment_status_is_paid(term_payment.status)
+        if term_payment is not None
+        else bool(member and payment_status_is_paid(member.payment_status))
+    )
     payment_label = "Pagata" if is_paid else "Pagamento non registrato"
     payment_tone = "#dcfce7" if is_paid else "#fee2e2"
 
@@ -1384,7 +1445,7 @@ def verify_member_card(request: Request, token: str, db: Session = Depends(get_d
             "slug": organization.slug if organization else None,
         },
         "payment": {
-            "status": member.payment_status if member else None,
+            "status": term_payment.status if term_payment else (member.payment_status if member else None),
             "is_paid": is_paid,
             "label": payment_label,
         },
@@ -1418,6 +1479,33 @@ def verify_member_card(request: Request, token: str, db: Session = Depends(get_d
     )
 
 
+@router.get("/api/cards/{token}/qr.png")
+def member_card_verification_qr_png(
+    token: str,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> Response:
+    """Return a locally generated QR for the existing public verification URL."""
+    _enforce_public_card_rate_limit(db, request, bucket="qr_png")
+    if not parse_card_verification_token(token):
+        raise HTTPException(status_code=404, detail="Tessera non valida")
+
+    verification_url = f"{_get_backend_base_url(request)}/api/cards/verify/{token}"
+    try:
+        qr_png = generate_qr_png_bytes(verification_url)
+    except Exception as exc:
+        logger.exception("Card verification QR generation failed.")
+        raise HTTPException(status_code=500, detail="Errore generazione QR") from exc
+
+    return Response(
+        content=qr_png,
+        media_type="image/png",
+        headers={
+            "Content-Disposition": 'inline; filename="verifica-tessera.png"',
+        },
+    )
+
+
 @router.get("/api/cards/{token}/download")
 def download_member_card(token: str, request: Request, db: Session = Depends(get_db)):
     _enforce_public_card_rate_limit(db, request, bucket="download_html")
@@ -1431,15 +1519,13 @@ def download_member_card(token: str, request: Request, db: Session = Depends(get
     inactive_reason = MEMBER_INACTIVE_REASON_NOT_APPROVED
     card_number = None
     card_year = None
+    annual_term = None
 
     if payload:
-        member = (
-            db.query(Member)
-            .filter(
-                Member.id == payload["member_id"],
-                Member.org_id == payload["org_id"],
-            )
-            .first()
+        member, annual_term, inactive_reason = _resolve_verification_membership(
+            db,
+            payload=payload,
+            checked_at=checked_at,
         )
         organization = (
             member.organization
@@ -1451,19 +1537,10 @@ def download_member_card(token: str, request: Request, db: Session = Depends(get
         card_number = payload["card_number"]
         card_year = payload["card_year"]
 
-    if member is None:
+    if not payload:
+        inactive_reason = MEMBER_INACTIVE_REASON_NOT_APPROVED
+    elif member is None:
         inactive_reason = MEMBER_INACTIVE_REASON_DELETED
-    else:
-        inactive_reason = get_member_inactive_reason(member, now=checked_at)
-        if inactive_reason == "" and (
-            member.card_no != payload["card_number"]
-            or member.card_year != payload["card_year"]
-        ):
-            inactive_reason = MEMBER_INACTIVE_REASON_NOT_APPROVED
-        if member.card_no is not None:
-            card_number = member.card_no
-        if member.card_year is not None:
-            card_year = member.card_year
 
     is_valid = bool(payload) and inactive_reason == ""
     backend_base = _get_backend_base_url(request)
@@ -1477,8 +1554,8 @@ def download_member_card(token: str, request: Request, db: Session = Depends(get
     )
     card_logo_url = resolve_card_logo_url(organization, base_url=backend_base)
     club_display_name = resolve_club_display_name(organization)
-    membership_type = resolve_member_membership_type(member)
-    valid_until = resolve_member_valid_until(member)
+    membership_type = MembershipType.ANNUAL.value if annual_term else resolve_member_membership_type(member)
+    valid_until = _term_valid_until(annual_term, member)
 
     html_content = _render_card_download_html(
         token=token,
@@ -1588,10 +1665,10 @@ def download_card_pdf(token: str, request: Request, db: Session = Depends(get_db
     if not payload:
         raise HTTPException(status_code=404, detail="Tessera non valida")
 
-    member = (
-        db.query(Member)
-        .filter(Member.id == payload["member_id"], Member.org_id == payload["org_id"])
-        .first()
+    member, annual_term, inactive_reason = _resolve_verification_membership(
+        db,
+        payload=payload,
+        checked_at=checked_at,
     )
     organization = (
         member.organization
@@ -1599,29 +1676,10 @@ def download_card_pdf(token: str, request: Request, db: Session = Depends(get_db
         else db.query(Organization).filter(Organization.id == payload["org_id"]).first()
     )
 
-    inactive_reason = ""
-    if not member:
-        inactive_reason = MEMBER_INACTIVE_REASON_DELETED
-    else:
-        inactive_reason = get_member_inactive_reason(member, now=checked_at)
-        if inactive_reason == "" and (
-            member.card_no != payload["card_number"]
-            or member.card_year != payload["card_year"]
-        ):
-            inactive_reason = MEMBER_INACTIVE_REASON_NOT_APPROVED
-
     is_valid = inactive_reason == ""
     card_status = "attiva" if is_valid else "non_attiva"
-    card_number = (
-        member.card_no
-        if member and member.card_no is not None
-        else payload["card_number"]
-    )
-    card_year = (
-        member.card_year
-        if member and member.card_year is not None
-        else payload["card_year"]
-    )
+    card_number = annual_term.card_no if annual_term else payload["card_number"]
+    card_year = annual_term.card_year if annual_term else payload["card_year"]
 
     backend_base = _get_backend_base_url(request)
     verification_url = f"{backend_base}/api/cards/verify/{token}"
@@ -1630,8 +1688,8 @@ def download_card_pdf(token: str, request: Request, db: Session = Depends(get_db
     )
     org_logo_path = _resolve_logo_disk_path(organization)
     assonam_logo_path = _resolve_assonam_disk_path()
-    membership_type = resolve_member_membership_type(member)
-    valid_until = resolve_member_valid_until(member)
+    membership_type = MembershipType.ANNUAL.value if annual_term else resolve_member_membership_type(member)
+    valid_until = _term_valid_until(annual_term, member)
 
     try:
         pdf_bytes = generate_card_pdf_bytes(
@@ -1680,10 +1738,10 @@ def card_image_png(token: str, request: Request, db: Session = Depends(get_db)):
     if not payload:
         raise HTTPException(status_code=404, detail="Tessera non valida")
 
-    member = (
-        db.query(Member)
-        .filter(Member.id == payload["member_id"], Member.org_id == payload["org_id"])
-        .first()
+    member, annual_term, inactive_reason = _resolve_verification_membership(
+        db,
+        payload=payload,
+        checked_at=checked_at,
     )
     organization = (
         member.organization
@@ -1691,35 +1749,16 @@ def card_image_png(token: str, request: Request, db: Session = Depends(get_db)):
         else db.query(Organization).filter(Organization.id == payload["org_id"]).first()
     )
 
-    inactive_reason = ""
-    if not member:
-        inactive_reason = MEMBER_INACTIVE_REASON_DELETED
-    else:
-        inactive_reason = get_member_inactive_reason(member, now=checked_at)
-        if inactive_reason == "" and (
-            member.card_no != payload["card_number"]
-            or member.card_year != payload["card_year"]
-        ):
-            inactive_reason = MEMBER_INACTIVE_REASON_NOT_APPROVED
-
     is_valid = inactive_reason == ""
     card_status = "attiva" if is_valid else "non_attiva"
-    card_number = (
-        member.card_no
-        if member and member.card_no is not None
-        else payload["card_number"]
-    )
-    card_year = (
-        member.card_year
-        if member and member.card_year is not None
-        else payload["card_year"]
-    )
+    card_number = annual_term.card_no if annual_term else payload["card_number"]
+    card_year = annual_term.card_year if annual_term else payload["card_year"]
     club_display_name = resolve_club_display_name(organization) or (
         organization.name if organization else ""
     )
     org_logo_path = _resolve_logo_disk_path(organization)
     assonam_logo_path = _resolve_assonam_disk_path()
-    membership_type = resolve_member_membership_type(member)
+    membership_type = MembershipType.ANNUAL.value if annual_term else resolve_member_membership_type(member)
 
     try:
         png_bytes = generate_card_image_bytes(

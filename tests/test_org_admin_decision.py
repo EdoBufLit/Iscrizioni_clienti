@@ -1,7 +1,17 @@
 import pytest
 from sqlalchemy import func
 from app.db import SessionLocal
-from app.models import AdminUser, AdminRole, Organization, Member, MemberStatus, OrgAdminToken, CardBatch
+from app.models import (
+    AdminUser,
+    AdminRole,
+    AnnualMembershipTerm,
+    AnnualMembershipTermStatus,
+    Organization,
+    Member,
+    MemberStatus,
+    OrgAdminToken,
+    CardBatch,
+)
 from app.utils import hash_token
 from datetime import datetime, timedelta
 import uuid
@@ -107,6 +117,18 @@ def test_org_admin_decision(client, db):
     assert member_approve.decision_by_admin_id == admin.id
     assert member_approve.decision_notes == "Approved via test"
     assert member_approve.decision_at is not None
+
+    annual_term = db.query(AnnualMembershipTerm).filter_by(member_id=member_approve.id).one()
+    assert annual_term.status == AnnualMembershipTermStatus.ACTIVE.value
+
+    # Rejecting an already active member must invalidate the historical term.
+    resp = client.post(
+        f"/api/org-admin/members/{member_approve.id}/decision",
+        json={"decision": "reject", "notes": "Active membership revoked"},
+    )
+    assert resp.status_code == 200
+    db.refresh(annual_term)
+    assert annual_term.status == AnnualMembershipTermStatus.CANCELLED.value
 
     # Test Reject
     resp = client.post(

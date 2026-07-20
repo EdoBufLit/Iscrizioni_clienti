@@ -210,6 +210,24 @@ class Settings:
     ORG_ADMIN_SESSION_DAYS: int = int(os.getenv("ORG_ADMIN_SESSION_DAYS", "30"))
     JOIN_TOKEN_EXPIRE_MINUTES: int = 120
 
+    # Privileged authentication. MFA is mandatory in deployed environments;
+    # local/test installations can keep the password-only compatibility path
+    # unless they explicitly enable it for security tests.
+    MFA_ENCRYPTION_KEY: str | None = _env_optional("MFA_ENCRYPTION_KEY")
+    SUPER_ADMIN_MFA_REQUIRED: bool = _env_bool(
+        "SUPER_ADMIN_MFA_REQUIRED",
+        default=APP_ENV in DEPLOYED_APP_ENVS,
+    )
+    SUPER_ADMIN_SESSION_IDLE_MINUTES: int = int(
+        os.getenv("SUPER_ADMIN_SESSION_IDLE_MINUTES", "30")
+    )
+    SUPER_ADMIN_SESSION_ABSOLUTE_HOURS: int = int(
+        os.getenv("SUPER_ADMIN_SESSION_ABSOLUTE_HOURS", "12")
+    )
+    SUPER_ADMIN_STEP_UP_MINUTES: int = int(
+        os.getenv("SUPER_ADMIN_STEP_UP_MINUTES", "10")
+    )
+
     BASE_URL: str = os.getenv("BASE_URL", "http://localhost:8000")
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "")
     FRONTEND_STATIC_DIR: str = os.getenv("FRONTEND_STATIC_DIR", "")
@@ -459,6 +477,11 @@ def validate_runtime_environment(runtime_settings: Settings) -> None:
     errors: list[str] = []
     if runtime_settings.USES_INSECURE_SECRET_KEY:
         errors.append("SECRET_KEY must be a non-default secret of at least 32 characters")
+
+    if not runtime_settings.SUPER_ADMIN_MFA_REQUIRED:
+        errors.append("SUPER_ADMIN_MFA_REQUIRED must be enabled")
+    if not (runtime_settings.MFA_ENCRYPTION_KEY or "").strip():
+        errors.append("MFA_ENCRYPTION_KEY must be configured")
 
     for variable_name in ("BASE_URL", "FRONTEND_URL"):
         if not _is_valid_deployed_url(getattr(runtime_settings, variable_name, "")):

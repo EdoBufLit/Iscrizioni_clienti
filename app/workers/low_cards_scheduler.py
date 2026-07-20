@@ -7,6 +7,7 @@ import time
 
 from app.config import settings
 from app.services.low_cards_alerts import run_low_cards_alert_job_once
+from app.services.renewals import run_renewal_reminder_job_once
 
 logger = logging.getLogger(__name__)
 
@@ -62,11 +63,13 @@ def main() -> int:
     if args.once:
         result = _run_low_cards_alerts_safely(force=args.force)
         logger.info("low_cards_worker_cycle %s", result)
+        logger.info("renewal_reminder_worker_cycle %s", run_renewal_reminder_job_once())
         return 0
 
     while True:
         result = _run_low_cards_alerts_safely(force=args.force)
         logger.info("low_cards_worker_cycle %s", result)
+        logger.info("renewal_reminder_worker_cycle %s", run_renewal_reminder_job_once())
         time.sleep(interval_seconds)
 
 

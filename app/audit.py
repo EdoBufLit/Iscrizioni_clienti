@@ -113,7 +113,11 @@ def log_operation(
     entity_id: int | None = None,
     actor_admin_id: int | None = None,
     actor_member_id: int | None = None,
+    org_id: int | None = None,
     actor_role: str | None = None,
+    category: str | None = None,
+    outcome: str = "success",
+    request_id: str | None = None,
     metadata: dict | None = None,
     ip: str | None = None,
     user_agent: str | None = None,
@@ -127,6 +131,18 @@ def log_operation(
         f"identifier_hash:{hash_identifier(user_agent)}" if user_agent else None
     )
 
+    resolved_org_id = org_id
+    if resolved_org_id is None and isinstance(safe_metadata, dict):
+        candidate_org_id = safe_metadata.get("org_id")
+        if isinstance(candidate_org_id, int):
+            resolved_org_id = candidate_org_id
+    if resolved_org_id is None and entity_type in {"organization", "association"}:
+        resolved_org_id = entity_id
+    resolved_category = (category or action.partition(".")[0] or "other").strip().lower()
+    resolved_outcome = (outcome or "success").strip().lower()
+    if resolved_outcome not in {"success", "failure", "blocked", "warning"}:
+        resolved_outcome = "success"
+
     # 1. DB Log
     op_log = OperationLog(
         action=action,
@@ -134,7 +150,11 @@ def log_operation(
         entity_id=entity_id,
         actor_admin_id=actor_admin_id,
         actor_member_id=actor_member_id,
+        org_id=resolved_org_id,
         actor_role=actor_role,
+        category=resolved_category,
+        outcome=resolved_outcome,
+        request_id=(request_id or "")[:64] or None,
         metadata_json=safe_metadata,
         ip=safe_ip,
         user_agent=safe_user_agent,
@@ -147,6 +167,10 @@ def log_operation(
         entity_type=entity_type,
         entity_id=entity_id,
         actor_id=actor_admin_id or actor_member_id,
+        org_id=resolved_org_id,
+        category=resolved_category,
+        outcome=resolved_outcome,
+        request_id=request_id,
         ip_hash=safe_ip,
         metadata=safe_metadata,
     )

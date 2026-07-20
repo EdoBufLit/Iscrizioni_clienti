@@ -1,6 +1,6 @@
 # Registro delle attività di trattamento (ROPA)
 
-> Registro di lavoro ai sensi dell'art. 30 GDPR. Proprietario: legale rappresentante ASSO.N.A.M. pro tempore. Ultimo aggiornamento tecnico: 15 luglio 2026.
+> Registro di lavoro ai sensi dell'art. 30 GDPR. Proprietario: legale rappresentante ASSO.N.A.M. pro tempore. Ultimo aggiornamento tecnico: 18 luglio 2026.
 
 ## Registro ASSO.N.A.M. quale titolare
 
@@ -26,8 +26,8 @@
 
 - Dati primari: Hetzner NBG1, Germania, SEE.
 - Accessi/trasferimenti extra SEE: possibili tramite fornitori globali; non dichiarati assenti. DPA, SCC/DPF, sub-responsabili e TIA devono essere collegati a ogni riga applicabile.
-- Misure: HTTPS, hashing password/token, sessioni HttpOnly/SameSite, CSRF, capability a scadenza, separazione tenant, rate limit distribuito, redazione log, backup, audit e cancellazione tramite outbox.
-- Misure ancora da completare: MFA privilegiata, restore drill, monitoraggio continuo, retention automatizzata completa, legal hold e revisione periodica accessi.
+- Misure: HTTPS, hashing password/token, sessioni HttpOnly/SameSite revocabili, CSRF, MFA TOTP obbligatoria per super admin e facoltativa per org admin, recovery code, step-up per operazioni critiche, doppia prova monouso vecchia/nuova email per il cambio indirizzo, capability a scadenza, separazione tenant, rate limit distribuito, redazione log, registro audit consultabile/esportabile, backup e cancellazione file tramite outbox.
+- Misure ancora da completare: restore drill periodico documentato, monitoraggio continuo dei job, retention automatizzata completa, legal hold, approvazione periodica degli accessi e decisione formale sull'obbligatorietà MFA per tutti gli org admin.
 
 ## Decisioni automatizzate
 

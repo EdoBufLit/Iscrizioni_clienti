@@ -4,6 +4,7 @@ import {
   type CreateOrgAdminMemberInput,
   type OrgAdminMembershipSettings,
 } from "../../../lib/api";
+import ModalShell from "../../../components/ui/ModalShell";
 
 type CreatedMember = {
   id: number;
@@ -137,46 +138,22 @@ const CreateMemberModal = memo(function CreateMemberModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div
-        className="modal-panel max-w-2xl p-6 max-h-[90vh] overflow-y-auto"
-        data-component="orgadmin-member-create-modal"
-      >
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h3 className="text-lg font-semibold text-neutral-900">
-              Aggiungi socio
-            </h3>
-            <p className="mt-1 text-sm text-neutral-500">
-              Inserisci i dati anagrafici del socio e salva l'iscrizione
-              manuale.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full p-2 text-neutral-500 transition hover:bg-neutral-100"
-            aria-label="Chiudi"
-          >
-            <svg
-              className="h-5 w-5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.5}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M6 6l12 12M18 6l-12 12"
-              />
-            </svg>
-          </button>
-        </div>
+    <ModalShell
+      open={open}
+      title="Aggiungi socio"
+      description="Inserisci i dati anagrafici del socio e salva l'iscrizione manuale."
+      onClose={() => !isSubmitting && onClose()}
+      closeOnOverlay={!isSubmitting}
+      closeOnEscape={!isSubmitting}
+      closeDisabled={isSubmitting}
+      sizeClassName="max-w-2xl"
+      contentClassName="max-h-[90vh] overflow-y-auto p-6"
+    >
+      <div data-component="orgadmin-member-create-modal">
 
         <div className="mt-4 min-h-[50px]">
           {submitError && (
-            <div className="rounded-md border border-red-200/60 bg-red-50 px-4 py-3">
+            <div className="rounded-md border border-red-200/60 bg-red-50 px-4 py-3" role="alert">
               <p className="text-sm text-red-700">{submitError}</p>
             </div>
           )}
@@ -185,10 +162,11 @@ const CreateMemberModal = memo(function CreateMemberModal({
         <form className="mt-2 grid gap-4" onSubmit={handleCreateMember}>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-              <label className="block text-xs font-medium text-neutral-600">
+              <label htmlFor="create-member-first-name" className="block text-xs font-medium text-neutral-600">
                 Nome *
               </label>
               <input
+                id="create-member-first-name"
                 className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
                 type="text"
                 name="first_name"
@@ -196,10 +174,11 @@ const CreateMemberModal = memo(function CreateMemberModal({
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-neutral-600">
+              <label htmlFor="create-member-last-name" className="block text-xs font-medium text-neutral-600">
                 Cognome *
               </label>
               <input
+                id="create-member-last-name"
                 className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
                 type="text"
                 name="last_name"
@@ -210,20 +189,22 @@ const CreateMemberModal = memo(function CreateMemberModal({
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-              <label className="block text-xs font-medium text-neutral-600">
+              <label htmlFor="create-member-email" className="block text-xs font-medium text-neutral-600">
                 Email (opzionale)
               </label>
               <input
+                id="create-member-email"
                 className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
                 type="email"
                 name="email"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-neutral-600">
+              <label htmlFor="create-member-phone" className="block text-xs font-medium text-neutral-600">
                 Telefono (opzionale)
               </label>
               <input
+                id="create-member-phone"
                 className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
                 type="tel"
                 name="phone"
@@ -233,20 +214,22 @@ const CreateMemberModal = memo(function CreateMemberModal({
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-              <label className="block text-xs font-medium text-neutral-600">
+              <label htmlFor="create-member-fiscal-code" className="block text-xs font-medium text-neutral-600">
                 Codice Fiscale (opzionale)
               </label>
               <input
+                id="create-member-fiscal-code"
                 className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
                 type="text"
                 name="fiscal_code"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-neutral-600">
+              <label htmlFor="create-member-payment-method" className="block text-xs font-medium text-neutral-600">
                 Modalità di pagamento (opzionale)
               </label>
               <select
+                id="create-member-payment-method"
                 className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
                 name="payment_method"
                 defaultValue=""
@@ -257,10 +240,11 @@ const CreateMemberModal = memo(function CreateMemberModal({
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-neutral-600">
+              <label htmlFor="create-member-joined-at" className="block text-xs font-medium text-neutral-600">
                 Data iscrizione
               </label>
               <input
+                id="create-member-joined-at"
                 className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
                 type="date"
                 name="joined_at"
@@ -270,10 +254,11 @@ const CreateMemberModal = memo(function CreateMemberModal({
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-neutral-600">
+            <label htmlFor="create-member-type" className="block text-xs font-medium text-neutral-600">
               Categoria / Tipo (opzionale)
             </label>
             <input
+              id="create-member-type"
               className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
               type="text"
               name="member_type"
@@ -283,10 +268,11 @@ const CreateMemberModal = memo(function CreateMemberModal({
           {membershipSettings?.custom_membership_types_enabled ? (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <label className="block text-xs font-medium text-neutral-600">
+                <label htmlFor="create-member-membership-type" className="block text-xs font-medium text-neutral-600">
                   Tipo tessera
                 </label>
                 <select
+                  id="create-member-membership-type"
                   className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
                   name="membership_type"
                   value={membershipType}
@@ -302,10 +288,11 @@ const CreateMemberModal = memo(function CreateMemberModal({
                 </p>
               </div>
               <div>
-                <label className="block text-xs font-medium text-neutral-600">
+                <label htmlFor="create-member-membership-fee" className="block text-xs font-medium text-neutral-600">
                   Importo tessera
                 </label>
                 <input
+                  id="create-member-membership-fee"
                   className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
                   type="number"
                   step="0.01"
@@ -319,10 +306,11 @@ const CreateMemberModal = memo(function CreateMemberModal({
           ) : null}
 
           <div>
-            <label className="block text-xs font-medium text-neutral-600">
+            <label htmlFor="create-member-notes" className="block text-xs font-medium text-neutral-600">
               Note interne (solo admin)
             </label>
             <textarea
+              id="create-member-notes"
               className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
               rows={3}
               name="internal_notes"
@@ -368,7 +356,7 @@ const CreateMemberModal = memo(function CreateMemberModal({
           </div>
         </form>
       </div>
-    </div>
+    </ModalShell>
   );
 });
 

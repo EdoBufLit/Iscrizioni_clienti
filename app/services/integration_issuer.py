@@ -25,6 +25,10 @@ from app.models import (
     TokenType,
 )
 from app.services.card_allocation import allocate_next_card, release_card_number
+from app.services.annual_memberships import (
+    cancel_current_annual_membership_term,
+    sync_annual_membership_term,
+)
 from app.services.card_verification import build_card_verification_token
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
@@ -32,6 +36,7 @@ from app.services.member_membership import (
     membership_type_label,
     resolve_member_membership_type,
 )
+from app.services.qr_code import generate_qr_png_bytes
 from app.services.org_branding import (
     resolve_assonam_logo_url,
     resolve_card_email_subject,
@@ -239,6 +244,7 @@ def _cleanup_deleted_conflicts(
         return 0
 
     for member in deleted_members:
+        cancel_current_annual_membership_term(db, member)
         release_card_number(
             db,
             org_id=org_id,
@@ -454,6 +460,8 @@ def issue_member_from_integration(
         if outcome == "reused":
             outcome = "reissued"
 
+    sync_annual_membership_term(db, member, source="integration")
+
     logger.info(
         "integration_issue_flush_before request_id=%s phase=upsert_member_and_card member_id=%s org_id=%s outcome=%s",
         request_id,
@@ -570,6 +578,7 @@ def issue_member_from_integration(
             card_image_bytes = None  # fallback: email senza immagine inline
 
         card_image_cid: str | None = None
+        qr_image_cid: str | None = None
         inline_images: list[dict] = []
         if card_image_bytes:
             card_image_cid = "card_front@assonam"
@@ -579,6 +588,27 @@ def issue_member_from_integration(
                     "content_type": "image/png",
                     "data": card_image_bytes,
                     "filename": "tessera.png",
+                }
+            )
+
+        qr_image_url = f"{backend_base}/api/cards/{verification_token}/qr.png"
+        try:
+            qr_image_bytes = generate_qr_png_bytes(verification_url)
+        except Exception:
+            logger.exception(
+                "Unable to generate inline verification QR for member_id=%s org_id=%s",
+                member.id,
+                member.org_id,
+            )
+            qr_image_bytes = None
+        if qr_image_bytes:
+            qr_image_cid = "card_verification_qr@assonam"
+            inline_images.append(
+                {
+                    "cid": qr_image_cid,
+                    "content_type": "image/png",
+                    "data": qr_image_bytes,
+                    "filename": "verifica-tessera.png",
                 }
             )
 
@@ -595,6 +625,8 @@ def issue_member_from_integration(
             assonam_logo_url=assonam_logo_url,
             organization_logo_url=organization_logo_url,
             card_image_cid=card_image_cid,
+            qr_image_url=qr_image_url,
+            qr_image_cid=qr_image_cid,
             access_email_hint=member.email,
             google_wallet_add_url=wallet_add_url,
             card_view_url=card_view_url,

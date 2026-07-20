@@ -1,6 +1,6 @@
 # Piano di conservazione e cancellazione
 
-> Proposta tecnica interna del 15 luglio 2026, da approvare formalmente prima di considerarla policy dell'ente. I valori sono criteri risk-based; il termine contabile decennale va coordinato con art. 2220 c.c. e disciplina fiscale. Validazione richiesta: legale rappresentante, commercialista e DPO o consulente privacy, se nominati.
+> Proposta tecnica interna aggiornata il 18 luglio 2026, da approvare formalmente prima di considerarla policy dell'ente. I valori sono criteri risk-based; il termine contabile decennale va coordinato con art. 2220 c.c. e disciplina fiscale. Validazione richiesta: legale rappresentante, commercialista e DPO o consulente privacy, se nominati.
 
 | Categoria | Evento iniziale | Termine proposto | Metodo/eccezioni | Attuazione |
 |---|---|---:|---|---|
@@ -23,18 +23,24 @@
 | Log sicurezza | Creazione | 90 giorni | Hold per incidente | Da configurare/monitorare |
 | Audit amministrativo | Creazione | 24 mesi | Hold per contenzioso | Da automatizzare |
 | Token/sessioni scaduti | Scadenza/revoca | 30 giorni | Cancellazione hash/token e metadati non necessari | Da automatizzare |
+| Modifica email/telefono socio | Conferma/cancellazione/scadenza | Valore proposto eliminato subito dopo conferma/cancellazione; richiesta scaduta entro 30 giorni | Conservare soltanto campo, esito, date e prova audit minimizzata; per l'email registrare l'esito delle due prove senza indirizzi/token in chiaro | Wipe conferma/cancellazione e doppia prova vecchia/nuova email implementati; purge scaduti da schedulare |
+| Import CSV soci in staging | Commit/rollback o ultima attività | Payload eliminato subito a commit/rollback; anteprima abbandonata entro 7 giorni | Dati cifrati fino alla decisione; conservare conteggi/esito batch minimizzati | Wipe commit/rollback implementato; purge abbandonati da schedulare |
+| Notifiche socio su rinnovi/scadenze | Invio/lettura | 24 mesi | Poi aggregare o cancellare; hold per contestazione | Da automatizzare |
+| Richieste lotti e crediti tessere | Chiusura contabile | 10 anni | Snapshot quantità/prezzo, eventi pagato/da pagare e rettifiche; validare col commercialista | Registro append-only implementato; purge non previsto prima della validazione |
 | DSAR e data breach | Chiusura | 5 anni | Registro ristretto e minimizzato | Registro organizzativo da creare |
 | Backup rolling | Creazione | 60 giorni | Cifratura/accesso ristretto; niente ripristino fuori procedura | Backup esistente, rotazione/restore drill da formalizzare |
 
-## Blocco noto da risolvere
+## Controllo annuale non distruttivo
 
-La funzione di manutenzione annuale esistente può azzerare immediatamente dati identificativi dei soci annuali scaduti, mentre documenti/pagamenti collegati possono restare. Prima di schedularla in produzione occorre:
+Il rischio della precedente manutenzione globale distruttiva è stato chiuso a livello applicativo. L'endpoint storico non è più eseguibile; la nuova operazione annuale:
 
-1. separare lo storico minimo del libro soci/tessera;
-2. cancellare coerentemente documenti e payload non più necessari;
-3. rispettare legal hold e richieste in corso;
-4. eseguire una simulazione con conteggi aggregati e approvazione;
-5. provare backup e ripristino senza reintrodurre dati scaduti nei sistemi operativi.
+1. mostra un'anteprima con conteggi e impronta immutabile del perimetro;
+2. richiede sessione super admin con autenticazione recente e frase di conferma;
+3. è idempotente e disattiva soltanto le tessere annuali del periodo indicato;
+4. non tocca tessere temporanee, anagrafica, documenti, pagamenti, numeri tessera o stock;
+5. conserva termini annuali distinti, così il rinnovo non sovrascrive lo storico.
+
+Questa disattivazione non è un job di retention e non cancella dati personali. L'eventuale cancellazione successiva deve restare in un processo separato con termini approvati, legal hold, report e prova di ripristino.
 
 ## Regole operative
 
@@ -44,4 +50,4 @@ La funzione di manutenzione annuale esistente può azzerare immediatamente dati 
 - Report trimestrale: candidati, cancellati, falliti, sotto hold e copie residue.
 - Cambio termine = nuova versione, motivazione, approvatore e test.
 
-Prossimo passo: modalità dry-run entro 31 agosto 2026; prima esecuzione solo dopo firma e restore drill.
+Prossimo passo: approvare formalmente termini e responsabilità, implementare i job di purge ancora indicati come “da schedulare” e provare legal hold/restore drill prima della prima cancellazione automatica.

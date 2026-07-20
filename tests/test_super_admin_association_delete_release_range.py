@@ -1,11 +1,22 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 from sqlalchemy import func
 
 from app.db import SessionLocal
-from app.models import AdminRole, AdminUser, CardBatch, Member, MemberStatus, OperationLog, Organization
+from app.models import (
+    AdminRole,
+    AdminUser,
+    CardBatch,
+    Member,
+    MemberStatus,
+    OperationLog,
+    Organization,
+    OrgAdminSession,
+    RechargeRequest,
+    RechargeRequestAccountingEvent,
+)
 
 
 @pytest.fixture
@@ -106,6 +117,7 @@ def test_purge_requires_force_and_cleans_fk_dependencies(client, db):
 
     org = _create_org(db, "purge-org", active=False)
     org_id = org.id
+    org_name = org.name
     start_no, end_no = _next_free_range(db)
     _set_card_range(client, org_id, start_no, end_no)
 
@@ -118,6 +130,16 @@ def test_purge_requires_force_and_cleans_fk_dependencies(client, db):
     db.add(org_admin)
     db.commit()
     db.refresh(org_admin)
+
+    persistent_session = OrgAdminSession(
+        admin_id=org_admin.id,
+        token_hash=f"purge-session-{uuid.uuid4().hex}",
+        expires_at=datetime.utcnow() + timedelta(days=1),
+        last_seen_at=datetime.utcnow(),
+    )
+    db.add(persistent_session)
+    db.commit()
+    persistent_session_id = persistent_session.id
 
     member = Member(
         org_id=org_id,
@@ -143,6 +165,39 @@ def test_purge_requires_force_and_cleans_fk_dependencies(client, db):
     db.commit()
     db.refresh(op_log)
 
+    batch = db.query(CardBatch).filter(CardBatch.org_id == org_id).one()
+    recharge = RechargeRequest(
+        association_id=org_id,
+        association_name=org_name,
+        requester_whatsapp="portal:org-admin",
+        requester_profile_name="Portale Org Admin",
+        requested_cards=5,
+        requested_year=batch.year,
+        status="fulfilled",
+        card_batch_id=batch.id,
+        source="org_admin_portal",
+        requested_by_admin_id=org_admin.id,
+        unit_price_cents=100,
+        amount_due_cents=500,
+        currency="EUR",
+        billing_status="paid",
+        paid_at=datetime.utcnow(),
+        paid_by_admin_id=org_admin.id,
+    )
+    db.add(recharge)
+    db.flush()
+    accounting_event = RechargeRequestAccountingEvent(
+        recharge_request_id=recharge.id,
+        actor_admin_id=org_admin.id,
+        previous_status="unpaid",
+        new_status="paid",
+        changes_json={"test": True},
+    )
+    db.add(accounting_event)
+    db.commit()
+    recharge_id = recharge.id
+    accounting_event_id = accounting_event.id
+
     blocked = client.delete(f"/api/admin/associations/{org_id}?mode=purge&release_range=true")
     assert blocked.status_code == 409, blocked.text
 
@@ -158,11 +213,26 @@ def test_purge_requires_force_and_cleans_fk_dependencies(client, db):
     db.expire_all()
     org_exists = db.query(Organization).filter(Organization.id == org_id).first()
     assert org_exists is None
+    assert db.query(OrgAdminSession).filter_by(id=persistent_session_id).first() is None
 
     refreshed_log = db.query(OperationLog).filter(OperationLog.id == op_log.id).first()
     assert refreshed_log is not None
     assert refreshed_log.actor_admin_id is None
     assert refreshed_log.actor_member_id is None
+
+    preserved_recharge = db.query(RechargeRequest).filter_by(id=recharge_id).one()
+    assert preserved_recharge.association_id is None
+    assert preserved_recharge.card_batch_id is None
+    assert preserved_recharge.requested_by_admin_id is None
+    assert preserved_recharge.paid_by_admin_id is None
+    assert preserved_recharge.association_name == org_name
+    assert preserved_recharge.amount_due_cents == 500
+    preserved_event = (
+        db.query(RechargeRequestAccountingEvent)
+        .filter_by(id=accounting_event_id)
+        .one()
+    )
+    assert preserved_event.actor_admin_id is None
 
     other_org = _create_org(db, "purge-target", active=True)
     reuse_response = client.post(

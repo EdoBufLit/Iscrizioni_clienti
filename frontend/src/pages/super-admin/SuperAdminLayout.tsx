@@ -49,7 +49,11 @@ const SuperAdminLayout = () => {
     { label: "Documenti", path: "/super-admin/documenti", icon: "documents" },
     { label: "Amministratori", path: "/super-admin/org-admins", icon: "shield" },
     { label: "Registro lotti", path: "/super-admin/registro-lotti", icon: "cards" },
+    { label: "Crediti tessere", path: "/super-admin/crediti-tessere", icon: "wallet" },
     { label: "Libro Soci", path: "/super-admin/soci", icon: "book" },
+    { label: "Sicurezza", path: "/super-admin/sicurezza", icon: "shield" },
+    { label: "Chiusura annuale", path: "/super-admin/chiusura-annuale", icon: "clock" },
+    { label: "Registro attività", path: "/super-admin/registro-attivita", icon: "book" },
   ];
 
   const mobilePrimaryNav = useMemo(
@@ -65,7 +69,11 @@ const SuperAdminLayout = () => {
   const mobileMoreNav = useMemo(
     (): MobileDashboardNavItem[] => [
       { key: "admins", label: "Amministratori", to: "/super-admin/org-admins", activeMatch: ["/super-admin/org-admins"], icon: "shield" as const },
+      { key: "card-credits", label: "Crediti tessere", to: "/super-admin/crediti-tessere", activeMatch: ["/super-admin/crediti-tessere"], icon: "cards" as const },
       { key: "members", label: "Libro Soci", to: "/super-admin/soci", activeMatch: ["/super-admin/soci"], icon: "book" as const },
+      { key: "security", label: "Sicurezza", to: "/super-admin/sicurezza", activeMatch: ["/super-admin/sicurezza"], icon: "shield" as const },
+      { key: "annual", label: "Chiusura annuale", to: "/super-admin/chiusura-annuale", activeMatch: ["/super-admin/chiusura-annuale"], icon: "chart" as const },
+      { key: "audit", label: "Registro attività", to: "/super-admin/registro-attivita", activeMatch: ["/super-admin/registro-attivita"], icon: "book" as const },
       { key: "site", label: "Torna al sito", to: "/", icon: "globe" as const },
       {
         key: "logout",

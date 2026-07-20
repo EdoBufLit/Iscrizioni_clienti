@@ -67,9 +67,25 @@ class MembershipPaymentSource(str, enum.Enum):
     MANUAL = "manual"
 
 
+class MembershipPaymentKind(str, enum.Enum):
+    INITIAL = "initial"
+    RENEWAL = "renewal"
+
+
 class MembershipType(str, enum.Enum):
     ANNUAL = "annual"
     TEMPORARY = "temporary"
+
+
+class AnnualMembershipTermStatus(str, enum.Enum):
+    DUE = "due"
+    PAYMENT_PENDING = "payment_pending"
+    APPROVED_WAITING_CARD = "approved_waiting_card"
+    PAID_WAITING_CARD = "paid_waiting_card"
+    SCHEDULED = "scheduled"
+    ACTIVE = "active"
+    EXPIRED = "expired"
+    CANCELLED = "cancelled"
 
 
 class TemporaryMembershipDurationUnit(str, enum.Enum):
@@ -167,6 +183,11 @@ class OrgAdminNotificationType(str, enum.Enum):
     DOCUMENT_GENERAL = "document_general"
     DOCUMENT_ACCOUNTING = "document_accounting"
     LOW_CARDS = "low_cards"
+    RENEWAL = "renewal"
+
+
+class MemberNotificationType(str, enum.Enum):
+    RENEWAL = "renewal"
 
 
 class SignupSource(str, enum.Enum):
@@ -380,6 +401,11 @@ class Organization(Base):
     recharge_requests = relationship(
         "RechargeRequest", back_populates="organization"
     )
+    member_import_batches = relationship(
+        "MemberImportBatch",
+        back_populates="organization",
+        passive_deletes=True,
+    )
     admins = relationship(
         "AdminUser", back_populates="organization", foreign_keys="AdminUser.org_id"
     )
@@ -399,6 +425,18 @@ class Organization(Base):
         foreign_keys="OrganizationSharedDocumentAssignment.association_id",
     )
     membership_payments = relationship("MembershipPayment", back_populates="organization")
+    member_notifications = relationship(
+        "MemberNotification",
+        back_populates="organization",
+        foreign_keys="MemberNotification.org_id",
+        passive_deletes=True,
+    )
+    annual_membership_terms = relationship(
+        "AnnualMembershipTerm",
+        back_populates="organization",
+        foreign_keys="AnnualMembershipTerm.org_id",
+        passive_deletes=True,
+    )
     accounting_folders = relationship(
         "AccountingFolder",
         back_populates="organization",
@@ -553,8 +591,12 @@ class OperationLog(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     actor_admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
     actor_member_id = Column(Integer, ForeignKey("members.id"), nullable=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
     actor_role = Column(String)
     action = Column(String, index=True)
+    category = Column(String, nullable=True, index=True)
+    outcome = Column(String, nullable=False, default="success", server_default="success", index=True)
+    request_id = Column(String(64), nullable=True, index=True)
     entity_type = Column(String, index=True)
     entity_id = Column(Integer, nullable=True)
     metadata_json = Column(JSON, nullable=True)
@@ -844,13 +886,150 @@ class RechargeRequest(Base):
     requester_whatsapp = Column(String, nullable=False)
     requester_profile_name = Column(String, nullable=True)
     requested_cards = Column(Integer, nullable=False)
+    requested_year = Column(
+        Integer,
+        nullable=False,
+        default=lambda: datetime.utcnow().year,
+    )
     notes = Column(Text, nullable=True)
     status = Column(String, nullable=False, default="new", server_default="new")
     card_batch_id = Column(Integer, ForeignKey("card_batches.id"), nullable=True, index=True)
+    source = Column(
+        String,
+        nullable=False,
+        default="whatsapp",
+        server_default="whatsapp",
+        index=True,
+    )
+    requested_by_admin_id = Column(
+        Integer,
+        ForeignKey("admin_users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    idempotency_key = Column(String(64), nullable=True)
+    unit_price_cents = Column(Integer, nullable=False, default=100, server_default="100")
+    amount_due_cents = Column(
+        Integer,
+        nullable=False,
+        default=lambda context: int(
+            context.get_current_parameters().get("requested_cards") or 0
+        )
+        * 100,
+        server_default="0",
+    )
+    currency = Column(String(3), nullable=False, default="EUR", server_default="EUR")
+    billing_status = Column(
+        String,
+        nullable=False,
+        default="not_applicable",
+        server_default="not_applicable",
+        index=True,
+    )
+    paid_at = Column(DateTime, nullable=True)
+    paid_by_admin_id = Column(
+        Integer,
+        ForeignKey("admin_users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    payment_reference = Column(String(160), nullable=True)
+    accounting_note = Column(Text, nullable=True)
+    accounting_updated_at = Column(DateTime, nullable=True)
+    notification_email_outbox_id = Column(
+        String(36),
+        ForeignKey("email_outbox.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    super_admin_notified_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        server_default=sa.func.now(),
+    )
 
     organization = relationship("Organization", back_populates="recharge_requests")
     card_batch = relationship("CardBatch", back_populates="recharge_request")
+    requested_by_admin = relationship(
+        "AdminUser",
+        foreign_keys=[requested_by_admin_id],
+    )
+    paid_by_admin = relationship(
+        "AdminUser",
+        foreign_keys=[paid_by_admin_id],
+    )
+    accounting_events = relationship(
+        "RechargeRequestAccountingEvent",
+        back_populates="recharge_request",
+        cascade="all, delete-orphan",
+        order_by="RechargeRequestAccountingEvent.created_at",
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "association_id",
+            "idempotency_key",
+            name="uq_recharge_requests_org_idempotency_key",
+        ),
+        sa.CheckConstraint(
+            "requested_cards >= 1 AND requested_cards <= 5000",
+            name="ck_recharge_requests_requested_cards_range",
+        ),
+        sa.CheckConstraint(
+            "unit_price_cents = 100",
+            name="ck_recharge_requests_unit_price_one_euro",
+        ),
+        sa.CheckConstraint(
+            "amount_due_cents = requested_cards * unit_price_cents",
+            name="ck_recharge_requests_amount_due",
+        ),
+        sa.CheckConstraint(
+            "currency = 'EUR'",
+            name="ck_recharge_requests_currency_eur",
+        ),
+        sa.CheckConstraint(
+            "billing_status IN ('not_applicable', 'unpaid', 'paid')",
+            name="ck_recharge_requests_billing_status",
+        ),
+    )
+
+
+class RechargeRequestAccountingEvent(Base):
+    """Append-only accounting history for card replenishment requests."""
+
+    __tablename__ = "recharge_request_accounting_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    recharge_request_id = Column(
+        Integer,
+        ForeignKey("recharge_requests.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    actor_admin_id = Column(
+        Integer,
+        ForeignKey("admin_users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    previous_status = Column(String, nullable=False)
+    new_status = Column(String, nullable=False)
+    changes_json = Column(GENERIC_JSON_TYPE, nullable=False, default=dict)
+    created_at = Column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        server_default=sa.func.now(),
+        index=True,
+    )
+
+    recharge_request = relationship(
+        "RechargeRequest",
+        back_populates="accounting_events",
+    )
+    actor_admin = relationship("AdminUser", foreign_keys=[actor_admin_id])
 
 
 class AdminUser(Base):
@@ -1173,6 +1352,49 @@ class OrgAdminNotification(Base):
         foreign_keys=[admin_user_id],
     )
     organization = relationship("Organization", foreign_keys=[org_id])
+
+
+class MemberNotification(Base):
+    """A tenant-scoped, durable notification shown in the member area."""
+
+    __tablename__ = "member_notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    member_id = Column(
+        Integer,
+        ForeignKey("members.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    org_id = Column(
+        Integer,
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    type = Column(String, nullable=False, index=True)
+    title = Column(String, nullable=False)
+    body = Column(Text, nullable=False)
+    href = Column(String, nullable=False)
+    is_read = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=sa.false(),
+        index=True,
+    )
+    read_at = Column(DateTime(timezone=True), nullable=True)
+    dedupe_key = Column(String(160), nullable=False, unique=True, index=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utcnow_aware,
+        server_default=sa.func.now(),
+        index=True,
+    )
+
+    member = relationship("Member", back_populates="notifications")
+    organization = relationship("Organization", back_populates="member_notifications")
 
 
 class EmailTemplate(Base):
@@ -1965,6 +2187,12 @@ class Member(Base):
     signup_source = Column(
         String, nullable=True, server_default=SignupSource.ASSONAM_FORM.value
     )
+    import_batch_id = Column(
+        Integer,
+        ForeignKey("member_import_batches.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     external_customer_id = Column(String, nullable=True)
 
     signup_ip = Column(String, nullable=True)
@@ -1988,8 +2216,33 @@ class Member(Base):
     documents = relationship("MemberDocument", back_populates="member")
     payments = relationship("MemberPayment", back_populates="member")
     membership_payments = relationship("MembershipPayment", back_populates="member")
+    annual_membership_terms = relationship(
+        "AnnualMembershipTerm",
+        back_populates="member",
+        foreign_keys="AnnualMembershipTerm.member_id",
+        order_by="AnnualMembershipTerm.membership_year.desc()",
+        passive_deletes=True,
+    )
+    contact_changes = relationship(
+        "MemberContactChange",
+        back_populates="member",
+        foreign_keys="MemberContactChange.member_id",
+        passive_deletes=True,
+        order_by="MemberContactChange.created_at.desc()",
+    )
+    notifications = relationship(
+        "MemberNotification",
+        back_populates="member",
+        foreign_keys="MemberNotification.member_id",
+        passive_deletes=True,
+    )
     tokens = relationship("Token", back_populates="member")
     batch = relationship("CardBatch")
+    import_batch = relationship(
+        "MemberImportBatch",
+        back_populates="members",
+        foreign_keys=[import_batch_id],
+    )
     form_submissions = relationship(
         "FormSubmission",
         back_populates="member",
@@ -2023,6 +2276,185 @@ class Member(Base):
             ),
         ),
         Index("ix_members_card_year_deleted", "card_year", "deleted_at"),
+    )
+
+
+class AnnualMembershipTerm(Base):
+    """Authoritative, non-destructive history for one annual membership card."""
+
+    __tablename__ = "annual_membership_terms"
+
+    id = Column(Integer, primary_key=True, index=True)
+    member_id = Column(
+        Integer,
+        ForeignKey("members.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    org_id = Column(
+        Integer,
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    membership_year = Column(Integer, nullable=False, index=True)
+    starts_on = Column(Date, nullable=False)
+    valid_through = Column(Date, nullable=False, index=True)
+    status = Column(
+        String,
+        nullable=False,
+        default=AnnualMembershipTermStatus.ACTIVE.value,
+        server_default=AnnualMembershipTermStatus.ACTIVE.value,
+        index=True,
+    )
+    fee_amount = Column(Numeric(10, 2), nullable=True)
+    currency = Column(String, nullable=False, default="EUR", server_default="EUR")
+    card_no = Column(Integer, nullable=True)
+    card_year = Column(Integer, nullable=True)
+    batch_id = Column(
+        Integer,
+        ForeignKey("card_batches.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    numbering_scope_id = Column(
+        Integer,
+        ForeignKey("numbering_scopes.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    issued_at = Column(DateTime(timezone=True), nullable=True)
+    activated_at = Column(DateTime(timezone=True), nullable=True)
+    deactivated_at = Column(DateTime(timezone=True), nullable=True)
+    source = Column(String, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utcnow_aware,
+        server_default=sa.func.now(),
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utcnow_aware,
+        onupdate=utcnow_aware,
+        server_default=sa.func.now(),
+    )
+
+    member = relationship("Member", back_populates="annual_membership_terms")
+    organization = relationship("Organization", back_populates="annual_membership_terms")
+    card_batch = relationship("CardBatch", foreign_keys=[batch_id])
+    numbering_scope = relationship("NumberingScope", foreign_keys=[numbering_scope_id])
+    membership_payments = relationship(
+        "MembershipPayment",
+        back_populates="annual_term",
+        foreign_keys="MembershipPayment.annual_term_id",
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "member_id",
+            "membership_year",
+            name="uq_annual_membership_terms_member_year",
+        ),
+        Index(
+            "uq_annual_membership_terms_active_org_year_card",
+            "org_id",
+            "card_year",
+            "card_no",
+            unique=True,
+            sqlite_where=status.notin_(
+                (
+                    AnnualMembershipTermStatus.EXPIRED.value,
+                    AnnualMembershipTermStatus.CANCELLED.value,
+                )
+            ),
+            postgresql_where=status.notin_(
+                (
+                    AnnualMembershipTermStatus.EXPIRED.value,
+                    AnnualMembershipTermStatus.CANCELLED.value,
+                )
+            ),
+        ),
+        Index(
+            "ix_annual_membership_terms_org_year_status",
+            "org_id",
+            "membership_year",
+            "status",
+        ),
+    )
+
+
+class AnnualCardDeactivationRun(Base):
+    """Immutable receipt used to make global annual deactivation idempotent."""
+
+    __tablename__ = "annual_card_deactivation_runs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    membership_year = Column(Integer, nullable=False, index=True)
+    valid_through = Column(Date, nullable=False)
+    preview_hash = Column(String(length=64), nullable=False, unique=True, index=True)
+    deactivated_count = Column(Integer, nullable=False, default=0, server_default="0")
+    term_ids_json = Column(GENERIC_JSON_TYPE, nullable=False, default=list)
+    actor_admin_id = Column(
+        Integer,
+        ForeignKey("admin_users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    executed_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utcnow_aware,
+        server_default=sa.func.now(),
+    )
+
+    actor_admin = relationship("AdminUser", foreign_keys=[actor_admin_id])
+
+
+class MemberContactChange(Base):
+    """Short-lived, encrypted verification request for email or phone changes."""
+
+    __tablename__ = "member_contact_changes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    member_id = Column(
+        Integer,
+        ForeignKey("members.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    org_id = Column(
+        Integer,
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    field = Column(String(length=16), nullable=False, index=True)
+    new_value_encrypted = Column(Text, nullable=False)
+    token_hash = Column(String(length=64), nullable=False, unique=True, index=True)
+    authorization_token_hash = Column(
+        String(length=64), nullable=True, unique=True, index=True
+    )
+    status = Column(String(length=16), nullable=False, default="pending", server_default="pending", index=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    authorized_at = Column(DateTime, nullable=True)
+    confirmed_at = Column(DateTime, nullable=True)
+    cancelled_at = Column(DateTime, nullable=True)
+    requested_ip_hash = Column(String(length=64), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    member = relationship("Member", back_populates="contact_changes")
+    organization = relationship("Organization", foreign_keys=[org_id])
+
+    __table_args__ = (
+        Index(
+            "ix_member_contact_changes_member_field_status",
+            "member_id",
+            "field",
+            "status",
+        ),
     )
 
 
@@ -2153,6 +2585,20 @@ class MembershipPayment(Base):
     id = Column(Integer, primary_key=True, index=True)
     org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     socio_id = Column(Integer, ForeignKey("members.id"), nullable=True, index=True)
+    annual_term_id = Column(
+        Integer,
+        ForeignKey("annual_membership_terms.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    membership_year = Column(Integer, nullable=True, index=True)
+    payment_kind = Column(
+        String,
+        nullable=False,
+        default=MembershipPaymentKind.INITIAL.value,
+        server_default=MembershipPaymentKind.INITIAL.value,
+        index=True,
+    )
     application_id = Column(Integer, nullable=True, index=True)
     provider = Column(
         String,
@@ -2196,10 +2642,95 @@ class MembershipPayment(Base):
 
     organization = relationship("Organization", back_populates="membership_payments")
     member = relationship("Member", back_populates="membership_payments")
+    annual_term = relationship(
+        "AnnualMembershipTerm",
+        back_populates="membership_payments",
+        foreign_keys=[annual_term_id],
+    )
     manual_marked_paid_by = relationship("AdminUser")
 
     __table_args__ = (
         Index("ix_membership_payments_org_member_status", "org_id", "socio_id", "status"),
+        Index(
+            "ix_membership_payments_term_status",
+            "annual_term_id",
+            "status",
+        ),
+    )
+
+
+class MemberImportBatch(Base):
+    __tablename__ = "member_import_batches"
+
+    id = Column(Integer, primary_key=True, index=True)
+    org_id = Column(
+        Integer,
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_by_admin_id = Column(
+        Integer,
+        ForeignKey("admin_users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    file_sha256 = Column(String(length=64), nullable=False, index=True)
+    delimiter = Column(String(length=1), nullable=False)
+    status = Column(String(length=24), nullable=False, default="previewed", server_default="previewed", index=True)
+    total_rows = Column(Integer, nullable=False, default=0, server_default="0")
+    valid_rows = Column(Integer, nullable=False, default=0, server_default="0")
+    error_rows = Column(Integer, nullable=False, default=0, server_default="0")
+    imported_rows = Column(Integer, nullable=False, default=0, server_default="0")
+    activation_mode = Column(String(length=24), nullable=True)
+    commit_policy = Column(String(length=24), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    committed_at = Column(DateTime, nullable=True)
+    rolled_back_at = Column(DateTime, nullable=True)
+
+    organization = relationship("Organization", back_populates="member_import_batches")
+    created_by_admin = relationship("AdminUser", foreign_keys=[created_by_admin_id])
+    rows = relationship(
+        "MemberImportRow",
+        back_populates="batch",
+        passive_deletes=True,
+        order_by="MemberImportRow.row_number.asc()",
+    )
+    members = relationship(
+        "Member",
+        back_populates="import_batch",
+        foreign_keys="Member.import_batch_id",
+    )
+
+
+class MemberImportRow(Base):
+    __tablename__ = "member_import_rows"
+
+    id = Column(Integer, primary_key=True, index=True)
+    batch_id = Column(
+        Integer,
+        ForeignKey("member_import_batches.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    row_number = Column(Integer, nullable=False)
+    payload_encrypted = Column(Text, nullable=False)
+    row_sha256 = Column(String(length=64), nullable=False)
+    errors_json = Column(GENERIC_JSON_TYPE, nullable=False, default=list)
+    status = Column(String(length=24), nullable=False, default="valid", server_default="valid", index=True)
+    member_id = Column(
+        Integer,
+        ForeignKey("members.id", ondelete="SET NULL", use_alter=True),
+        nullable=True,
+        index=True,
+    )
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    batch = relationship("MemberImportBatch", back_populates="rows")
+    member = relationship("Member", foreign_keys=[member_id])
+
+    __table_args__ = (
+        UniqueConstraint("batch_id", "row_number", name="uq_member_import_rows_batch_row"),
     )
 
 
@@ -2257,12 +2788,94 @@ class OrgAdminSession(Base):
     expires_at = Column(DateTime, nullable=False, index=True)
     revoked_at = Column(DateTime, nullable=True, index=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    last_seen_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    user_agent = Column(String(512), nullable=True)
+    ip_hash = Column(String(64), nullable=True)
+    mfa_verified_at = Column(DateTime, nullable=True, index=True)
+    # A dedicated, short-lived first-factor step-up used only while enrolling
+    # optional MFA.  Keeping it separate from ``mfa_verified_at`` avoids
+    # representing an email verification as a completed second factor.
+    mfa_setup_authorized_at = Column(DateTime, nullable=True)
 
     admin = relationship(
         "AdminUser",
         back_populates="persistent_sessions",
         foreign_keys=[admin_id],
     )
+
+
+class AdminMfaFactor(Base):
+    """Encrypted TOTP factor for a privileged administrator."""
+
+    __tablename__ = "admin_mfa_factors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    admin_id = Column(
+        Integer,
+        ForeignKey("admin_users.id"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    factor_type = Column(String, nullable=False, default="totp", server_default="totp")
+    status = Column(String, nullable=False, default="pending", server_default="pending", index=True)
+    secret_encrypted = Column(Text, nullable=False)
+    last_used_timestep = Column(Integer, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    activated_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    admin = relationship("AdminUser", foreign_keys=[admin_id])
+
+
+class AdminRecoveryCode(Base):
+    __tablename__ = "admin_recovery_codes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=False, index=True)
+    code_hash = Column(String(64), nullable=False, index=True)
+    used_at = Column(DateTime, nullable=True, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    admin = relationship("AdminUser", foreign_keys=[admin_id])
+
+    __table_args__ = (
+        UniqueConstraint("admin_id", "code_hash", name="uq_admin_recovery_code_hash"),
+    )
+
+
+class SuperAdminSession(Base):
+    __tablename__ = "super_admin_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=False, index=True)
+    token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    last_seen_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    idle_expires_at = Column(DateTime, nullable=False, index=True)
+    absolute_expires_at = Column(DateTime, nullable=False, index=True)
+    revoked_at = Column(DateTime, nullable=True, index=True)
+    mfa_verified_at = Column(DateTime, nullable=True, index=True)
+    user_agent = Column(String(512), nullable=True)
+    ip_hash = Column(String(64), nullable=True)
+
+    admin = relationship("AdminUser", foreign_keys=[admin_id])
+
+
+class AdminAuthChallenge(Base):
+    __tablename__ = "admin_auth_challenges"
+
+    id = Column(Integer, primary_key=True, index=True)
+    admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=False, index=True)
+    token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    purpose = Column(String, nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    attempts = Column(Integer, nullable=False, default=0, server_default="0")
+    max_attempts = Column(Integer, nullable=False, default=5, server_default="5")
+    consumed_at = Column(DateTime, nullable=True, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    admin = relationship("AdminUser", foreign_keys=[admin_id])
 
 
 class OnboardingTour(Base):

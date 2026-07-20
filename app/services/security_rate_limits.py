@@ -11,6 +11,7 @@ from app.services.db_rate_limit import enforce_db_rate_limit
 AUTH_RATE_LIMIT_BUCKET = "security:auth:global"
 JOIN_RATE_LIMIT_BUCKET = "security:join:global"
 PAYMENT_STATUS_RATE_LIMIT_BUCKET = "security:payment-status:global"
+ORG_ADMIN_MFA_SETUP_RATE_LIMIT_BUCKET = "security:org-admin-mfa-setup:global"
 _RATE_LIMIT_DETAIL = "Too many requests. Please try again later."
 
 
@@ -67,4 +68,15 @@ def enforce_payment_status_rate_limit(db: Session, *, client_ip: str) -> None:
         bucket=PAYMENT_STATUS_RATE_LIMIT_BUCKET,
         client_ip=client_ip,
         max_requests=30,
+    )
+
+
+def enforce_org_admin_mfa_setup_rate_limit(db: Session, *, client_ip: str) -> None:
+    """Bound enrollment-code requests and guesses independently from login."""
+
+    _enforce_security_rate_limit(
+        db,
+        bucket=ORG_ADMIN_MFA_SETUP_RATE_LIMIT_BUCKET,
+        client_ip=client_ip,
+        max_requests=5,
     )

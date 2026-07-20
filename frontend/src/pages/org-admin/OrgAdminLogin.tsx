@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { requestOrgAdminMagicLink, fetchWhoAmI, verifyOrgAdminCode } from "../../lib/api";
+import OrgAdminMfaChallenge from "./components/OrgAdminMfaChallenge";
 
 const OrgAdminLogin = () => {
   const navigate = useNavigate();
@@ -11,6 +12,7 @@ const OrgAdminLogin = () => {
   const [accessCode, setAccessCode] = useState("");
   const [codeError, setCodeError] = useState("");
   const [verifyingCode, setVerifyingCode] = useState(false);
+  const [mfaChallenge, setMfaChallenge] = useState("");
 
   useEffect(() => {
     fetchWhoAmI()
@@ -47,6 +49,10 @@ const OrgAdminLogin = () => {
     setVerifyingCode(true);
     try {
       const result = await verifyOrgAdminCode(email.trim(), normalizedAccessCode);
+      if (result.mfa_required && result.challenge) {
+        setMfaChallenge(result.challenge);
+        return;
+      }
       navigate(result.redirect_to || "/org-admin", { replace: true });
     } catch {
       setCodeError("Codice non valido o scaduto. Richiedi una nuova email e riprova.");
@@ -80,6 +86,24 @@ const OrgAdminLogin = () => {
       </div>
     </div>
   );
+
+  if (mfaChallenge) {
+    return (
+      <section className="auth-page auth-page--standalone">
+        <div className="container-shell w-full">
+          <div className="auth-shell mx-auto grid max-w-4xl md:grid-cols-2">
+            <div className="flex items-center px-6 py-10 sm:px-10">
+              <OrgAdminMfaChallenge
+                challenge={mfaChallenge}
+                onSuccess={(redirectTo) => navigate(redirectTo, { replace: true })}
+              />
+            </div>
+            {imagePanel}
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   if (sent) {
     return (

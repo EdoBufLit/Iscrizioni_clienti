@@ -188,7 +188,7 @@ def test_public_uploads_route_blocks_private_files_but_keeps_wallet_assets(clien
         legacy_svg.unlink(missing_ok=True)
 
 
-def test_legacy_admin_login_requires_active_super_admin(client):
+def test_legacy_admin_login_is_not_mounted(client):
     client.cookies.clear()
     db = SessionLocal()
     try:
@@ -235,9 +235,9 @@ def test_legacy_admin_login_requires_active_super_admin(client):
             follow_redirects=False,
         )
 
-        assert allowed.status_code == 302, allowed.text
-        assert blocked_org_admin.status_code == 401, blocked_org_admin.text
-        assert blocked_disabled.status_code == 401, blocked_disabled.text
+        assert allowed.status_code == 405, allowed.text
+        assert blocked_org_admin.status_code == 405, blocked_org_admin.text
+        assert blocked_disabled.status_code == 405, blocked_disabled.text
     finally:
         client.cookies.clear()
         db.close()

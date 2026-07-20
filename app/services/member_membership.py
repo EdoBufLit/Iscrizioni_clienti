@@ -1,10 +1,15 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
 from app.models import Member, Organization
+from app.services.annual_memberships import (
+    annual_membership_expiry_datetime,
+    annual_membership_valid_through,
+    as_rome_datetime,
+)
 
 MEMBERSHIP_TYPE_ANNUAL = "annual"
 MEMBERSHIP_TYPE_TEMPORARY = "temporary"
@@ -124,7 +129,7 @@ def resolve_member_valid_until(member: Member | None) -> datetime | None:
         parsed_year = int(card_year)
     except (TypeError, ValueError):
         return None
-    return datetime(parsed_year, 12, 31, 23, 59, 59)
+    return annual_membership_expiry_datetime(parsed_year)
 
 
 def is_member_membership_expired(
@@ -137,7 +142,19 @@ def is_member_membership_expired(
     current_time = now or datetime.utcnow()
     explicit_valid_until = getattr(member, "valid_until", None)
     if explicit_valid_until is not None:
-        return explicit_valid_until < current_time
+        if explicit_valid_until.tzinfo is None:
+            comparable_now = (
+                current_time
+                if current_time.tzinfo is None
+                else current_time.astimezone(timezone.utc).replace(tzinfo=None)
+            )
+        else:
+            comparable_now = (
+                current_time.replace(tzinfo=timezone.utc)
+                if current_time.tzinfo is None
+                else current_time.astimezone(explicit_valid_until.tzinfo)
+            )
+        return explicit_valid_until < comparable_now
     card_year = getattr(member, "card_year", None)
     if card_year is None:
         return False
@@ -145,7 +162,7 @@ def is_member_membership_expired(
         parsed_year = int(card_year)
     except (TypeError, ValueError):
         return True
-    return parsed_year < current_time.year
+    return as_rome_datetime(current_time).date() > annual_membership_valid_through(parsed_year)
 
 
 def member_has_issued_card(member: Member | None) -> bool:

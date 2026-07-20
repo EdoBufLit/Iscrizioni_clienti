@@ -1,6 +1,6 @@
 # Fascicolo compliance ASSO.N.A.M.
 
-> **Stato al 15 luglio 2026:** compilazione tecnica e policy interna provvisoria completate. Restano necessarie la firma del legale rappresentante, la verifica con visura/statuto, la raccolta dei contratti dei fornitori e la validazione di un consulente privacy. Il fascicolo non sostituisce un parere legale.
+> **Stato al 18 luglio 2026:** compilazione tecnica e policy interna provvisoria aggiornate ai controlli annualità, MFA, audit, rinnovi e importazione. Restano necessarie la firma del legale rappresentante, la verifica con visura/statuto, la raccolta dei contratti dei fornitori e la validazione di un consulente privacy. Il fascicolo non sostituisce un parere legale.
 
 ## Identità utilizzata
 
@@ -40,7 +40,7 @@ Non è possibile dichiarare “dati soltanto in Italia” o “nessun trasferime
 
 La proposta risk-based è dettagliata in [05-conservazione.md](05-conservazione.md). I termini principali sono: 30 giorni per pratiche abbandonate, 180 giorni per pratiche chiuse/rifiutate, 30 giorni dopo la verifica per copie dei documenti, rapporto + 12 mesi per dati operativi socio, 10 anni per storico minimo e contabilità, 7 giorni per webhook grezzi e 60 giorni per backup rolling.
 
-La proposta costituisce l'obiettivo operativo del progetto, ma richiede ancora approvazione formale e non è interamente automatizzata. Prima di schedulare cancellazioni va corretta e verificata anche la manutenzione annuale esistente, che può anonimizzare dati del socio prima di aver separato lo storico minimo necessario.
+La proposta costituisce l'obiettivo operativo del progetto, ma richiede ancora approvazione formale e non è interamente automatizzata. La precedente manutenzione annuale distruttiva è stata disabilitata: la chiusura globale ora produce prima un'anteprima e disattiva soltanto le tessere annuali interessate, conservando storico, anagrafica, documenti, pagamenti, numeri e stock. I job di cancellazione per retention restano separati e non devono essere attivati prima dell'approvazione formale e del legal hold.
 
 ## Documenti del fascicolo
 
@@ -78,6 +78,6 @@ La proposta costituisce l'obiettivo operativo del progetto, ma richiede ancora a
 ## Controllo versione
 
 - Proprietario documentale: legale rappresentante ASSO.N.A.M. pro tempore.
-- Compilazione tecnica: 15 luglio 2026.
+- Compilazione tecnica: 18 luglio 2026.
 - Revisione ordinaria: almeno annuale e a ogni cambio di finalità, fornitore, Paese, retention o misura rilevante.
 - Prossima revisione proposta: 15 ottobre 2026.

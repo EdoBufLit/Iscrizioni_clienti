@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import {
   MemberCardPreview,
@@ -7,7 +7,17 @@ import {
 } from "../../components/cards/MemberCardPreview";
 import Skeleton from "../../components/ui/Skeleton";
 import type { DashboardContext } from "./DashboardLayout";
-import { AuthError, createMemberGoogleWalletSaveLink } from "../../lib/api";
+import {
+  AuthError,
+  createMemberGoogleWalletSaveLink,
+  createMemberRenewalCheckout,
+  fetchMemberNotifications,
+  fetchMemberMembership,
+  markMemberNotificationRead,
+  requestMemberRenewal,
+  type MemberAreaNotification,
+  type MemberMembershipResponse,
+} from "../../lib/api";
 
 const STATUS_STYLE: Record<string, { label: string; color: string }> = {
   active: {
@@ -25,6 +35,10 @@ const STATUS_STYLE: Record<string, { label: string; color: string }> = {
   pending_verification: {
     label: "In attesa verifica",
     color: "border-blue-200 bg-blue-50 text-blue-700",
+  },
+  expired: {
+    label: "Da rinnovare",
+    color: "border-rose-200 bg-rose-50 text-rose-700",
   },
 };
 
@@ -123,6 +137,36 @@ const DashboardHome = () => {
   const { user, loading, profileError, reloadProfile } = useOutletContext<DashboardContext>();
   const [walletLoading, setWalletLoading] = useState(false);
   const [walletError, setWalletError] = useState<string | null>(null);
+  const [membership, setMembership] = useState<MemberMembershipResponse | null>(null);
+  const [renewalBusy, setRenewalBusy] = useState(false);
+  const [renewalMessage, setRenewalMessage] = useState<string | null>(null);
+  const [renewalError, setRenewalError] = useState<string | null>(null);
+  const [notifications, setNotifications] = useState<MemberAreaNotification[]>([]);
+
+  const loadMembership = async () => {
+    try {
+      setMembership(await fetchMemberMembership());
+    } catch (error) {
+      if (!(error instanceof AuthError)) {
+        setRenewalError(error instanceof Error ? error.message : "Rinnovo non disponibile");
+      }
+    }
+  };
+
+  const loadNotifications = async () => {
+    try {
+      const payload = await fetchMemberNotifications({ limit: 5 });
+      setNotifications(payload.items);
+    } catch (error) {
+      if (error instanceof AuthError) return;
+      setRenewalError(error instanceof Error ? error.message : "Notifiche non disponibili");
+    }
+  };
+
+  useEffect(() => {
+    if (!user) return;
+    void Promise.all([loadMembership(), loadNotifications()]);
+  }, [user?.id]);
 
   const statusInfo = user
     ? STATUS_STYLE[user.status] ?? { label: user.status, color: "border-neutral-200 bg-neutral-50 text-neutral-600" }
@@ -161,6 +205,47 @@ const DashboardHome = () => {
     }
   };
 
+  const handleRenewal = async () => {
+    if (renewalBusy) return;
+    setRenewalBusy(true);
+    setRenewalError(null);
+    setRenewalMessage(null);
+    try {
+      const result = await requestMemberRenewal();
+      if (result.checkout_required) {
+        const checkout = await createMemberRenewalCheckout(result.term.id);
+        window.location.href = checkout.hosted_checkout_url;
+        return;
+      }
+      setRenewalMessage(
+        result.term.card_no != null
+          ? "Rinnovo registrato: la nuova tessera è stata predisposta."
+          : "Richiesta inviata. L'associazione può seguirla dal Centro Quote.",
+      );
+      await loadMembership();
+      await loadNotifications();
+    } catch (error) {
+      if (error instanceof AuthError) {
+        window.location.href = "/login";
+        return;
+      }
+      setRenewalError(error instanceof Error ? error.message : "Impossibile richiedere il rinnovo");
+    } finally {
+      setRenewalBusy(false);
+    }
+  };
+
+  const handleNotificationRead = async (notificationId: number) => {
+    try {
+      await markMemberNotificationRead(notificationId);
+      setNotifications((current) => current.map((item) => (
+        item.id === notificationId ? { ...item, is_read: true } : item
+      )));
+    } catch (error) {
+      setRenewalError(error instanceof Error ? error.message : "Impossibile aggiornare la notifica");
+    }
+  };
+
   return (
     <div data-tour="member-dashboard-home" className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div>
@@ -194,6 +279,80 @@ const DashboardHome = () => {
         </>
       ) : user ? (
         <>
+          {membership?.current ? (
+            <section
+              className="surface-strong border border-brand/10 p-6 sm:flex sm:items-center sm:justify-between sm:gap-8"
+              aria-labelledby="membership-renewal-title"
+            >
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-brand">Annualità associativa</p>
+                <h2 id="membership-renewal-title" className="mt-2 text-xl font-bold text-neutral-900">
+                  {membership.renewal?.card_no != null
+                    ? `Rinnovo ${membership.renewal.membership_year} completato`
+                    : `La tessera scade il ${new Date(`${membership.current.valid_through}T12:00:00`).toLocaleDateString("it-IT")}`}
+                </h2>
+                <p className="mt-2 text-sm font-medium leading-relaxed text-neutral-600">
+                  {membership.renewal?.card_no != null
+                    ? `La nuova tessera sarà valida dal ${new Date(`${membership.renewal.starts_on}T12:00:00`).toLocaleDateString("it-IT")}.`
+                    : membership.renewal?.status === "payment_pending"
+                      ? "Il rinnovo è in attesa del pagamento."
+                      : membership.can_renew
+                        ? "Puoi rinnovare ora senza ripetere l'iscrizione."
+                        : `Il rinnovo sarà disponibile dal ${membership.renewal_opens_on ? new Date(`${membership.renewal_opens_on}T12:00:00`).toLocaleDateString("it-IT") : "periodo indicato"}.`}
+                </p>
+                {renewalMessage ? <p className="mt-3 text-sm font-semibold text-emerald-700" role="status">{renewalMessage}</p> : null}
+                {renewalError ? <p className="mt-3 text-sm font-semibold text-red-600" role="alert">{renewalError}</p> : null}
+              </div>
+              {membership.can_renew ? (
+                <button
+                  type="button"
+                  className="btn-primary mt-5 w-full shrink-0 px-6 py-3 sm:mt-0 sm:w-auto"
+                  onClick={() => void handleRenewal()}
+                  disabled={renewalBusy}
+                >
+                  {renewalBusy ? "Operazione in corso…" : membership.renewal?.status === "payment_pending" ? "Completa rinnovo" : "Rinnova tessera"}
+                </button>
+              ) : null}
+            </section>
+          ) : null}
+
+          {notifications.length ? (
+            <section className="surface p-6" aria-labelledby="member-notifications-title">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-brand">Area riservata</p>
+                  <h2 id="member-notifications-title" className="mt-2 text-xl font-bold text-neutral-900">Comunicazioni</h2>
+                </div>
+                <span className="text-xs font-semibold text-neutral-500">
+                  {notifications.filter((item) => !item.is_read).length} da leggere
+                </span>
+              </div>
+              <div className="mt-5 divide-y divide-neutral-200">
+                {notifications.map((notification) => (
+                  <article key={notification.id} className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        {!notification.is_read ? <span className="h-2 w-2 shrink-0 rounded-full bg-brand" aria-label="Non letta" /> : null}
+                        <h3 className="font-bold text-neutral-900">{notification.title}</h3>
+                      </div>
+                      <p className="mt-1 text-sm font-medium leading-relaxed text-neutral-600">{notification.body}</p>
+                      {notification.created_at ? (
+                        <time className="mt-2 block text-xs font-semibold text-neutral-400" dateTime={notification.created_at}>
+                          {new Date(notification.created_at).toLocaleString("it-IT", { dateStyle: "medium", timeStyle: "short" })}
+                        </time>
+                      ) : null}
+                    </div>
+                    {!notification.is_read ? (
+                      <button type="button" className="btn-ghost shrink-0 !px-3 !py-2 !text-xs" onClick={() => void handleNotificationRead(notification.id)}>
+                        Segna come letta
+                      </button>
+                    ) : null}
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
           <div className="grid gap-6 md:grid-cols-3">
             {SUMMARY_CARDS.map((card) => (
               <div

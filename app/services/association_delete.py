@@ -23,7 +23,10 @@ from app.models import (
     MemberPayment,
     OperationLog,
     Organization,
+    OrgAdminSession,
     OrgAdminToken,
+    RechargeRequest,
+    RechargeRequestAccountingEvent,
     Token,
 )
 
@@ -59,6 +62,9 @@ def _collect_dependency_counts(db: Session, org_id: int, org_slug: str) -> dict[
         "integration_keys": db.query(IntegrationApiKey).filter(IntegrationApiKey.org_id == org_id).count(),
         "card_movements": db.query(CardMovement).filter(CardMovement.org_id == org_id).count(),
         "card_batches": db.query(CardBatch).filter(CardBatch.org_id == org_id).count(),
+        "recharge_requests": db.query(RechargeRequest)
+        .filter(RechargeRequest.association_id == org_id)
+        .count(),
         "ingest_rate_limits": db.query(IngestRateLimit).filter(IngestRateLimit.org_slug == org_slug).count(),
     }
 
@@ -100,6 +106,10 @@ def _purge_association_dependencies(db: Session, *, org: Organization) -> None:
             AdminUser.role == AdminRole.ORG_ADMIN,
         ).all()
     ]
+    batch_ids = [
+        batch_id
+        for (batch_id,) in db.query(CardBatch.id).filter(CardBatch.org_id == org.id).all()
+    ]
 
     if member_ids:
         db.query(OperationLog).filter(OperationLog.actor_member_id.in_(member_ids)).update(
@@ -111,6 +121,32 @@ def _purge_association_dependencies(db: Session, *, org: Organization) -> None:
             {OperationLog.actor_admin_id: None},
             synchronize_session=False,
         )
+        db.query(RechargeRequest).filter(
+            RechargeRequest.requested_by_admin_id.in_(admin_ids)
+        ).update({RechargeRequest.requested_by_admin_id: None}, synchronize_session=False)
+        db.query(RechargeRequest).filter(
+            RechargeRequest.paid_by_admin_id.in_(admin_ids)
+        ).update({RechargeRequest.paid_by_admin_id: None}, synchronize_session=False)
+        db.query(RechargeRequestAccountingEvent).filter(
+            RechargeRequestAccountingEvent.actor_admin_id.in_(admin_ids)
+        ).update(
+            {RechargeRequestAccountingEvent.actor_admin_id: None},
+            synchronize_session=False,
+        )
+
+    # Preserve the immutable accounting snapshot while severing tenant and lot
+    # foreign keys before the organization/card batches are purged.
+    db.query(RechargeRequest).filter(RechargeRequest.association_id == org.id).update(
+        {
+            RechargeRequest.association_id: None,
+            RechargeRequest.card_batch_id: None,
+        },
+        synchronize_session=False,
+    )
+    if batch_ids:
+        db.query(RechargeRequest).filter(
+            RechargeRequest.card_batch_id.in_(batch_ids)
+        ).update({RechargeRequest.card_batch_id: None}, synchronize_session=False)
 
     if member_ids:
         db.query(Booking).filter(Booking.member_id.in_(member_ids)).update(
@@ -130,6 +166,11 @@ def _purge_association_dependencies(db: Session, *, org: Organization) -> None:
     db.query(Member).filter(Member.org_id == org.id).delete(synchronize_session=False)
 
     if admin_ids:
+        # Persistent login sessions use a legacy FK without ON DELETE CASCADE.
+        # Revoke their storage explicitly before removing the administrators.
+        db.query(OrgAdminSession).filter(OrgAdminSession.admin_id.in_(admin_ids)).delete(
+            synchronize_session=False
+        )
         db.query(OrgAdminToken).filter(OrgAdminToken.admin_id.in_(admin_ids)).delete(
             synchronize_session=False
         )

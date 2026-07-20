@@ -455,6 +455,25 @@ export type MemberDocumentsResponse = {
   items: MemberDocumentItem[];
 };
 
+export type MemberDocumentCorrectionResponse = {
+  member: {
+    display_name: string;
+  };
+  organization: {
+    name: string;
+  };
+  document: {
+    id: number;
+    type: string;
+    filename: string;
+    mime_type: string | null;
+    size_bytes: number | null;
+    rejection_note: string | null;
+    reviewed_at: string | null;
+  };
+  session_expires_in_seconds: number;
+};
+
 export type MemberBookingItem = {
   id: number;
   status: string;
@@ -470,6 +489,7 @@ export type MemberBookingItem = {
   has_unreviewed_customer_note: boolean;
   created_at: string | null;
   confirmed_at: string | null;
+  authorized_at: string | null;
   cancelled_at: string | null;
   source_form: {
     id: number;
@@ -569,6 +589,55 @@ export async function resubmitMemberDocument(
   return res.json();
 }
 
+async function throwDocumentCorrectionError(
+  response: Response,
+  fallback: string,
+): Promise<never> {
+  const payload = await response.json().catch(() => null);
+  throw new Error(payload?.detail ?? fallback);
+}
+
+export async function establishMemberDocumentCorrectionSession(
+  token: string,
+): Promise<MemberDocumentCorrectionResponse> {
+  const res = await fetch("/api/member/document-correction/session", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  if (!res.ok) {
+    return throwDocumentCorrectionError(res, "Link di correzione non valido o scaduto.");
+  }
+  return res.json();
+}
+
+export async function fetchMemberDocumentCorrection(): Promise<MemberDocumentCorrectionResponse> {
+  const res = await fetch("/api/member/document-correction");
+  if (!res.ok) {
+    return throwDocumentCorrectionError(res, "Sessione di correzione non disponibile.");
+  }
+  return res.json();
+}
+
+export async function resubmitMemberDocumentCorrection(
+  docId: number,
+  file: File,
+): Promise<{ ok: boolean; id: number; status: string }> {
+  const body = new FormData();
+  body.append("document", file);
+  const res = await fetch(
+    `/api/member/document-correction/documents/${encodeURIComponent(String(docId))}/resubmit`,
+    {
+      method: "POST",
+      body,
+    },
+  );
+  if (!res.ok) {
+    return throwDocumentCorrectionError(res, "Errore durante il reinvio del documento.");
+  }
+  return res.json();
+}
+
 export async function changePassword(
   newPassword: string,
 ): Promise<{ status: string; message: string }> {
@@ -582,6 +651,73 @@ export async function changePassword(
   }
   if (!res.ok) throw new Error("Errore nel cambio password");
   return res.json();
+}
+
+export type MemberContactChange = {
+  id: number;
+  field: "email" | "phone";
+  masked_new_value: string;
+  status: "pending" | "confirmed" | "cancelled" | "expired";
+  expires_at: string | null;
+  created_at: string | null;
+  confirmed_at: string | null;
+};
+
+export async function fetchMemberContactChanges(): Promise<MemberContactChange[]> {
+  const res = await fetch("/api/member/contact-changes");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error("Impossibile caricare le richieste di modifica");
+  const payload = await res.json();
+  return Array.isArray(payload?.items) ? payload.items : [];
+}
+
+export async function requestMemberContactChange(
+  field: "email" | "phone",
+  newValue: string,
+): Promise<MemberContactChange> {
+  const res = await fetch("/api/member/contact-changes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ field, new_value: newValue }),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  const payload = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(payload?.detail ?? "Richiesta non riuscita");
+  return payload.request;
+}
+
+export async function resendMemberContactChange(id: number): Promise<MemberContactChange> {
+  const res = await fetch(`/api/member/contact-changes/${id}/resend`, { method: "POST" });
+  const payload = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(payload?.detail ?? "Invio non riuscito");
+  return payload.request;
+}
+
+export async function cancelMemberContactChange(id: number): Promise<void> {
+  const res = await fetch(`/api/member/contact-changes/${id}`, { method: "DELETE" });
+  const payload = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(payload?.detail ?? "Annullamento non riuscito");
+}
+
+export async function confirmMemberContactChange(token: string): Promise<"email" | "phone"> {
+  const res = await fetch("/api/member/contact-changes/confirm", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  const payload = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(payload?.detail ?? "Conferma non riuscita");
+  return payload.field;
+}
+
+export async function authorizeMemberEmailChange(token: string): Promise<void> {
+  const res = await fetch("/api/member/contact-changes/authorize", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  const payload = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(payload?.detail ?? "Autorizzazione non riuscita");
 }
 
 export async function apiLogout(): Promise<void> {
@@ -611,6 +747,8 @@ export type OrgAdminProfile = {
   email: string;
   org_id: number;
   role: string;
+  mfa_enabled?: boolean;
+  session_id?: number;
   organization: {
     id: number;
     name: string;
@@ -632,9 +770,17 @@ export async function requestOrgAdminMagicLink(
   return res.json();
 }
 
+export type OrgAdminLoginVerification = {
+  ok: boolean;
+  redirect_to?: string;
+  mfa_required?: boolean;
+  challenge?: string;
+  recovery_codes_remaining?: number;
+};
+
 export async function verifyOrgAdminToken(
   token: string,
-): Promise<void> {
+): Promise<OrgAdminLoginVerification> {
   // Use default redirect behavior to ensure cookies are set correctly by the browser
   const res = await fetch(
     `/api/org-admin/auth/verify?token=${encodeURIComponent(token)}`
@@ -643,6 +789,9 @@ export async function verifyOrgAdminToken(
   // If successful, the backend redirects to the dashboard (200 OK HTML)
   // If failed, it returns 400 or similar
   if (!res.ok) throw new Error("Invalid or expired token");
+  const contentType = res.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) return res.json();
+  return { ok: true, redirect_to: "/org-admin" };
 }
 
 export async function fetchMemberBookings(): Promise<MemberBookingsResponse> {
@@ -672,7 +821,7 @@ export async function submitMemberBookingNote(
 export async function verifyOrgAdminCode(
   email: string,
   code: string,
-): Promise<{ ok: boolean; redirect_to?: string }> {
+): Promise<OrgAdminLoginVerification> {
   const body = new FormData();
   body.append("email", email);
   body.append("code", code);
@@ -681,6 +830,123 @@ export async function verifyOrgAdminCode(
     body,
   });
   if (!res.ok) throw new Error("Invalid or expired code");
+  return res.json();
+}
+
+export async function verifyOrgAdminMfa(
+  challenge: string,
+  code: string,
+  useRecoveryCode = false,
+): Promise<OrgAdminLoginVerification> {
+  const res = await fetch("/api/org-admin/auth/mfa/verify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ challenge, code, use_recovery_code: useRecoveryCode }),
+  });
+  if (!res.ok) throw new Error("Invalid authentication code");
+  return res.json();
+}
+
+export type OrgAdminSessionInfo = {
+  id: number;
+  created_at: string | null;
+  last_seen_at: string | null;
+  expires_at: string;
+  user_agent: string | null;
+  ip_hash: string | null;
+  mfa_verified: boolean;
+  current: boolean;
+};
+
+export type OrgAdminSecurityInfo = {
+  mfa_enabled: boolean;
+  recovery_codes_remaining: number;
+  sessions: OrgAdminSessionInfo[];
+};
+
+export type OrgAdminMfaSetup = {
+  secret: string;
+  provisioning_uri: string;
+  qr_data_uri: string;
+};
+
+export type OrgAdminMfaSetupEmailStepUp = {
+  ok: boolean;
+  masked_email: string;
+  expires_in_seconds: number;
+  resend_after_seconds: number;
+};
+
+export async function requestOrgAdminMfaSetupEmailCode(): Promise<OrgAdminMfaSetupEmailStepUp> {
+  const res = await fetch("/api/org-admin/auth/mfa/setup/email/request", { method: "POST" });
+  if (!res.ok) throw new Error("Impossibile inviare il codice di sicurezza");
+  return res.json();
+}
+
+export async function verifyOrgAdminMfaSetupEmailCode(
+  code: string,
+): Promise<{ ok: boolean; setup_authorized: boolean; expires_in_seconds: number }> {
+  const res = await fetch("/api/org-admin/auth/mfa/setup/email/verify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
+  if (!res.ok) throw new Error("Codice di sicurezza non valido o scaduto");
+  return res.json();
+}
+
+export async function setupOrgAdminMfa(): Promise<OrgAdminMfaSetup> {
+  const res = await fetch("/api/org-admin/auth/mfa/setup", { method: "POST" });
+  if (!res.ok) throw new Error("Impossibile avviare la configurazione MFA");
+  return res.json();
+}
+
+export async function confirmOrgAdminMfa(
+  code: string,
+): Promise<{ ok: boolean; recovery_codes: string[] }> {
+  const res = await fetch("/api/org-admin/auth/mfa/setup/confirm", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code, use_recovery_code: false }),
+  });
+  if (!res.ok) throw new Error("Codice non valido");
+  return res.json();
+}
+
+export async function fetchOrgAdminSecurity(): Promise<OrgAdminSecurityInfo> {
+  const res = await fetch("/api/org-admin/auth/security");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error("Impossibile caricare le impostazioni di sicurezza");
+  return res.json();
+}
+
+export async function regenerateOrgAdminRecoveryCodes(
+  code: string,
+  useRecoveryCode = false,
+): Promise<{ ok: boolean; recovery_codes: string[] }> {
+  const res = await fetch("/api/org-admin/auth/mfa/recovery-codes/regenerate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code, use_recovery_code: useRecoveryCode }),
+  });
+  if (!res.ok) throw new Error("Codice non valido");
+  return res.json();
+}
+
+export async function revokeOrgAdminSession(
+  sessionId: number,
+): Promise<{ ok: boolean; current: boolean }> {
+  const res = await fetch(`/api/org-admin/auth/sessions/${sessionId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Impossibile revocare la sessione");
+  return res.json();
+}
+
+export async function revokeOtherOrgAdminSessions(): Promise<{
+  ok: boolean;
+  revoked_count: number;
+}> {
+  const res = await fetch("/api/org-admin/auth/sessions/revoke-others", { method: "POST" });
+  if (!res.ok) throw new Error("Impossibile revocare le altre sessioni");
   return res.json();
 }
 
@@ -3817,10 +4083,156 @@ export async function fetchCardMovements(params?: {
 
 // ── Super Admin ─────────────────────────────────────────────────
 
+export type CardReplenishmentAccountingEvent = {
+  id: number;
+  actor_admin_id: number | null;
+  previous_status: string;
+  new_status: string;
+  changes: Record<string, unknown>;
+  created_at: string | null;
+};
+
+export type MemberImportRow = {
+  id: number;
+  row_number: number;
+  status: "valid" | "invalid" | "imported" | "skipped" | "rolled_back";
+  errors: Array<{ field: string; code: string; message: string }>;
+  member_id: number | null;
+  preview: {
+    first_name?: string | null;
+    last_name?: string | null;
+    email?: string | null;
+    fiscal_code?: string | null;
+  };
+};
+
+export type MemberImportBatch = {
+  id: number;
+  status: "previewed" | "committed" | "rolled_back";
+  total_rows: number;
+  valid_rows: number;
+  error_rows: number;
+  imported_rows: number;
+  activation_mode: "pending" | "active" | null;
+  commit_policy: "all_or_nothing" | "valid_only" | null;
+  created_at: string | null;
+  committed_at: string | null;
+  rolled_back_at: string | null;
+  rows?: MemberImportRow[];
+  rows_truncated?: boolean;
+};
+
+export type CardReplenishmentRequest = {
+  id: number;
+  organization_id: number | null;
+  organization_name: string;
+  requested_cards: number;
+  requested_year: number;
+  notes: string | null;
+  allocation_status: string;
+  card_batch_id: number | null;
+  batch_range_start: number | null;
+  batch_range_end: number | null;
+  source: string;
+  unit_price_cents: number;
+  amount_due_cents: number;
+  currency: string;
+  billing_status: "not_applicable" | "unpaid" | "paid";
+  paid_at: string | null;
+  paid_by_admin_id: number | null;
+  payment_reference: string | null;
+  accounting_note: string | null;
+  accounting_updated_at: string | null;
+  super_admin_notified_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  accounting_events?: CardReplenishmentAccountingEvent[];
+};
+
+export type CardReplenishmentSummary = {
+  total: number;
+  unpaid: number;
+  paid: number;
+  outstanding_cents: number;
+  paid_cents: number;
+};
+
+export type CardReplenishmentCapability = {
+  can_auto_allocate: boolean;
+  numbering_mode: string;
+  blocked_reason: string | null;
+  unit_price_cents: number;
+  currency: string;
+  min_quantity: number;
+  max_quantity: number;
+  default_year: number;
+  allowed_years: number[];
+};
+
+export type OrgAdminCardReplenishmentsResponse = {
+  items: CardReplenishmentRequest[];
+  total: number;
+  summary: CardReplenishmentSummary;
+  capability: CardReplenishmentCapability;
+};
+
+export async function fetchOrgAdminCardReplenishments(): Promise<OrgAdminCardReplenishmentsResponse> {
+  const res = await fetch("/api/org-admin/cards/replenishments");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) {
+    throw new Error(await parseApiErrorDetail(res, "Errore nel caricamento delle richieste tessere"));
+  }
+  return res.json();
+}
+
+export async function createOrgAdminCardReplenishment(
+  payload: { requested_cards: number; requested_year?: number; notes?: string | null },
+  idempotencyKey: string,
+): Promise<{ ok: boolean; created: boolean; item: CardReplenishmentRequest }> {
+  const res = await fetch("/api/org-admin/cards/replenishments", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": idempotencyKey,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) {
+    throw new Error(await parseApiErrorDetail(res, "Errore nella richiesta di rifornimento"));
+  }
+  return res.json();
+}
+
 export type SuperAdminProfile = {
   id: number;
   email: string;
   role: string;
+  mfa_enabled?: boolean;
+  recovery_codes_remaining?: number;
+  session_id?: number;
+};
+
+export type SuperAdminLoginResult = {
+  ok: boolean;
+  status: "authenticated" | "mfa_required" | "mfa_setup_required";
+  challenge_token?: string;
+  secret?: string;
+  qr_data_uri?: string;
+  expires_in_seconds?: number;
+  recovery_codes?: string[];
+  recovery_codes_remaining?: number;
+  used_recovery_code?: boolean;
+};
+
+export type SuperAdminSessionInfo = {
+  id: number;
+  created_at: string;
+  last_seen_at: string;
+  absolute_expires_at: string;
+  user_agent: string | null;
+  ip_hash: string | null;
+  current: boolean;
 };
 
 export type SuperAdminMemberDetail = {
@@ -3883,15 +4295,214 @@ export type SuperAdminMemberRegistryResponse = {
 export async function superAdminLogin(
   email: string,
   password: string,
-): Promise<{ ok: boolean }> {
+): Promise<SuperAdminLoginResult> {
   const res = await fetch("/api/super-admin/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
   if (res.status === 401) throw new AuthError("Invalid credentials");
-  if (!res.ok) throw new Error("Login failed");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Login failed"));
   return res.json();
+}
+
+export async function confirmSuperAdminTotp(
+  challengeToken: string,
+  code: string,
+): Promise<SuperAdminLoginResult> {
+  const res = await fetch("/api/super-admin/auth/mfa/totp/confirm", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ challenge_token: challengeToken, code }),
+  });
+  if (res.status === 401) throw new AuthError("Invalid authentication code");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Impossibile attivare MFA"));
+  return res.json();
+}
+
+export async function verifySuperAdminMfa(
+  challengeToken: string,
+  code: string,
+): Promise<SuperAdminLoginResult> {
+  const res = await fetch("/api/super-admin/auth/mfa/verify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ challenge_token: challengeToken, code }),
+  });
+  if (res.status === 401) throw new AuthError("Invalid authentication code");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Impossibile verificare MFA"));
+  return res.json();
+}
+
+export async function stepUpSuperAdmin(code: string): Promise<void> {
+  const res = await fetch("/api/super-admin/auth/step-up", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Codice non valido"));
+}
+
+export async function fetchSuperAdminSessions(): Promise<SuperAdminSessionInfo[]> {
+  const res = await fetch("/api/super-admin/auth/sessions");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento sessioni"));
+  const payload = await res.json();
+  return Array.isArray(payload?.items) ? payload.items : [];
+}
+
+export async function revokeSuperAdminSession(sessionId: number): Promise<void> {
+  const res = await fetch(`/api/super-admin/auth/sessions/${sessionId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore revoca sessione"));
+}
+
+export async function revokeOtherSuperAdminSessions(): Promise<number> {
+  const res = await fetch("/api/super-admin/auth/sessions/revoke-others", { method: "POST" });
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore revoca sessioni"));
+  const payload = await res.json();
+  return Number(payload?.revoked || 0);
+}
+
+export async function regenerateSuperAdminRecoveryCodes(): Promise<string[]> {
+  const res = await fetch("/api/super-admin/auth/recovery-codes/regenerate", { method: "POST" });
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore rigenerazione codici"));
+  const payload = await res.json();
+  return Array.isArray(payload?.recovery_codes) ? payload.recovery_codes : [];
+}
+
+export async function changeSuperAdminPassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  const res = await fetch("/api/super-admin/auth/password", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  });
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore cambio password"));
+}
+
+export type AnnualCardDeactivationPreview = {
+  ok: boolean;
+  membership_year: number;
+  valid_through: string;
+  deactivates_at: string;
+  can_execute: boolean;
+  total_count: number;
+  organizations: Array<{ org_id: number; organization_name: string; count: number }>;
+  preview_hash: string;
+};
+
+export type AnnualCardDeactivationResult = {
+  ok: boolean;
+  membership_year: number;
+  valid_through: string;
+  deactivated_count: number;
+  executed_at: string;
+  already_executed: boolean;
+  run_id: number;
+};
+
+export async function previewAnnualCardDeactivation(
+  membershipYear: number,
+): Promise<AnnualCardDeactivationPreview> {
+  const res = await fetch("/api/super-admin/annual-cards/deactivation/preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ membership_year: membershipYear }),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Anteprima non disponibile"));
+  return res.json();
+}
+
+export async function executeAnnualCardDeactivation(
+  membershipYear: number,
+  previewHash: string,
+  confirmation: string,
+): Promise<AnnualCardDeactivationResult> {
+  const res = await fetch("/api/super-admin/annual-cards/deactivation/execute", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      membership_year: membershipYear,
+      preview_hash: previewHash,
+      confirmation,
+    }),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Disattivazione non riuscita"));
+  return res.json();
+}
+
+export type AuditEvent = {
+  id: number;
+  created_at: string | null;
+  category: string;
+  action: string;
+  outcome: "success" | "failure" | "blocked" | "warning";
+  actor: { role: string | null; admin_id: number | null; member_id: number | null };
+  organization: { id: number; name: string | null } | null;
+  entity: { type: string | null; id: number | null };
+  request_id: string | null;
+  metadata: Record<string, unknown> | null;
+};
+
+export type AuditEventPage = {
+  items: AuditEvent[];
+  next_cursor: number | null;
+  has_more: boolean;
+};
+
+export type AuditEventFilters = {
+  cursor?: number;
+  limit?: number;
+  orgId?: number;
+  category?: string;
+  action?: string;
+  outcome?: "success" | "failure" | "blocked" | "warning";
+  dateFrom?: string;
+  dateTo?: string;
+  q?: string;
+};
+
+const auditEventSearchParams = (filters?: AuditEventFilters) => {
+  const params = new URLSearchParams();
+  if (filters?.cursor) params.set("cursor", String(filters.cursor));
+  if (filters?.limit) params.set("limit", String(filters.limit));
+  if (filters?.orgId) params.set("org_id", String(filters.orgId));
+  if (filters?.category) params.set("category", filters.category);
+  if (filters?.action) params.set("action", filters.action);
+  if (filters?.outcome) params.set("outcome", filters.outcome);
+  if (filters?.dateFrom) params.set("date_from", filters.dateFrom);
+  if (filters?.dateTo) params.set("date_to", filters.dateTo);
+  if (filters?.q) params.set("q", filters.q);
+  return params;
+};
+
+export async function fetchAuditEvents(
+  scope: "super-admin" | "org-admin",
+  filters?: AuditEventFilters,
+): Promise<AuditEventPage> {
+  const params = auditEventSearchParams(filters);
+  const res = await fetch(`/api/${scope}/audit-events?${params.toString()}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore nel caricamento del registro attività"));
+  return res.json();
+}
+
+export async function downloadAuditEventsCsv(
+  scope: "super-admin" | "org-admin",
+  filters?: AuditEventFilters,
+): Promise<void> {
+  const params = auditEventSearchParams(filters);
+  params.delete("cursor");
+  params.delete("limit");
+  return downloadAuthenticatedFile(
+    `/api/${scope}/audit-events/export.csv?${params.toString()}`,
+    scope === "super-admin" ? "registro-audit.csv" : "registro-attivita.csv",
+    "Impossibile esportare il registro attività",
+  );
 }
 
 export async function fetchSuperAdminMe(): Promise<SuperAdminProfile> {
@@ -3944,6 +4555,7 @@ export type OrgAdmin = {
   org_name: string | null;
   is_active: boolean;
   created_at: string | null;
+  mfa_enabled?: boolean;
   restored?: boolean;
   created?: boolean;
 };
@@ -5701,6 +6313,72 @@ export async function downloadCardLotRegistryExcel(): Promise<void> {
   );
 }
 
+export type SuperAdminRechargeCreditsResponse = {
+  items: CardReplenishmentRequest[];
+  total: number;
+  summary: CardReplenishmentSummary;
+};
+
+export async function fetchSuperAdminRechargeCredits(params?: {
+  billing_status?: "all" | "unpaid" | "paid" | "not_applicable";
+  allocation_status?: string;
+  org_id?: number;
+  q?: string;
+  scope?: "portal" | "historical" | "all";
+  limit?: number;
+  offset?: number;
+}): Promise<SuperAdminRechargeCreditsResponse> {
+  const search = new URLSearchParams();
+  if (params?.billing_status) search.set("billing_status", params.billing_status);
+  if (params?.allocation_status) search.set("allocation_status", params.allocation_status);
+  if (params?.org_id != null) search.set("org_id", String(params.org_id));
+  if (params?.q) search.set("q", params.q);
+  if (params?.scope) search.set("scope", params.scope);
+  if (params?.limit != null) search.set("limit", String(params.limit));
+  if (params?.offset != null) search.set("offset", String(params.offset));
+  const query = search.toString();
+  const res = await fetch(`/api/super-admin/recharge-credits${query ? `?${query}` : ""}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) {
+    throw new Error(await parseApiErrorDetail(res, "Errore nel caricamento dei crediti tessere"));
+  }
+  return res.json();
+}
+
+export async function patchSuperAdminRechargeCreditAccounting(
+  requestId: number,
+  payload: {
+    billing_status: "unpaid" | "paid";
+    paid_at?: string | null;
+    payment_reference?: string | null;
+    accounting_note?: string | null;
+  },
+): Promise<{ ok: boolean; item: CardReplenishmentRequest }> {
+  const res = await fetch(`/api/super-admin/recharge-credits/${requestId}/accounting`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) {
+    throw new Error(await parseApiErrorDetail(res, "Errore nell'aggiornamento contabile"));
+  }
+  return res.json();
+}
+
+export async function retrySuperAdminRechargeCreditAllocation(
+  requestId: number,
+): Promise<{ ok: boolean; message: string; item: CardReplenishmentRequest }> {
+  const res = await fetch(`/api/super-admin/recharge-credits/${requestId}/retry-allocation`, {
+    method: "POST",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) {
+    throw new Error(await parseApiErrorDetail(res, "Errore nel nuovo tentativo di allocazione"));
+  }
+  return res.json();
+}
+
 export type PatchOrgCardLotPayload = {
   status?: "active" | "inactive";
   year?: number;
@@ -5744,29 +6422,6 @@ export async function deleteOrgCardLot(
     throw new Error(await parseApiErrorDetail(res, "Operazione bloccata"));
   }
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore nell'eliminazione del lotto"));
-  return res.json();
-}
-
-export type MaintenanceRunResult = {
-  ok: boolean;
-  ran_at: string;
-  expired_count: number;
-  purged_count: number;
-  current_year: number;
-  member_ids: number[];
-};
-
-export async function runAnnualMaintenance(
-  purgePii: boolean = true,
-): Promise<MaintenanceRunResult> {
-  const res = await fetch("/api/super-admin/maintenance/run", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ purge_pii: purgePii }),
-  });
-  if (res.status === 401) throw new AuthError("Not authenticated");
-  if (res.status === 403) throw new Error("Operazione consentita solo a super-admin");
-  if (!res.ok) throw new Error("Errore esecuzione manutenzione annuale");
   return res.json();
 }
 
@@ -5947,6 +6602,256 @@ export async function createManualPayment(
   if (res.status === 403) throw new Error("Permesso negato");
   if (res.status === 404) throw new Error("Socio non trovato");
   if (!res.ok) throw new Error("Errore durante il salvataggio del pagamento");
+  return res.json();
+}
+
+export async function previewOrgAdminMemberImport(file: File): Promise<MemberImportBatch> {
+  const form = new FormData();
+  form.append("upload", file);
+  const res = await fetch("/api/org-admin/members/imports/preview", {
+    method: "POST",
+    body: form,
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Anteprima non disponibile"));
+  return res.json();
+}
+
+export async function commitOrgAdminMemberImport(
+  batchId: number,
+  payload: {
+    policy: "all_or_nothing" | "valid_only";
+    activation_mode: "pending" | "active";
+    confirmation: string;
+  },
+): Promise<MemberImportBatch> {
+  const res = await fetch(`/api/org-admin/members/imports/${batchId}/commit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Importazione non riuscita"));
+  const data = await res.json();
+  return data.batch;
+}
+
+export async function rollbackOrgAdminMemberImport(batchId: number): Promise<MemberImportBatch> {
+  const res = await fetch(`/api/org-admin/members/imports/${batchId}/rollback`, { method: "POST" });
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Annullamento non riuscito"));
+  const data = await res.json();
+  return data.batch;
+}
+
+export async function resetOrgAdminMfa(
+  adminId: number,
+): Promise<{ ok: boolean; mfa_reset: boolean; revoked_sessions: number }> {
+  const res = await fetch(`/api/super-admin/org-admins/${adminId}/mfa/reset`, {
+    method: "POST",
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (res.status === 403) {
+    throw new Error("Conferma prima l'MFA nella pagina Sicurezza del Super Admin.");
+  }
+  if (!res.ok) throw new Error("Impossibile reimpostare l'MFA");
+  return res.json();
+}
+
+// ── Annual renewals and Quote Center ───────────────────────────────────────
+
+export type AnnualTermPayment = {
+  id: number;
+  status: string;
+  source: string;
+  amount: number;
+  currency: string;
+  confirmed_at: string | null;
+  hosted_checkout_url?: string | null;
+};
+
+export type AnnualMembershipTerm = {
+  id: number;
+  membership_year: number;
+  starts_on: string;
+  valid_through: string;
+  status: string;
+  fee_amount: number;
+  currency: string;
+  card_no: number | null;
+  card_year: number | null;
+  issued_at: string | null;
+  payment: AnnualTermPayment | null;
+};
+
+export type MemberMembershipResponse = {
+  current: AnnualMembershipTerm | null;
+  renewal: AnnualMembershipTerm | null;
+  renewal_opens_on: string | null;
+  can_renew: boolean;
+  is_account_only: boolean;
+};
+
+export type MemberRenewalResponse = {
+  ok: boolean;
+  action: string;
+  checkout_required: boolean;
+  term: AnnualMembershipTerm;
+};
+
+export async function fetchMemberMembership(): Promise<MemberMembershipResponse> {
+  const res = await fetch("/api/member/membership");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Impossibile caricare il rinnovo"));
+  return res.json();
+}
+
+export async function requestMemberRenewal(): Promise<MemberRenewalResponse> {
+  const res = await fetch("/api/member/renewals", { method: "POST" });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Impossibile richiedere il rinnovo"));
+  return res.json();
+}
+
+export async function createMemberRenewalCheckout(
+  termId: number,
+): Promise<{ payment_id: number; hosted_checkout_url: string }> {
+  const res = await fetch(`/api/member/renewals/${termId}/checkout`, { method: "POST" });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Impossibile avviare il pagamento"));
+  return res.json();
+}
+
+export type MemberAreaNotification = {
+  id: number;
+  type: string;
+  title: string;
+  body: string;
+  href: string;
+  is_read: boolean;
+  created_at: string | null;
+};
+
+export async function fetchMemberNotifications(input: {
+  limit?: number;
+  unreadOnly?: boolean;
+} = {}): Promise<{ items: MemberAreaNotification[]; unread_count: number }> {
+  const params = new URLSearchParams();
+  if (input.limit != null) params.set("limit", String(input.limit));
+  if (input.unreadOnly) params.set("unread_only", "true");
+  const suffix = params.size ? `?${params.toString()}` : "";
+  const res = await fetch(`/api/member/notifications${suffix}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Impossibile caricare le notifiche"));
+  return res.json();
+}
+
+export async function markMemberNotificationRead(notificationId: number): Promise<{ ok: boolean }> {
+  const res = await fetch(`/api/member/notifications/${notificationId}/read`, { method: "PATCH" });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Impossibile aggiornare la notifica"));
+  return res.json();
+}
+
+export type QuoteCenterRow = {
+  member_id: number;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  source_term_id: number | null;
+  renewal_term_id: number | null;
+  membership_year: number;
+  previous_valid_through: string | null;
+  renewal_status: string;
+  renewed: boolean;
+  fee_amount: number;
+  can_confirm_without_payment: boolean;
+  currency: string;
+  payment_state: "paid" | "pending" | "unpaid" | "not_required";
+  payment: AnnualTermPayment | null;
+  new_card_no: number | null;
+  new_card_year: number | null;
+};
+
+export type QuoteCenterResponse = {
+  year: number;
+  kpis: {
+    due: number;
+    renewed: number;
+    payment_pending: number;
+    unpaid: number;
+    paid_waiting_card: number;
+    approved_waiting_card: number;
+    theoretical_total: number;
+    collected_total: number;
+    outstanding_total: number;
+    currency: string;
+  };
+  items: QuoteCenterRow[];
+  total: number;
+};
+
+export async function fetchOrgAdminQuotes(input: {
+  year: number;
+  status?: string;
+  q?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<QuoteCenterResponse> {
+  const params = new URLSearchParams({ year: String(input.year) });
+  if (input.status) params.set("status", input.status);
+  if (input.q) params.set("q", input.q);
+  if (input.limit != null) params.set("limit", String(input.limit));
+  if (input.offset != null) params.set("offset", String(input.offset));
+  const res = await fetch(`/api/org-admin/quotes?${params.toString()}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Impossibile caricare quote e rinnovi"));
+  return res.json();
+}
+
+export async function recordOrgAdminRenewalPayment(
+  memberId: number,
+  payload: {
+    membership_year: number;
+    amount: number;
+    method: string;
+    paid_at: string;
+    notes?: string;
+  },
+): Promise<{ ok: boolean; card_assigned: boolean; term: AnnualMembershipTerm }> {
+  const res = await fetch(`/api/org-admin/quotes/members/${memberId}/payments/manual`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Impossibile registrare il pagamento"));
+  return res.json();
+}
+
+export async function confirmOrgAdminRenewal(
+  memberId: number,
+  membershipYear: number,
+): Promise<{ ok: boolean; card_assigned: boolean; term: AnnualMembershipTerm }> {
+  const res = await fetch(`/api/org-admin/quotes/members/${memberId}/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ membership_year: membershipYear }),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Impossibile confermare il rinnovo"));
+  return res.json();
+}
+
+export async function sendOrgAdminRenewalReminders(
+  membershipYear: number,
+  memberIds: number[] = [],
+): Promise<{ ok: boolean; queued_count: number }> {
+  const res = await fetch("/api/org-admin/quotes/reminders", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ membership_year: membershipYear, member_ids: memberIds }),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Impossibile inviare i promemoria"));
   return res.json();
 }
 

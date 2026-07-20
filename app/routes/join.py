@@ -21,6 +21,7 @@ from app.services.file_deletion import enqueue_file_deletion
 from app.services.email_sender import build_sender_payload
 from app.utils import generate_token, save_upload_file, hash_token
 from app.services.card_allocation import allocate_next_card
+from app.services.annual_memberships import sync_annual_membership_term
 from app.services.fiscal_code import validate_fiscal_code
 from app.services.integration_issuer import (
     IssueMemberCommand,
@@ -739,6 +740,7 @@ async def api_join_continue(
             member.numbering_scope_id = allocation.numbering_scope_id
             member.status = MemberStatus.ACTIVE
             member.joined_at = datetime.utcnow()
+            sync_annual_membership_term(db, member, source="signup")
             assigned = allocation.card_no
         except HTTPException as exc:
             if exc.status_code == 409:

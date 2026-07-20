@@ -6,6 +6,7 @@ import pytest
 
 from app.db import SessionLocal
 from app.models import (
+    AnnualMembershipTerm,
     CardBatch,
     Member,
     MemberStatus,
@@ -570,6 +571,13 @@ def test_sumup_webhook_verifies_checkout_before_completion_and_is_idempotent(cli
     assert member.payment_status == MembershipPaymentStatus.COMPLETED.value
     assert member.card_no == 800
     assert member.status == MemberStatus.ACTIVE
+    annual_term = (
+        db.query(AnnualMembershipTerm)
+        .filter_by(member_id=member.id, membership_year=member.card_year)
+        .one()
+    )
+    assert annual_term.card_no == 800
+    assert annual_term.valid_through.isoformat() == f"{member.card_year + 1}-01-01"
 
 
 def test_sumup_webhook_queues_standard_card_email_and_status_exposes_card_page(

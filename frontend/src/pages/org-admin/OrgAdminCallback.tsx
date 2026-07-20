@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { verifyOrgAdminToken } from "../../lib/api";
+import OrgAdminMfaChallenge from "./components/OrgAdminMfaChallenge";
 
 const OrgAdminCallback = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [error, setError] = useState(false);
+  const [mfaChallenge, setMfaChallenge] = useState(() => searchParams.get("mfa_challenge") || "");
 
   useEffect(() => {
+    if (mfaChallenge) return;
     const token = searchParams.get("token");
     if (!token) {
       setError(true);
@@ -15,13 +18,30 @@ const OrgAdminCallback = () => {
     }
 
     verifyOrgAdminToken(token)
-      .then(() => {
+      .then((result) => {
+        if (result.mfa_required && result.challenge) {
+          setMfaChallenge(result.challenge);
+          return;
+        }
         navigate("/org-admin", { replace: true });
       })
       .catch(() => {
         setError(true);
       });
-  }, [searchParams, navigate]);
+  }, [searchParams, navigate, mfaChallenge]);
+
+  if (mfaChallenge) {
+    return (
+      <section className="flex min-h-[70vh] items-center justify-center py-16">
+        <div className="container-shell">
+          <OrgAdminMfaChallenge
+            challenge={mfaChallenge}
+            onSuccess={(redirectTo) => navigate(redirectTo, { replace: true })}
+          />
+        </div>
+      </section>
+    );
+  }
 
   if (error) {
     return (

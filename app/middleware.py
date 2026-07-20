@@ -55,8 +55,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         )
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
         is_public_upload = request.url.path.startswith("/uploads/")
+        is_public_card_qr = (
+            request.url.path.startswith("/api/cards/")
+            and request.url.path.endswith("/qr.png")
+        )
         response.headers["Cross-Origin-Resource-Policy"] = (
-            "cross-origin" if is_public_upload else "same-origin"
+            "cross-origin" if is_public_upload or is_public_card_qr else "same-origin"
         )
         response_content_type = response.headers.get("content-type", "").split(";", 1)[0].lower()
         is_svg_response = (
@@ -108,7 +112,7 @@ _CSRF_ALLOWED_ORIGINS = {
     if origin
 }
 _CSRF_UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
-_SESSION_AUTH_COOKIE_NAMES = {"session", "org_admin_session"}
+_SESSION_AUTH_COOKIE_NAMES = {"session", "org_admin_session", "super_admin_session"}
 
 
 class SessionCsrfMiddleware(BaseHTTPMiddleware):

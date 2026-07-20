@@ -1,10 +1,13 @@
 from datetime import datetime, timedelta
+from io import BytesIO
 
 import pytest
+from PIL import Image
 
 from app.db import SessionLocal
 from app.models import Member, MemberStatus, Organization
 from app.security import get_password_hash
+from app.services.annual_memberships import sync_annual_membership_term
 from app.services.card_verification import build_card_verification_token
 
 
@@ -127,6 +130,75 @@ def test_member_card_verify_html_response_for_browser(client, db):
 def test_member_card_verify_invalid_token(client):
     res = client.get("/api/cards/verify/not-a-valid-token")
     assert res.status_code == 404
+
+
+def test_member_card_qr_png_is_generated_locally(client, db):
+    org, member = _ensure_active_member(db)
+    token = build_card_verification_token(
+        member_id=member.id,
+        org_id=org.id,
+        card_number=member.card_no,
+        card_year=member.card_year,
+    )
+
+    response = client.get(f"/api/cards/{token}/qr.png")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("image/png")
+    assert response.headers["cross-origin-resource-policy"] == "cross-origin"
+    assert response.content.startswith(b"\x89PNG\r\n\x1a\n")
+    assert len(response.content) > 500
+    image = Image.open(BytesIO(response.content)).convert("L")
+    minimum, maximum = image.getextrema()
+    assert minimum == 0
+    assert maximum == 255
+
+
+def test_member_card_qr_png_rejects_invalid_token(client):
+    response = client.get("/api/cards/not-a-valid-token/qr.png")
+    assert response.status_code == 404
+
+
+def test_annual_history_cannot_reactivate_a_rejected_member(client, db):
+    org, member = _ensure_active_member(db)
+    term = sync_annual_membership_term(db, member, source="verification-regression")
+    assert term is not None
+    member.status = MemberStatus.REJECTED
+    db.commit()
+    token = build_card_verification_token(
+        member_id=member.id,
+        org_id=org.id,
+        card_number=member.card_no,
+        card_year=member.card_year,
+    )
+
+    response = client.get(f"/api/cards/verify/{token}?format=json")
+
+    assert response.status_code == 200
+    assert response.json()["valid"] is False
+    assert response.json()["reason"] == "not_approved"
+
+
+def test_annual_history_cannot_override_expired_temporary_conversion(client, db):
+    org, member = _ensure_active_member(db)
+    term = sync_annual_membership_term(db, member, source="verification-regression")
+    assert term is not None
+    member.membership_type = "temporary"
+    member.valid_from = datetime.utcnow() - timedelta(hours=4)
+    member.valid_until = datetime.utcnow() - timedelta(hours=1)
+    db.commit()
+    token = build_card_verification_token(
+        member_id=member.id,
+        org_id=org.id,
+        card_number=member.card_no,
+        card_year=member.card_year,
+    )
+
+    response = client.get(f"/api/cards/verify/{token}?format=json")
+
+    assert response.status_code == 200
+    assert response.json()["valid"] is False
+    assert response.json()["reason"] == "expired"
 
 
 def test_public_org_info_endpoint_returns_safe_branding_fields(client, db):

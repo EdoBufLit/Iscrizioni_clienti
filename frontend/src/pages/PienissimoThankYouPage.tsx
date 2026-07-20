@@ -185,7 +185,7 @@ const PienissimoThankYouPage = () => {
           {isSuccess ? (
             /* ── Success state ── */
             <div className="space-y-4">
-              <div className="rounded-xl border border-[#c6a04f]/30 bg-[#2d0015]/5 px-4 py-4">
+              <div className="rounded-xl border border-[#c6a04f]/30 bg-[#2d0015]/5 px-4 py-4" role="status">
                 <p className="text-base font-semibold text-neutral-800">
                   {isAlreadyIssued
                     ? "Hai già una tessera attiva. Puoi scaricarla o verificarla qui."
@@ -200,7 +200,7 @@ const PienissimoThankYouPage = () => {
 
               {downloadUrl && (
                 <a
-                  className="btn-primary inline-flex w-full items-center justify-center py-3 text-sm"
+                  className="btn-primary inline-flex min-h-11 w-full items-center justify-center py-3 text-sm"
                   href={downloadUrl}
                 >
                   Scarica tessera (PDF)
@@ -209,7 +209,7 @@ const PienissimoThankYouPage = () => {
 
               {verifyUrl && (
                 <a
-                  className="inline-flex w-full items-center justify-center rounded-xl border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-neutral-700 hover:bg-neutral-50"
+                  className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-neutral-700 hover:bg-neutral-50"
                   href={verifyUrl}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -223,7 +223,7 @@ const PienissimoThankYouPage = () => {
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {walletAppleUrl && (
                     <a
-                      className="inline-flex items-center justify-center rounded-xl border border-brand/40 bg-white px-3 py-2 text-xs font-semibold text-brand hover:bg-brand/5"
+                      className="inline-flex min-h-11 items-center justify-center rounded-xl border border-brand/40 bg-white px-3 py-2 text-xs font-semibold text-brand hover:bg-brand/5"
                       href={walletAppleUrl}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -233,7 +233,7 @@ const PienissimoThankYouPage = () => {
                   )}
                   {walletGoogleUrl && (
                     <a
-                      className="inline-flex items-center justify-center rounded-xl border border-brand/40 bg-white px-3 py-2 text-xs font-semibold text-brand hover:bg-brand/5"
+                      className="inline-flex min-h-11 items-center justify-center rounded-xl border border-brand/40 bg-white px-3 py-2 text-xs font-semibold text-brand hover:bg-brand/5"
                       href={walletGoogleUrl}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -252,7 +252,7 @@ const PienissimoThankYouPage = () => {
               </p>
 
               {errorMessage && (
-                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
                   {errorMessage}
                 </div>
               )}
@@ -275,8 +275,9 @@ const PienissimoThankYouPage = () => {
                   }}
                   placeholder="nome@esempio.it"
                   aria-invalid={emailError ? "true" : "false"}
+                  aria-describedby={emailError ? "pienissimo-email-error" : undefined}
                 />
-                {emailError && <p className="mt-1 text-xs text-red-600">{emailError}</p>}
+                {emailError && <p id="pienissimo-email-error" className="mt-1 text-xs text-red-600">{emailError}</p>}
               </div>
 
               <div>
@@ -313,10 +314,11 @@ const PienissimoThankYouPage = () => {
                 className="btn-primary mt-2 w-full py-3 text-sm"
                 type="submit"
                 disabled={!canSubmit}
+                aria-busy={isLoading}
               >
                 {isLoading ? (
                   <span className="inline-flex items-center gap-2">
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />
                     Elaborazione...
                   </span>
                 ) : (

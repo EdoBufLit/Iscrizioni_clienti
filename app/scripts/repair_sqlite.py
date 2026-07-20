@@ -115,8 +115,42 @@ def repair_db():
 
         recharge_request_columns = [
             ("card_batch_id", "INTEGER REFERENCES card_batches(id)"),
+            ("requested_year", "INTEGER"),
+            ("source", "VARCHAR DEFAULT 'whatsapp' NOT NULL"),
+            ("requested_by_admin_id", "INTEGER REFERENCES admin_users(id)"),
+            ("idempotency_key", "VARCHAR(64)"),
+            ("unit_price_cents", "INTEGER DEFAULT 100 NOT NULL"),
+            ("amount_due_cents", "INTEGER DEFAULT 0 NOT NULL"),
+            ("currency", "VARCHAR(3) DEFAULT 'EUR' NOT NULL"),
+            ("billing_status", "VARCHAR DEFAULT 'not_applicable' NOT NULL"),
+            ("paid_at", "DATETIME"),
+            ("paid_by_admin_id", "INTEGER REFERENCES admin_users(id)"),
+            ("payment_reference", "VARCHAR(160)"),
+            ("accounting_note", "TEXT"),
+            ("accounting_updated_at", "DATETIME"),
+            ("notification_email_outbox_id", "VARCHAR(36) REFERENCES email_outbox(id)"),
+            ("super_admin_notified_at", "DATETIME"),
+            ("updated_at", "DATETIME"),
         ]
         ensure_columns(cursor, "recharge_requests", recharge_request_columns)
+        cursor.execute(
+            """
+            UPDATE recharge_requests
+               SET source = COALESCE(NULLIF(source, ''), 'whatsapp'),
+                   requested_year = COALESCE(
+                       requested_year,
+                       (SELECT card_batches.year
+                          FROM card_batches
+                         WHERE card_batches.id = recharge_requests.card_batch_id),
+                       CAST(strftime('%Y', 'now') AS INTEGER)
+                   ),
+                   unit_price_cents = 100,
+                   amount_due_cents = requested_cards * 100,
+                   currency = 'EUR',
+                   billing_status = COALESCE(NULLIF(billing_status, ''), 'not_applicable'),
+                   updated_at = COALESCE(updated_at, created_at, CURRENT_TIMESTAMP)
+            """
+        )
 
         # 4. Check/Add Columns for 'member_documents'
         doc_columns = [

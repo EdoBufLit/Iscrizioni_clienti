@@ -7,9 +7,10 @@ import os
 import random
 import re
 import secrets
-from fastapi import APIRouter, Depends, HTTPException, Request, Form, Body, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, Form, Body, Header, Query
 from fastapi.responses import StreamingResponse, FileResponse, Response
 from sqlalchemy import func, or_, case, and_, select, cast, String
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime, timedelta, date
 from decimal import Decimal
@@ -26,6 +27,8 @@ from app.models import (
     BookingEventSeries,
     BookingEventTimeSlot,
     OrgAdminToken,
+    OrgAdminSession,
+    AdminMfaFactor,
     Member,
     MemberStatus,
     PaymentMethod,
@@ -60,6 +63,8 @@ from app.models import (
     WhatsAppAutomation,
     Room,
     RoomTable,
+    RechargeRequest,
+    MemberImportBatch,
 )
 from app.models_affiliation import (
     AffiliationApplication,
@@ -179,7 +184,23 @@ from app.services.sqlite_card_allocation_guard import (
     sqlite_card_allocation_request_guard,
 )
 from app.services.card_inventory import compute_org_card_stock
+from app.services.member_imports import (
+    MAX_IMPORT_BYTES,
+    MemberImportError,
+    commit_member_import,
+    member_import_template,
+    parse_member_import,
+    rollback_member_import,
+    serialize_import_batch,
+)
 from app.services.card_lot_registry import format_card_number
+from app.services.card_replenishments import (
+    create_portal_replenishment_request,
+    load_replenishment_request,
+    replenishment_capability,
+    replenishment_summary,
+    serialize_replenishment_request,
+)
 from app.services.card_pdf import generate_card_pdf_bytes
 from app.services.card_verification import build_card_verification_token
 from app.services.fiscal_code import validate_fiscal_code
@@ -221,6 +242,10 @@ from app.services.member_card_delivery import (
     maybe_send_member_card_ready_email,
     queue_member_card_email,
 )
+from app.services.member_document_correction import (
+    DOCUMENT_CORRECTION_TOKEN_TTL_SECONDS,
+    enqueue_document_rejection_email,
+)
 from app.services.membership_payments import (
     PAID_MEMBERSHIP_STATUSES,
     apply_manual_membership_payment,
@@ -238,9 +263,26 @@ from app.services.org_admin_sessions import (
     clear_org_admin_session_cookie,
     create_org_admin_persistent_session,
     get_current_org_admin_from_request,
+    resolve_org_admin_session,
     revoke_current_org_admin_persistent_session,
+    serialize_org_admin_session,
     set_org_admin_session_cookie,
 )
+from app.services import org_admin_mfa_enrollment
+from app.services.super_admin_auth import (
+    active_totp_factor,
+    build_provisioning_uri,
+    consume_recovery_code,
+    count_remaining_recovery_codes,
+    ensure_pending_totp_factor,
+    generate_recovery_codes,
+    issue_auth_challenge,
+    load_auth_challenge,
+    provisioning_qr_data_uri,
+    record_challenge_failure,
+    verify_factor_code,
+)
+from app.services.audit_registry import audit_events_csv, list_audit_events
 from app.services.statute_upload import (
     enforce_statute_request_size_from_headers,
     save_statute_pdf,
@@ -254,7 +296,10 @@ from app.services.whatsapp_provider import whatsapp_feature_enabled
 from app.config import settings
 from app.log_redaction import hash_identifier, redact_for_log, redact_url
 from app.middleware import get_client_ip
-from app.services.security_rate_limits import enforce_auth_rate_limit
+from app.services.security_rate_limits import (
+    enforce_auth_rate_limit,
+    enforce_org_admin_mfa_setup_rate_limit,
+)
 from app import audit
 import logging
 
@@ -266,6 +311,89 @@ auth_router = APIRouter(prefix="/auth")
 
 _ORG_SHARED_DOCUMENT_KINDS = {"general", "accounting"}
 _EMAIL_STR_ADAPTER = TypeAdapter(EmailStr)
+_ORG_ADMIN_LOGIN_MFA_PURPOSE = "org_admin_login"
+
+
+class OrgAdminMfaVerifyBody(BaseModel):
+    challenge: str = Field(min_length=20, max_length=512)
+    code: str = Field(min_length=4, max_length=64)
+    use_recovery_code: bool = False
+
+
+class OrgAdminMfaCodeBody(BaseModel):
+    code: str = Field(min_length=4, max_length=64)
+    use_recovery_code: bool = False
+
+
+class OrgAdminMfaSetupEmailCodeBody(BaseModel):
+    code: str = Field(min_length=6, max_length=12)
+
+
+class CreateCardReplenishmentBody(BaseModel):
+    requested_cards: int = Field(ge=1, le=5000)
+    requested_year: int | None = None
+    notes: str | None = Field(default=None, max_length=1000)
+
+
+@router.get("/audit-events")
+def get_org_admin_audit_events(
+    request: Request,
+    cursor: int | None = Query(default=None, ge=1),
+    limit: int = Query(default=50, ge=1, le=100),
+    category: str | None = Query(default=None, max_length=64),
+    action: str | None = Query(default=None, max_length=160),
+    outcome: Literal["success", "failure", "blocked", "warning"] | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    q: str | None = Query(default=None, max_length=120),
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin or admin.org_id is None:
+        raise HTTPException(status_code=401, detail="Non autenticato")
+    return list_audit_events(
+        db,
+        org_id=admin.org_id,
+        cursor=cursor,
+        limit=limit,
+        category=category,
+        action=action,
+        outcome=outcome,
+        date_from=date_from,
+        date_to=date_to,
+        search=q,
+    )
+
+
+@router.get("/audit-events/export.csv")
+def export_org_admin_audit_events(
+    request: Request,
+    category: str | None = Query(default=None, max_length=64),
+    action: str | None = Query(default=None, max_length=160),
+    outcome: Literal["success", "failure", "blocked", "warning"] | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    q: str | None = Query(default=None, max_length=120),
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin or admin.org_id is None:
+        raise HTTPException(status_code=401, detail="Non autenticato")
+    output = audit_events_csv(
+        db,
+        org_id=admin.org_id,
+        category=category,
+        action=action,
+        outcome=outcome,
+        date_from=date_from,
+        date_to=date_to,
+        search=q,
+    )
+    return StreamingResponse(
+        output,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": "attachment; filename=registro-attivita.csv"},
+    )
 
 
 def _get_current_org_admin(request: Request, db: Session):
@@ -279,6 +407,56 @@ def _get_current_org_admin(request: Request, db: Session):
     return get_current_org_admin_from_request(request, db)
 
 
+def _consume_all_pending_org_admin_login_tokens(
+    db: Session,
+    admin_id: int,
+) -> datetime:
+    """Consume both the link and code, plus any older outstanding login email."""
+    consumed_at = datetime.utcnow()
+    (
+        db.query(OrgAdminToken)
+        .filter(
+            OrgAdminToken.admin_id == admin_id,
+            OrgAdminToken.used_at.is_(None),
+        )
+        .update(
+            {OrgAdminToken.used_at: consumed_at},
+            synchronize_session=False,
+        )
+    )
+    return consumed_at
+
+
+def _begin_org_admin_login_after_first_factor(
+    db: Session,
+    admin: AdminUser,
+) -> str | None:
+    _consume_all_pending_org_admin_login_tokens(db, admin.id)
+    if active_totp_factor(db, admin.id) is None:
+        return None
+    return issue_auth_challenge(db, admin.id, _ORG_ADMIN_LOGIN_MFA_PURPOSE)
+
+
+def _require_org_admin_authentication(request: Request, db: Session):
+    authenticated = resolve_org_admin_session(request, db)
+    if authenticated is None:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return authenticated
+
+
+def _verify_org_admin_mfa_or_recovery(
+    db: Session,
+    admin_id: int,
+    factor: AdminMfaFactor,
+    code: str,
+    *,
+    use_recovery_code: bool,
+) -> bool:
+    if use_recovery_code:
+        return consume_recovery_code(db, admin_id, code)
+    return verify_factor_code(db, factor, code)
+
+
 def _hash_email_for_log(email: str | None) -> str:
     return hash_identifier(email)
 
@@ -289,6 +467,14 @@ def _normalize_login_email(email: str | None) -> str:
 
 def _normalize_org_admin_login_code(code: str | None) -> str:
     return re.sub(r"\D+", "", code or "")[:6]
+
+
+def _mask_org_admin_email(email: str) -> str:
+    local_part, separator, domain = (email or "").strip().partition("@")
+    if not separator or not local_part or not domain:
+        return "email dell'account"
+    visible = local_part[:2] if len(local_part) > 2 else local_part[:1]
+    return f"{visible}{'*' * max(2, len(local_part) - len(visible))}@{domain}"
 
 
 def _org_admin_login_code_token(email: str, code: str) -> str:
@@ -1482,6 +1668,13 @@ class CreateMemberBody(BaseModel):
     send_access_email: bool = False
 
 
+class CommitMemberImportBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    policy: Literal["all_or_nothing", "valid_only"] = "all_or_nothing"
+    activation_mode: Literal["pending", "active"] = "pending"
+    confirmation: str = Field(..., min_length=6, max_length=64)
+
+
 class UpdateMemberProfileBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
     first_name: str = Field(..., min_length=1)
@@ -1943,17 +2136,40 @@ def verify_magic_link(
         )
         raise HTTPException(status_code=400, detail="Invalid or expired token")
 
-    # Mark token as used (one-time) and create the persistent org-admin session.
-    token_entry.used_at = datetime.utcnow()
+    # Consuming either first factor invalidates every outstanding link/code for
+    # this account. If optional MFA is enabled, no authenticated session exists
+    # until the second factor succeeds.
+    mfa_challenge = _begin_org_admin_login_after_first_factor(db, admin)
+    if mfa_challenge is not None:
+        audit.log_operation(
+            db,
+            action="org_admin.mfa_challenge_issued",
+            entity_type="admin_user",
+            entity_id=admin.id,
+            actor_admin_id=admin.id,
+            org_id=admin.org_id,
+            actor_role=AdminRole.ORG_ADMIN.value,
+            category="authentication",
+            metadata={"first_factor": "magic_link"},
+            ip=client_ip,
+            user_agent=request.headers.get("user-agent"),
+        )
+        db.commit()
+        return {
+            "ok": True,
+            "mfa_required": True,
+            "challenge": mfa_challenge,
+        }
+
     persistent_session, persistent_token = create_org_admin_persistent_session(
-        db, admin
+        db, admin, request
     )
     db.commit()
     logger.info(
         "org_admin_magic_link_verify_token_consumed token_hash_prefix=%s admin_id=%s used_at=%s",
         token_hash_prefix,
         admin.id,
-        token_entry.used_at.isoformat() if token_entry.used_at else None,
+        datetime.utcnow().isoformat(),
     )
     logger.info(
         "org_admin_persistent_session_created admin_id=%s session_id=%s expires_at=%s",
@@ -2043,8 +2259,31 @@ def verify_magic_code(
         )
         raise HTTPException(status_code=400, detail="Invalid or expired code")
 
-    token_entry.used_at = datetime.utcnow()
-    persistent_session, persistent_token = create_org_admin_persistent_session(db, admin)
+    mfa_challenge = _begin_org_admin_login_after_first_factor(db, admin)
+    if mfa_challenge is not None:
+        audit.log_operation(
+            db,
+            action="org_admin.mfa_challenge_issued",
+            entity_type="admin_user",
+            entity_id=admin.id,
+            actor_admin_id=admin.id,
+            org_id=admin.org_id,
+            actor_role=AdminRole.ORG_ADMIN.value,
+            category="authentication",
+            metadata={"first_factor": "email_code"},
+            ip=client_ip,
+            user_agent=request.headers.get("user-agent"),
+        )
+        db.commit()
+        return {
+            "ok": True,
+            "mfa_required": True,
+            "challenge": mfa_challenge,
+        }
+
+    persistent_session, persistent_token = create_org_admin_persistent_session(
+        db, admin, request
+    )
     db.commit()
     logger.info(
         "org_admin_magic_code_verify_completed token_hash_prefix=%s admin_id=%s org_id=%s session_id=%s",
@@ -2060,6 +2299,429 @@ def verify_magic_code(
     return {"ok": True, "redirect_to": "/org-admin"}
 
 
+@auth_router.post("/mfa/verify")
+def verify_org_admin_mfa(
+    request: Request,
+    response: Response,
+    body: OrgAdminMfaVerifyBody,
+    db: Session = Depends(get_db),
+):
+    """Complete an optional-MFA login after the email first factor."""
+    enforce_auth_rate_limit(db, client_ip=get_client_ip(request))
+    challenge = load_auth_challenge(
+        db,
+        body.challenge,
+        purposes={_ORG_ADMIN_LOGIN_MFA_PURPOSE},
+    )
+    admin = (
+        db.query(AdminUser)
+        .filter(
+            AdminUser.id == challenge.admin_id,
+            AdminUser.role == AdminRole.ORG_ADMIN,
+            AdminUser.is_active.is_(True),
+            AdminUser.deleted_at.is_(None),
+        )
+        .first()
+    )
+    factor = active_totp_factor(db, challenge.admin_id)
+    if admin is None or factor is None:
+        challenge.consumed_at = datetime.utcnow()
+        db.commit()
+        raise HTTPException(status_code=401, detail="Authentication challenge expired")
+
+    verified = _verify_org_admin_mfa_or_recovery(
+        db,
+        admin.id,
+        factor,
+        body.code,
+        use_recovery_code=body.use_recovery_code,
+    )
+    if not verified:
+        record_challenge_failure(db, challenge)
+        audit.log_operation(
+            db,
+            action="org_admin.mfa_login_blocked",
+            entity_type="admin_user",
+            entity_id=admin.id,
+            actor_admin_id=admin.id,
+            org_id=admin.org_id,
+            actor_role=AdminRole.ORG_ADMIN.value,
+            category="authentication",
+            outcome="blocked",
+            metadata={"attempts": challenge.attempts},
+            ip=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
+        db.commit()
+        raise HTTPException(status_code=401, detail="Invalid authentication code")
+
+    challenge.consumed_at = datetime.utcnow()
+    persistent_session, persistent_token = create_org_admin_persistent_session(
+        db,
+        admin,
+        request,
+        mfa_verified=True,
+    )
+    audit.log_operation(
+        db,
+        action="org_admin.mfa_login_completed",
+        entity_type="admin_user",
+        entity_id=admin.id,
+        actor_admin_id=admin.id,
+        org_id=admin.org_id,
+        actor_role=AdminRole.ORG_ADMIN.value,
+        category="authentication",
+        metadata={"method": "recovery" if body.use_recovery_code else "totp"},
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+    request.session["org_admin_id"] = admin.id
+    set_org_admin_session_cookie(response, persistent_token)
+    return {
+        "ok": True,
+        "redirect_to": "/org-admin",
+        "recovery_codes_remaining": count_remaining_recovery_codes(db, admin.id),
+        "session_id": persistent_session.id,
+    }
+
+
+@auth_router.post("/mfa/setup/email/request")
+def request_org_admin_mfa_setup_email_code(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Send a session-bound first-factor code before exposing a TOTP secret."""
+
+    authenticated = _require_org_admin_authentication(request, db)
+    if active_totp_factor(db, authenticated.admin.id) is not None:
+        raise HTTPException(status_code=409, detail="MFA is already enabled")
+    enforce_org_admin_mfa_setup_rate_limit(db, client_ip=get_client_ip(request))
+
+    current_email = _normalize_login_email(authenticated.admin.email)
+    if not current_email:
+        raise HTTPException(
+            status_code=409,
+            detail="L'account non ha un indirizzo email valido",
+        )
+
+    # Requesting a new code also invalidates any previous setup authorization
+    # on this session, so a resend cannot extend an old proof silently.
+    authenticated.session.mfa_setup_authorized_at = None
+    challenge, code = org_admin_mfa_enrollment.issue_setup_email_challenge(
+        db,
+        admin_id=authenticated.admin.id,
+        session_id=authenticated.session.id,
+    )
+    enqueue_email(
+        db,
+        email_type="org_admin_mfa_setup_step_up",
+        to_email=current_email,
+        subject="Codice di sicurezza per attivare MFA",
+        payload=build_email_payload(
+            text_body=(
+                "Attivazione verifica in due passaggi ASSONAM\n\n"
+                "Inserisci questo codice nella tua area riservata:\n\n"
+                f"{code}\n\n"
+                "Il codice scade tra 5 minuti e può essere usato una sola volta. "
+                "Se non hai richiesto tu l'attivazione, ignora questa email e revoca le sessioni sconosciute."
+            ),
+            html_body=(
+                '<div style="font-family:Inter,Arial,sans-serif;color:#0f172a;line-height:1.5">'
+                '<h1 style="font-size:22px;margin:0 0 12px">Attivazione verifica in due passaggi</h1>'
+                "<p>Inserisci questo codice nella tua area riservata ASSONAM:</p>"
+                f'<p style="font-size:32px;font-weight:800;letter-spacing:8px;margin:16px 0;color:#00594f">{code}</p>'
+                '<p style="color:#64748b;font-size:13px">Il codice scade tra 5 minuti e può essere usato una sola volta. '
+                "Se non hai richiesto tu l'attivazione, ignora questa email e revoca le sessioni sconosciute.</p>"
+                "</div>"
+            ),
+            meta={
+                "admin_id": authenticated.admin.id,
+                "challenge_id": challenge.id,
+                "token_purpose": "org_admin_mfa_setup_step_up",
+                "service_message": True,
+            },
+        ),
+        priority=1,
+    )
+    audit.log_operation(
+        db,
+        action="org_admin.mfa_setup_email_code_requested",
+        entity_type="admin_user",
+        entity_id=authenticated.admin.id,
+        actor_admin_id=authenticated.admin.id,
+        org_id=authenticated.admin.org_id,
+        actor_role=AdminRole.ORG_ADMIN.value,
+        category="security",
+        metadata={"session_id": authenticated.session.id},
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+    return {
+        "ok": True,
+        "masked_email": _mask_org_admin_email(current_email),
+        "expires_in_seconds": int(
+            org_admin_mfa_enrollment.MFA_SETUP_CHALLENGE_TTL.total_seconds()
+        ),
+        "resend_after_seconds": int(
+            org_admin_mfa_enrollment.MFA_SETUP_RESEND_COOLDOWN.total_seconds()
+        ),
+    }
+
+
+@auth_router.post("/mfa/setup/email/verify")
+def verify_org_admin_mfa_setup_email_code(
+    request: Request,
+    body: OrgAdminMfaSetupEmailCodeBody,
+    db: Session = Depends(get_db),
+):
+    authenticated = _require_org_admin_authentication(request, db)
+    if active_totp_factor(db, authenticated.admin.id) is not None:
+        raise HTTPException(status_code=409, detail="MFA is already enabled")
+    enforce_org_admin_mfa_setup_rate_limit(db, client_ip=get_client_ip(request))
+    org_admin_mfa_enrollment.verify_setup_email_challenge(
+        db,
+        admin_id=authenticated.admin.id,
+        session_id=authenticated.session.id,
+        code=body.code,
+    )
+    authenticated.session.mfa_setup_authorized_at = datetime.utcnow()
+    audit.log_operation(
+        db,
+        action="org_admin.mfa_setup_email_verified",
+        entity_type="admin_user",
+        entity_id=authenticated.admin.id,
+        actor_admin_id=authenticated.admin.id,
+        org_id=authenticated.admin.org_id,
+        actor_role=AdminRole.ORG_ADMIN.value,
+        category="security",
+        metadata={"session_id": authenticated.session.id},
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+    return {
+        "ok": True,
+        "setup_authorized": True,
+        "expires_in_seconds": int(
+            org_admin_mfa_enrollment.MFA_SETUP_AUTHORIZATION_TTL.total_seconds()
+        ),
+    }
+
+
+@auth_router.post("/mfa/setup")
+def setup_org_admin_mfa(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    authenticated = _require_org_admin_authentication(request, db)
+    if active_totp_factor(db, authenticated.admin.id) is not None:
+        raise HTTPException(status_code=409, detail="MFA is already enabled")
+    org_admin_mfa_enrollment.require_recent_setup_authorization(
+        authenticated.session
+    )
+    _factor, secret = ensure_pending_totp_factor(db, authenticated.admin)
+    provisioning_uri = build_provisioning_uri(authenticated.admin.email, secret)
+    db.commit()
+    return {
+        "secret": secret,
+        "provisioning_uri": provisioning_uri,
+        "qr_data_uri": provisioning_qr_data_uri(provisioning_uri),
+    }
+
+
+@auth_router.post("/mfa/setup/confirm")
+def confirm_org_admin_mfa_setup(
+    request: Request,
+    body: OrgAdminMfaCodeBody,
+    db: Session = Depends(get_db),
+):
+    authenticated = _require_org_admin_authentication(request, db)
+    if active_totp_factor(db, authenticated.admin.id) is not None:
+        raise HTTPException(status_code=409, detail="MFA is already enabled")
+    org_admin_mfa_enrollment.require_recent_setup_authorization(
+        authenticated.session
+    )
+    factor = (
+        db.query(AdminMfaFactor)
+        .filter(
+            AdminMfaFactor.admin_id == authenticated.admin.id,
+            AdminMfaFactor.status == "pending",
+        )
+        .first()
+    )
+    if factor is None or not verify_factor_code(
+        db,
+        factor,
+        body.code,
+        allow_pending=True,
+    ):
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Invalid authentication code")
+
+    now = datetime.utcnow()
+    factor.status = "active"
+    factor.activated_at = now
+    factor.updated_at = now
+    authenticated.session.mfa_verified_at = now
+    authenticated.session.mfa_setup_authorized_at = None
+    recovery_codes = generate_recovery_codes(db, authenticated.admin.id)
+    audit.log_operation(
+        db,
+        action="org_admin.mfa_enabled",
+        entity_type="admin_user",
+        entity_id=authenticated.admin.id,
+        actor_admin_id=authenticated.admin.id,
+        org_id=authenticated.admin.org_id,
+        actor_role=AdminRole.ORG_ADMIN.value,
+        category="security",
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+    return {"ok": True, "recovery_codes": recovery_codes}
+
+
+@auth_router.get("/security")
+def get_org_admin_security(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    authenticated = _require_org_admin_authentication(request, db)
+    now = datetime.utcnow()
+    sessions = (
+        db.query(OrgAdminSession)
+        .filter(
+            OrgAdminSession.admin_id == authenticated.admin.id,
+            OrgAdminSession.revoked_at.is_(None),
+            OrgAdminSession.expires_at > now,
+        )
+        .order_by(OrgAdminSession.last_seen_at.desc(), OrgAdminSession.id.desc())
+        .all()
+    )
+    return {
+        "mfa_enabled": active_totp_factor(db, authenticated.admin.id) is not None,
+        "recovery_codes_remaining": count_remaining_recovery_codes(
+            db,
+            authenticated.admin.id,
+        ),
+        "sessions": [
+            serialize_org_admin_session(item, current_id=authenticated.session.id)
+            for item in sessions
+        ],
+    }
+
+
+@auth_router.post("/mfa/recovery-codes/regenerate")
+def regenerate_org_admin_recovery_codes(
+    request: Request,
+    body: OrgAdminMfaCodeBody,
+    db: Session = Depends(get_db),
+):
+    authenticated = _require_org_admin_authentication(request, db)
+    factor = active_totp_factor(db, authenticated.admin.id)
+    if factor is None or not _verify_org_admin_mfa_or_recovery(
+        db,
+        authenticated.admin.id,
+        factor,
+        body.code,
+        use_recovery_code=body.use_recovery_code,
+    ):
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Invalid authentication code")
+    recovery_codes = generate_recovery_codes(db, authenticated.admin.id)
+    authenticated.session.mfa_verified_at = datetime.utcnow()
+    audit.log_operation(
+        db,
+        action="org_admin.mfa_recovery_codes_regenerated",
+        entity_type="admin_user",
+        entity_id=authenticated.admin.id,
+        actor_admin_id=authenticated.admin.id,
+        org_id=authenticated.admin.org_id,
+        actor_role=AdminRole.ORG_ADMIN.value,
+        category="security",
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+    return {"ok": True, "recovery_codes": recovery_codes}
+
+
+@auth_router.delete("/sessions/{session_id}")
+def revoke_org_admin_session(
+    session_id: int,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    authenticated = _require_org_admin_authentication(request, db)
+    target = (
+        db.query(OrgAdminSession)
+        .filter(
+            OrgAdminSession.id == session_id,
+            OrgAdminSession.admin_id == authenticated.admin.id,
+            OrgAdminSession.revoked_at.is_(None),
+        )
+        .first()
+    )
+    if target is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    target.revoked_at = datetime.utcnow()
+    is_current = target.id == authenticated.session.id
+    audit.log_operation(
+        db,
+        action="org_admin.session_revoked",
+        entity_type="org_admin_session",
+        entity_id=target.id,
+        actor_admin_id=authenticated.admin.id,
+        org_id=authenticated.admin.org_id,
+        actor_role=AdminRole.ORG_ADMIN.value,
+        category="security",
+        metadata={"current": is_current},
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+    if is_current:
+        request.session.pop("org_admin_id", None)
+        clear_org_admin_session_cookie(response)
+    return {"ok": True, "current": is_current}
+
+
+@auth_router.post("/sessions/revoke-others")
+def revoke_other_org_admin_sessions(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    authenticated = _require_org_admin_authentication(request, db)
+    now = datetime.utcnow()
+    count = (
+        db.query(OrgAdminSession)
+        .filter(
+            OrgAdminSession.admin_id == authenticated.admin.id,
+            OrgAdminSession.id != authenticated.session.id,
+            OrgAdminSession.revoked_at.is_(None),
+        )
+        .update({OrgAdminSession.revoked_at: now}, synchronize_session=False)
+    )
+    audit.log_operation(
+        db,
+        action="org_admin.other_sessions_revoked",
+        entity_type="admin_user",
+        entity_id=authenticated.admin.id,
+        actor_admin_id=authenticated.admin.id,
+        org_id=authenticated.admin.org_id,
+        actor_role=AdminRole.ORG_ADMIN.value,
+        category="security",
+        metadata={"revoked_count": count},
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+    return {"ok": True, "revoked_count": count}
+
+
 @auth_router.post("/logout")
 def logout(request: Request, response: Response, db: Session = Depends(get_db)):
     """Clear the org-admin session."""
@@ -2073,15 +2735,18 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)):
 @auth_router.get("/me")
 def me(request: Request, db: Session = Depends(get_db)):
     """Return the authenticated org admin profile."""
-    admin = _get_current_org_admin(request, db)
-    if not admin:
+    authenticated = resolve_org_admin_session(request, db)
+    if authenticated is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    admin = authenticated.admin
 
     return {
         "id": admin.id,
         "email": admin.email,
         "org_id": admin.org_id,
         "role": AdminRole.ORG_ADMIN.value,
+        "mfa_enabled": active_totp_factor(db, admin.id) is not None,
+        "session_id": authenticated.session.id,
         "organization": {
             "id": admin.organization.id,
             "name": admin.organization.name,
@@ -5095,6 +5760,232 @@ def spin_referral_reward(
     }
 
 
+@router.get("/members/imports/template.csv")
+def download_member_import_template(request: Request, db: Session = Depends(get_db)):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return StreamingResponse(
+        member_import_template(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": "attachment; filename=modello-import-soci.csv"},
+    )
+
+
+@router.get("/members/imports")
+def list_member_import_batches(request: Request, db: Session = Depends(get_db)):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    batches = (
+        db.query(MemberImportBatch)
+        .filter(MemberImportBatch.org_id == admin.org_id)
+        .order_by(MemberImportBatch.created_at.desc(), MemberImportBatch.id.desc())
+        .limit(30)
+        .all()
+    )
+    return {"items": [serialize_import_batch(batch, include_rows=False) for batch in batches]}
+
+
+@router.post("/members/imports/preview")
+def preview_member_import(
+    request: Request,
+    upload: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin or not admin.organization:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    filename = (upload.filename or "").strip().lower()
+    if not filename.endswith(".csv"):
+        raise HTTPException(status_code=415, detail="Carica un file con estensione .csv")
+    content = upload.file.read(MAX_IMPORT_BYTES + 1)
+    try:
+        batch = parse_member_import(
+            db,
+            organization=admin.organization,
+            admin=admin,
+            content=content,
+        )
+        audit.log_operation(
+            db,
+            action="member.import_previewed",
+            category="member",
+            entity_type="member_import_batch",
+            entity_id=batch.id,
+            actor_admin_id=admin.id,
+            actor_role=AdminRole.ORG_ADMIN.value,
+            org_id=admin.org_id,
+            metadata={
+                "total_rows": batch.total_rows,
+                "valid_rows": batch.valid_rows,
+                "error_rows": batch.error_rows,
+            },
+            ip=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
+        db.commit()
+        db.refresh(batch)
+        return serialize_import_batch(batch)
+    except MemberImportError as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/members/imports/{batch_id}")
+def get_member_import_batch(
+    batch_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    batch = (
+        db.query(MemberImportBatch)
+        .filter(MemberImportBatch.id == batch_id, MemberImportBatch.org_id == admin.org_id)
+        .first()
+    )
+    if not batch:
+        raise HTTPException(status_code=404, detail="Importazione non trovata")
+    return serialize_import_batch(batch)
+
+
+@router.get("/members/imports/{batch_id}/errors.csv")
+def export_member_import_errors(
+    batch_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    batch = (
+        db.query(MemberImportBatch)
+        .filter(MemberImportBatch.id == batch_id, MemberImportBatch.org_id == admin.org_id)
+        .first()
+    )
+    if not batch:
+        raise HTTPException(status_code=404, detail="Importazione non trovata")
+    output = io.StringIO()
+    output.write("\ufeff")
+    writer = csv.writer(output)
+    writer.writerow(["riga", "campo", "codice", "errore"])
+    for row in batch.rows:
+        for error in row.errors_json or []:
+            writer.writerow(
+                [
+                    row.row_number,
+                    neutralize_csv_formula(error.get("field") or ""),
+                    neutralize_csv_formula(error.get("code") or ""),
+                    neutralize_csv_formula(error.get("message") or ""),
+                ]
+            )
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename=errori-import-{batch.id}.csv"},
+    )
+
+
+@router.post(
+    "/members/imports/{batch_id}/commit",
+    dependencies=[Depends(sqlite_card_allocation_request_guard)],
+)
+def commit_member_import_batch(
+    batch_id: int,
+    body: CommitMemberImportBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    batch = (
+        db.query(MemberImportBatch)
+        .filter(MemberImportBatch.id == batch_id, MemberImportBatch.org_id == admin.org_id)
+        .first()
+    )
+    if not batch:
+        raise HTTPException(status_code=404, detail="Importazione non trovata")
+    expected = (
+        f"ATTIVA {batch.valid_rows} SOCI"
+        if body.activation_mode == "active"
+        else f"IMPORTA {batch.valid_rows} SOCI"
+    )
+    if body.confirmation.strip() != expected:
+        raise HTTPException(status_code=422, detail=f"Digita esattamente: {expected}")
+    try:
+        imported = commit_member_import(
+            db,
+            batch=batch,
+            admin=admin,
+            policy=body.policy,
+            activation_mode=body.activation_mode,
+        )
+        audit.log_operation(
+            db,
+            action="member.import_committed",
+            category="member",
+            entity_type="member_import_batch",
+            entity_id=batch.id,
+            actor_admin_id=admin.id,
+            actor_role=AdminRole.ORG_ADMIN.value,
+            org_id=admin.org_id,
+            metadata={
+                "imported_rows": imported,
+                "activation_mode": body.activation_mode,
+                "commit_policy": body.policy,
+            },
+            ip=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
+        db.commit()
+        return {"ok": True, "batch": serialize_import_batch(batch)}
+    except MemberImportError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/members/imports/{batch_id}/rollback")
+def rollback_member_import_batch(
+    batch_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    batch = (
+        db.query(MemberImportBatch)
+        .filter(MemberImportBatch.id == batch_id, MemberImportBatch.org_id == admin.org_id)
+        .first()
+    )
+    if not batch:
+        raise HTTPException(status_code=404, detail="Importazione non trovata")
+    try:
+        removed = rollback_member_import(db, batch=batch)
+        audit.log_operation(
+            db,
+            action="member.import_rolled_back",
+            category="member",
+            entity_type="member_import_batch",
+            entity_id=batch.id,
+            actor_admin_id=admin.id,
+            actor_role=AdminRole.ORG_ADMIN.value,
+            org_id=admin.org_id,
+            metadata={"removed_rows": removed},
+            ip=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
+        db.commit()
+        return {"ok": True, "removed_rows": removed, "batch": serialize_import_batch(batch)}
+    except MemberImportError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
 @router.get("/members")
 def list_org_members(
     request: Request,
@@ -5665,6 +6556,13 @@ def update_member_profile(
 
     current_membership_type = resolve_member_membership_type(member)
     if body.membership_type is not None and current_membership_type != membership_type:
+        from app.services.annual_memberships import (
+            cancel_current_annual_membership_term,
+            reactivate_current_annual_membership_term,
+        )
+
+        if current_membership_type == "annual" and membership_type == "temporary":
+            cancel_current_annual_membership_term(db, member, now=datetime.utcnow())
         apply_membership_defaults(
             member=member,
             org=admin.organization,
@@ -5672,6 +6570,8 @@ def update_member_profile(
             reference_time=member.joined_at or datetime.utcnow(),
             membership_fee_snapshot=membership_fee_snapshot,
         )
+        if membership_type == "annual":
+            reactivate_current_annual_membership_term(db, member, now=datetime.utcnow())
         changed_fields.extend(["membership_type", "valid_from", "valid_until", "membership_fee_snapshot"])
     elif membership_fee_snapshot is not None and member.membership_fee_snapshot != membership_fee_snapshot:
         member.membership_fee_snapshot = membership_fee_snapshot
@@ -6008,7 +6908,18 @@ def member_decision(
             )
             if not fulfillment.issued_card and fulfillment.reason == "card_stock_exhausted":
                 member.status = MemberStatus.PENDING_CARDS
+        if member.status == MemberStatus.ACTIVE:
+            from app.services.annual_memberships import reactivate_current_annual_membership_term
+
+            # maybe_fulfill_member_card dual-writes a pending annual term; flush
+            # it before the explicit reactivation lookup to avoid a duplicate
+            # in the same unit of work.
+            db.flush()
+            reactivate_current_annual_membership_term(db, member, now=member.decision_at)
     else:
+        from app.services.annual_memberships import cancel_current_annual_membership_term
+
+        cancel_current_annual_membership_term(db, member, now=member.decision_at)
         member.status = MemberStatus.REJECTED
 
     db.commit()
@@ -6218,10 +7129,13 @@ def delete_member(
     if member.org_id != admin.org_id:
         raise HTTPException(status_code=403, detail="Forbidden")
 
+    from app.services.annual_memberships import cancel_current_annual_membership_term
+
     now = datetime.utcnow()
     released_card_no = member.card_no
     released_card_year = member.card_year
     released_batch_id = member.batch_id
+    cancel_current_annual_membership_term(db, member, now=now)
     release_card_number(
         db,
         org_id=member.org_id,
@@ -6286,16 +7200,47 @@ def _apply_doc_review(
     status: str,
     rejection_note: Optional[str] = None,
 ):
-    doc.status = status
-    doc.reviewed_at = datetime.utcnow()
-    doc.reviewed_by = admin.id
-    doc.reviewed_by_admin_id = admin.id
-    if status == DocStatus.REJECTED.value:
-        doc.rejection_note = rejection_note
-        doc.review_notes = rejection_note
-    else:
-        doc.rejection_note = None
+    now = datetime.utcnow()
+    is_recent_duplicate_rejection = bool(
+        status == DocStatus.REJECTED.value
+        and doc.status == DocStatus.REJECTED.value
+        and (doc.rejection_note or "").strip() == (rejection_note or "").strip()
+        and doc.reviewed_at is not None
+        and doc.reviewed_at
+        > now - timedelta(seconds=DOCUMENT_CORRECTION_TOKEN_TTL_SECONDS)
+    )
+
+    # Identical retries keep the same review marker, so the outbox can refresh
+    # an unsent job without invalidating the link already delivered. After the
+    # 72-hour capability window, the same action intentionally creates a new
+    # review marker and therefore a fresh email/link.
+    if not is_recent_duplicate_rejection:
+        doc.status = status
+        doc.reviewed_at = now
+        doc.reviewed_by = admin.id
+        doc.reviewed_by_admin_id = admin.id
+        if status == DocStatus.REJECTED.value:
+            doc.rejection_note = rejection_note
+            doc.review_notes = rejection_note
+        else:
+            doc.rejection_note = None
     db.commit()
+
+    if status == DocStatus.REJECTED.value:
+        reviewed_member_id = doc.member_id
+        reviewed_document_id = doc.id
+        try:
+            enqueue_document_rejection_email(db, request, doc)
+        except Exception:
+            # A temporary email/outbox issue must not make the org admin repeat
+            # a review that was already persisted. The failure remains visible
+            # in application logs and the document stays safely rejected.
+            db.rollback()
+            logger.exception(
+                "Failed to queue document correction email for member_id=%s doc_id=%s",
+                reviewed_member_id,
+                reviewed_document_id,
+            )
 
     audit.log_operation(
         db,
@@ -6533,6 +7478,143 @@ def card_movements(
         "items": [_serialize_org_admin_card_lot(batch) for batch in batches],
         "total": total,
         "current_year": current_year,
+    }
+
+
+@router.get("/cards/replenishments")
+def list_card_replenishments(
+    request: Request,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin or admin.org_id is None:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    org = (
+        db.query(Organization)
+        .options(joinedload(Organization.numbering_scope))
+        .filter(Organization.id == admin.org_id)
+        .first()
+    )
+    if org is None:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    query = (
+        db.query(RechargeRequest)
+        .options(joinedload(RechargeRequest.card_batch))
+        .filter(
+            RechargeRequest.association_id == admin.org_id,
+            RechargeRequest.source == "org_admin_portal",
+        )
+    )
+    total = int(query.count())
+    items = (
+        query.order_by(RechargeRequest.created_at.desc(), RechargeRequest.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return {
+        "items": [serialize_replenishment_request(item) for item in items],
+        "total": total,
+        "summary": replenishment_summary(db, org_id=admin.org_id),
+        "capability": replenishment_capability(db, org),
+    }
+
+
+@router.post("/cards/replenishments", status_code=201)
+def create_card_replenishment(
+    body: CreateCardReplenishmentBody,
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin or admin.org_id is None:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    org = (
+        db.query(Organization)
+        .options(joinedload(Organization.numbering_scope))
+        .filter(
+            Organization.id == admin.org_id,
+            Organization.deleted_at.is_(None),
+            Organization.is_active.is_(True),
+        )
+        .first()
+    )
+    if org is None:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    effective_idempotency_key = idempotency_key or secrets.token_urlsafe(18)
+    try:
+        replenishment, created = create_portal_replenishment_request(
+            db,
+            org=org,
+            requested_by=admin,
+            requested_cards=body.requested_cards,
+            requested_year=body.requested_year,
+            notes=body.notes,
+            idempotency_key=effective_idempotency_key,
+        )
+    except IntegrityError as exc:
+        db.rollback()
+        replenishment = (
+            db.query(RechargeRequest)
+            .options(joinedload(RechargeRequest.card_batch))
+            .filter(
+                RechargeRequest.association_id == admin.org_id,
+                RechargeRequest.idempotency_key == effective_idempotency_key,
+            )
+            .first()
+        )
+        if replenishment is None:
+            raise HTTPException(
+                status_code=409,
+                detail="La richiesta e in elaborazione; aggiorna l'elenco tra pochi secondi",
+            ) from exc
+        created = False
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    if created:
+        audit.log_operation(
+            db,
+            action="org.cards.replenishment_requested",
+            entity_type="recharge_request",
+            entity_id=replenishment.id,
+            actor_admin_id=admin.id,
+            org_id=admin.org_id,
+            actor_role=AdminRole.ORG_ADMIN.value,
+            category="cards",
+            request_id=effective_idempotency_key,
+            metadata={
+                "org_id": admin.org_id,
+                "requested_cards": replenishment.requested_cards,
+                "requested_year": replenishment.requested_year,
+                "amount_due_cents": replenishment.amount_due_cents,
+                "currency": replenishment.currency,
+                "billing_status": replenishment.billing_status,
+                "card_batch_id": replenishment.card_batch_id,
+            },
+            ip=get_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
+    db.commit()
+
+    persisted = load_replenishment_request(db, replenishment.id)
+    if persisted is None:
+        raise HTTPException(status_code=500, detail="Richiesta non disponibile dopo il salvataggio")
+    return {
+        "ok": True,
+        "created": created,
+        "item": serialize_replenishment_request(persisted),
     }
 
 

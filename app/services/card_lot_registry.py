@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
 from io import BytesIO
 import logging
 import re
@@ -332,7 +331,7 @@ def ensure_recharge_request_batch(db: Session, recharge_request_id: int) -> Card
             actor_role="system",
             metadata={
                 "reason": "blocked_non_shared",
-                "source": "whatsapp_bot",
+                "source": recharge_request.source or "whatsapp",
                 "recharge_request_id": recharge_request.id,
                 "org_id": org.id,
                 "org_scope_id": org.numbering_scope_id,
@@ -401,7 +400,7 @@ def ensure_recharge_request_batch(db: Session, recharge_request_id: int) -> Card
     batch = CardBatch(
         org_id=org.id,
         numbering_scope_id=central_scope.id,
-        year=datetime.utcnow().year,
+        year=int(recharge_request.requested_year),
         start_no=start_no,
         end_no=end_no,
         next_no=start_no,
@@ -434,7 +433,7 @@ def ensure_recharge_request_batch(db: Session, recharge_request_id: int) -> Card
         actor_role="system",
         metadata={
             "recharge_request_id": recharge_request.id,
-            "source": "whatsapp_bot",
+            "source": recharge_request.source or "whatsapp",
             "reason": "recharge_request",
             "created_by": "system",
             "org_id": org.id,
@@ -442,6 +441,7 @@ def ensure_recharge_request_batch(db: Session, recharge_request_id: int) -> Card
             "start_no": start_no,
             "end_no": end_no,
             "quantity": recharge_request.requested_cards,
+            "requested_year": recharge_request.requested_year,
             "max_end_before_create": max_end,
         },
     )

@@ -28,7 +28,14 @@ const MagicLinkVerify = () => {
     const verify = async () => {
       try {
         if (role === "org_admin") {
-          await verifyOrgAdminToken(token);
+          const result = await verifyOrgAdminToken(token);
+          if (result.mfa_required && result.challenge) {
+            navigate(
+              `/org-admin/callback?mfa_challenge=${encodeURIComponent(result.challenge)}`,
+              { replace: true },
+            );
+            return;
+          }
           navigate("/org-admin", { replace: true });
           return;
         }
@@ -53,7 +60,7 @@ const MagicLinkVerify = () => {
           <div className="surface-strong mx-auto max-w-xl p-8 text-center md:p-10">
             <p className="section-title">Accesso</p>
             <h1 className="section-heading">Link non valido</h1>
-            <p className="mt-4 text-sm leading-7 text-neutral-600">{errorMessage}</p>
+            <p className="mt-4 text-sm leading-7 text-neutral-600" role="alert">{errorMessage}</p>
             <div className="mt-7">
               <Link className="btn-primary px-6 py-2.5" to="/login">
                 Torna al login
@@ -71,7 +78,7 @@ const MagicLinkVerify = () => {
         <div className="surface-strong mx-auto max-w-xl p-8 text-center md:p-10">
           <p className="section-title">Accesso</p>
           <h1 className="section-heading">Verifica in corso</h1>
-          <p className="mt-4 text-sm leading-7 text-neutral-600">
+          <p className="mt-4 text-sm leading-7 text-neutral-600" role="status">
             Stiamo completando la verifica del link sicuro.
           </p>
         </div>

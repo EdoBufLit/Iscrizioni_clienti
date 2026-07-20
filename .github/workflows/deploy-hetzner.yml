@@ -302,6 +302,7 @@ jobs:
           FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
           SUPER_ADMIN_EMAIL: ${{ secrets.SUPER_ADMIN_EMAIL }}
           SUPER_ADMIN_PASSWORD: ${{ secrets.SUPER_ADMIN_PASSWORD }}
+          MFA_ENCRYPTION_KEY: ${{ secrets.MFA_ENCRYPTION_KEY }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           UPLOAD_DIR: ${{ secrets.UPLOAD_DIR }}

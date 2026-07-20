@@ -4,10 +4,10 @@ import os
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File, Form
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy.orm import Session, aliased, joinedload
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Literal, Optional
 import secrets
 import re
@@ -36,10 +36,16 @@ from app.models import (
     AccountingFolder,
     AccountingShareLink,
     WhatsAppConnection,
+    AdminAuthChallenge,
+    AdminMfaFactor,
+    AdminRecoveryCode,
+    OrgAdminSession,
+    SuperAdminSession,
+    RechargeRequest,
 )
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.file_deletion import enqueue_file_deletion
-from app.security import hash_api_key, verify_password
+from app.security import get_password_hash, hash_api_key, verify_password
 from app.utils import generate_token, hash_token, save_upload_file
 from app.config import settings
 from app.log_redaction import hash_identifier, redact_for_log
@@ -54,7 +60,12 @@ from app.services.member_activity import (
     member_active_filters,
     member_expired_filters,
 )
-from app.services.member_maintenance import expire_and_purge_members
+from app.services.annual_memberships import (
+    AnnualDeactivationNotAllowedError,
+    AnnualDeactivationPreviewChangedError,
+    build_annual_deactivation_preview,
+    execute_annual_deactivation,
+)
 from app.services.org_admin_notifications import (
     notify_org_admins_about_accounting_document,
     notify_org_admins_about_shared_document,
@@ -106,12 +117,44 @@ from app.services.whatsapp_sync import apply_connection_snapshot, serialize_conn
 from app.services.org_branding import sanitize_card_email_subject_template
 from app.services.card_lot_registry import (
     build_card_lots_workbook,
+    ensure_recharge_request_batch,
     find_batch_overlap,
     format_card_number,
     list_card_lot_registry_rows,
     serialize_card_lot_registry_row,
 )
+from app.services.card_replenishments import (
+    BILLING_STATUS_PAID,
+    BILLING_STATUS_UNPAID,
+    PORTAL_SOURCE,
+    load_replenishment_request,
+    replenishment_summary,
+    serialize_replenishment_request,
+    update_replenishment_accounting,
+)
 from app.models_affiliation import AffiliationApplication
+from app.services.super_admin_auth import (
+    SUPER_ADMIN_SESSION_COOKIE,
+    active_totp_factor,
+    build_provisioning_uri,
+    clear_super_admin_session_cookie,
+    consume_recovery_code,
+    count_remaining_recovery_codes,
+    create_super_admin_session,
+    ensure_pending_totp_factor,
+    generate_recovery_codes,
+    issue_auth_challenge,
+    load_auth_challenge,
+    provisioning_qr_data_uri,
+    record_challenge_failure,
+    require_recent_step_up,
+    resolve_super_admin_session,
+    revoke_session_by_cookie,
+    serialize_session,
+    set_super_admin_session_cookie,
+    verify_factor_code,
+)
+from app.services.audit_registry import audit_events_csv, list_audit_events
 
 import logging
 
@@ -160,23 +203,74 @@ _ORGANIZATION_SORT_FIELDS = {
 _NUMBERING_SCOPE_UNSET = object()
 
 
-def _require_super_admin(request: Request, db: Session) -> AdminUser:
-    admin_id = request.session.get("admin_id")
-    if not admin_id:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    admin = (
-        db.query(AdminUser)
-        .filter(
-            AdminUser.id == admin_id,
-            AdminUser.role == AdminRole.SUPER_ADMIN,
-            AdminUser.is_active.is_(True),
-            AdminUser.deleted_at.is_(None),
-        )
-        .first()
+@router.get("/audit-events")
+def get_super_admin_audit_events(
+    request: Request,
+    cursor: int | None = Query(default=None, ge=1),
+    limit: int = Query(default=50, ge=1, le=100),
+    org_id: int | None = Query(default=None, ge=1),
+    category: str | None = Query(default=None, max_length=64),
+    action: str | None = Query(default=None, max_length=160),
+    outcome: Literal["success", "failure", "blocked", "warning"] | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    q: str | None = Query(default=None, max_length=120),
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    return list_audit_events(
+        db,
+        cursor=cursor,
+        limit=limit,
+        org_id=org_id,
+        category=category,
+        action=action,
+        outcome=outcome,
+        date_from=date_from,
+        date_to=date_to,
+        search=q,
     )
-    if not admin:
-        raise HTTPException(status_code=403, detail="Forbidden")
-    return admin
+
+
+@router.get("/audit-events/export.csv")
+def export_super_admin_audit_events(
+    request: Request,
+    org_id: int | None = Query(default=None, ge=1),
+    category: str | None = Query(default=None, max_length=64),
+    action: str | None = Query(default=None, max_length=160),
+    outcome: Literal["success", "failure", "blocked", "warning"] | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    q: str | None = Query(default=None, max_length=120),
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    output = audit_events_csv(
+        db,
+        org_id=org_id,
+        category=category,
+        action=action,
+        outcome=outcome,
+        date_from=date_from,
+        date_to=date_to,
+        search=q,
+    )
+    return StreamingResponse(
+        output,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": "attachment; filename=registro-audit.csv"},
+    )
+
+
+def _require_super_admin(request: Request, db: Session) -> AdminUser:
+    return resolve_super_admin_session(request, db).admin
+
+
+def _require_recent_super_admin_step_up(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> AdminUser:
+    return require_recent_step_up(request, db).admin
 
 
 def _serialize_member_payment_method(value) -> str | None:
@@ -553,6 +647,26 @@ def _list_organizations_payload(
 class LoginBody(BaseModel):
     email: str
     password: str
+
+
+class MfaChallengeBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    challenge_token: str = Field(..., min_length=20, max_length=256)
+    code: str = Field(..., min_length=6, max_length=32)
+
+
+class MfaCodeBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(..., min_length=6, max_length=32)
+
+
+class ChangeSuperAdminPasswordBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    current_password: str = Field(..., min_length=1, max_length=1024)
+    new_password: str = Field(..., min_length=12, max_length=1024)
 
 
 class CreateOrganization(BaseModel):
@@ -1146,26 +1260,310 @@ def super_admin_login(
         audit.super_admin_login_failed(ip=get_client_ip(request))
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    request.session["admin_id"] = admin.id
+    if not settings.SUPER_ADMIN_MFA_REQUIRED:
+        _, raw_session = create_super_admin_session(
+            db,
+            admin,
+            request,
+            mfa_verified=False,
+        )
+        db.commit()
+        response = JSONResponse({"ok": True, "status": "authenticated"})
+        set_super_admin_session_cookie(response, raw_session)
+        audit.super_admin_login(admin_id=admin.id, ip=get_client_ip(request))
+        logger.info("super_admin_login: local compatibility success for admin id=%d", admin.id)
+        return response
+
+    factor = active_totp_factor(db, admin.id)
+    if factor is not None:
+        challenge_token = issue_auth_challenge(db, admin.id, "login")
+        db.commit()
+        return {
+            "ok": True,
+            "status": "mfa_required",
+            "challenge_token": challenge_token,
+            "expires_in_seconds": int(5 * 60),
+        }
+
+    _, secret = ensure_pending_totp_factor(db, admin)
+    challenge_token = issue_auth_challenge(db, admin.id, "setup")
+    provisioning_uri = build_provisioning_uri(admin.email, secret)
+    db.commit()
+    return {
+        "ok": True,
+        "status": "mfa_setup_required",
+        "challenge_token": challenge_token,
+        "secret": secret,
+        "qr_data_uri": provisioning_qr_data_uri(provisioning_uri),
+        "expires_in_seconds": int(5 * 60),
+    }
+
+
+def _load_challenge_admin(db: Session, challenge: AdminAuthChallenge) -> AdminUser:
+    admin = (
+        db.query(AdminUser)
+        .filter(
+            AdminUser.id == challenge.admin_id,
+            AdminUser.role == AdminRole.SUPER_ADMIN,
+            AdminUser.is_active.is_(True),
+            AdminUser.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if admin is None:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return admin
+
+
+@auth_router.post("/mfa/totp/confirm")
+def confirm_super_admin_totp(
+    request: Request,
+    body: MfaChallengeBody,
+    db: Session = Depends(get_db),
+):
+    challenge = load_auth_challenge(db, body.challenge_token, purposes={"setup"})
+    admin = _load_challenge_admin(db, challenge)
+    factor = (
+        db.query(AdminMfaFactor)
+        .filter(
+            AdminMfaFactor.admin_id == admin.id,
+            AdminMfaFactor.status == "pending",
+        )
+        .first()
+    )
+    if factor is None:
+        raise HTTPException(status_code=409, detail="MFA setup is no longer pending")
+    if not verify_factor_code(db, factor, body.code, allow_pending=True):
+        record_challenge_failure(db, challenge)
+        raise HTTPException(status_code=401, detail="Invalid authentication code")
+
+    now = datetime.utcnow()
+    factor.status = "active"
+    factor.activated_at = now
+    factor.updated_at = now
+    challenge.consumed_at = now
+    recovery_codes = generate_recovery_codes(db, admin.id)
+    _, raw_session = create_super_admin_session(
+        db,
+        admin,
+        request,
+        mfa_verified=True,
+    )
+    db.commit()
     audit.super_admin_login(admin_id=admin.id, ip=get_client_ip(request))
-    logger.info("super_admin_login: success for admin id=%d", admin.id)
-    return {"ok": True}
+    audit.log_operation(
+        db,
+        action="super_admin.mfa_enabled",
+        entity_type="admin_user",
+        entity_id=admin.id,
+        actor_admin_id=admin.id,
+        actor_role=AdminRole.SUPER_ADMIN.value,
+        metadata={"factor": "totp"},
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+    response = JSONResponse(
+        {
+            "ok": True,
+            "status": "authenticated",
+            "recovery_codes": recovery_codes,
+        }
+    )
+    set_super_admin_session_cookie(response, raw_session)
+    return response
+
+
+@auth_router.post("/mfa/verify")
+def verify_super_admin_mfa(
+    request: Request,
+    body: MfaChallengeBody,
+    db: Session = Depends(get_db),
+):
+    challenge = load_auth_challenge(db, body.challenge_token, purposes={"login"})
+    admin = _load_challenge_admin(db, challenge)
+    factor = active_totp_factor(db, admin.id)
+    if factor is None:
+        raise HTTPException(status_code=409, detail="MFA factor is not configured")
+
+    is_valid = verify_factor_code(db, factor, body.code)
+    used_recovery_code = False
+    if not is_valid:
+        used_recovery_code = consume_recovery_code(db, admin.id, body.code)
+        is_valid = used_recovery_code
+    if not is_valid:
+        record_challenge_failure(db, challenge)
+        raise HTTPException(status_code=401, detail="Invalid authentication code")
+
+    challenge.consumed_at = datetime.utcnow()
+    _, raw_session = create_super_admin_session(
+        db,
+        admin,
+        request,
+        mfa_verified=True,
+    )
+    db.commit()
+    audit.super_admin_login(admin_id=admin.id, ip=get_client_ip(request))
+    response = JSONResponse(
+        {
+            "ok": True,
+            "status": "authenticated",
+            "used_recovery_code": used_recovery_code,
+            "recovery_codes_remaining": count_remaining_recovery_codes(db, admin.id),
+        }
+    )
+    set_super_admin_session_cookie(response, raw_session)
+    return response
 
 
 @auth_router.get("/me")
 def super_admin_me(request: Request, db: Session = Depends(get_db)):
-    admin = _require_super_admin(request, db)
+    authenticated = resolve_super_admin_session(request, db)
+    admin = authenticated.admin
     return {
         "id": admin.id,
         "email": admin.email,
         "role": AdminRole.SUPER_ADMIN.value,
+        "mfa_enabled": active_totp_factor(db, admin.id) is not None,
+        "recovery_codes_remaining": count_remaining_recovery_codes(db, admin.id),
+        "session_id": authenticated.session.id,
     }
 
 
 @auth_router.post("/logout")
-def super_admin_logout(request: Request):
+def super_admin_logout(request: Request, db: Session = Depends(get_db)):
+    revoke_session_by_cookie(request, db)
     request.session.pop("admin_id", None)
-    return {"ok": True}
+    response = JSONResponse({"ok": True})
+    clear_super_admin_session_cookie(response)
+    return response
+
+
+@auth_router.post("/step-up")
+def step_up_super_admin(
+    request: Request,
+    body: MfaCodeBody,
+    db: Session = Depends(get_db),
+):
+    authenticated = resolve_super_admin_session(request, db)
+    if not settings.SUPER_ADMIN_MFA_REQUIRED:
+        return {"ok": True, "valid_for_seconds": settings.SUPER_ADMIN_STEP_UP_MINUTES * 60}
+    factor = active_totp_factor(db, authenticated.admin.id)
+    if factor is None:
+        raise HTTPException(status_code=409, detail="MFA factor is not configured")
+    is_valid = verify_factor_code(db, factor, body.code)
+    if not is_valid:
+        is_valid = consume_recovery_code(db, authenticated.admin.id, body.code)
+    if not is_valid:
+        db.rollback()
+        raise HTTPException(status_code=401, detail="Invalid authentication code")
+    authenticated.session.mfa_verified_at = datetime.utcnow()
+    db.commit()
+    return {"ok": True, "valid_for_seconds": settings.SUPER_ADMIN_STEP_UP_MINUTES * 60}
+
+
+@auth_router.get("/sessions")
+def list_super_admin_sessions(request: Request, db: Session = Depends(get_db)):
+    authenticated = resolve_super_admin_session(request, db)
+    now = datetime.utcnow()
+    sessions = (
+        db.query(SuperAdminSession)
+        .filter(
+            SuperAdminSession.admin_id == authenticated.admin.id,
+            SuperAdminSession.revoked_at.is_(None),
+            SuperAdminSession.idle_expires_at > now,
+            SuperAdminSession.absolute_expires_at > now,
+        )
+        .order_by(SuperAdminSession.last_seen_at.desc())
+        .all()
+    )
+    return {
+        "items": [
+            serialize_session(session, current_id=authenticated.session.id)
+            for session in sessions
+        ]
+    }
+
+
+@auth_router.delete("/sessions/{session_id}")
+def revoke_super_admin_session(
+    session_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    authenticated = resolve_super_admin_session(request, db)
+    target = (
+        db.query(SuperAdminSession)
+        .filter(
+            SuperAdminSession.id == session_id,
+            SuperAdminSession.admin_id == authenticated.admin.id,
+            SuperAdminSession.revoked_at.is_(None),
+        )
+        .first()
+    )
+    if target is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    target.revoked_at = datetime.utcnow()
+    db.commit()
+    response = JSONResponse({"ok": True})
+    if target.id == authenticated.session.id:
+        clear_super_admin_session_cookie(response)
+    return response
+
+
+@auth_router.post("/sessions/revoke-others")
+def revoke_other_super_admin_sessions(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    authenticated = resolve_super_admin_session(request, db)
+    updated = (
+        db.query(SuperAdminSession)
+        .filter(
+            SuperAdminSession.admin_id == authenticated.admin.id,
+            SuperAdminSession.id != authenticated.session.id,
+            SuperAdminSession.revoked_at.is_(None),
+        )
+        .update({SuperAdminSession.revoked_at: datetime.utcnow()}, synchronize_session=False)
+    )
+    db.commit()
+    return {"ok": True, "revoked": updated}
+
+
+@auth_router.post("/recovery-codes/regenerate")
+def regenerate_super_admin_recovery_codes(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    authenticated = require_recent_step_up(request, db)
+    codes = generate_recovery_codes(db, authenticated.admin.id)
+    db.commit()
+    return {"ok": True, "recovery_codes": codes}
+
+
+@auth_router.put("/password")
+def change_super_admin_password(
+    request: Request,
+    body: ChangeSuperAdminPasswordBody,
+    db: Session = Depends(get_db),
+):
+    authenticated = require_recent_step_up(request, db)
+    if not verify_password(body.current_password, authenticated.admin.password_hash):
+        raise HTTPException(status_code=401, detail="Current password is invalid")
+    if body.current_password == body.new_password:
+        raise HTTPException(status_code=422, detail="New password must be different")
+    authenticated.admin.password_hash = get_password_hash(body.new_password)
+    revoked = (
+        db.query(SuperAdminSession)
+        .filter(
+            SuperAdminSession.admin_id == authenticated.admin.id,
+            SuperAdminSession.id != authenticated.session.id,
+            SuperAdminSession.revoked_at.is_(None),
+        )
+        .update({SuperAdminSession.revoked_at: datetime.utcnow()}, synchronize_session=False)
+    )
+    db.commit()
+    return {"ok": True, "revoked_other_sessions": revoked}
 
 
 router.include_router(auth_router)
@@ -1190,6 +1588,16 @@ class CreateIntegrationKeyBody(BaseModel):
 class RunMaintenanceBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
     purge_pii: bool = True
+
+
+class AnnualCardDeactivationPreviewBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    membership_year: int = Field(ge=1900, le=9998)
+
+
+class AnnualCardDeactivationExecuteBody(AnnualCardDeactivationPreviewBody):
+    preview_hash: str = Field(min_length=64, max_length=64, pattern=r"^[a-f0-9]{64}$")
+    confirmation: str = Field(min_length=1, max_length=64)
 
 
 class RunLowCardsAlertJobBody(BaseModel):
@@ -1360,7 +1768,7 @@ def list_org_integration_keys(
     return {"items": [_serialize_integration_key(key) for key in keys]}
 
 
-@router.post("/orgs/{org_id}/integration-keys")
+@router.post("/orgs/{org_id}/integration-keys", dependencies=[Depends(_require_recent_super_admin_step_up)])
 def create_org_integration_key(
     request: Request,
     org_id: int,
@@ -1404,7 +1812,7 @@ def create_org_integration_key(
     }
 
 
-@router.post("/orgs/{org_id}/integration-keys/{key_id}/rotate")
+@router.post("/orgs/{org_id}/integration-keys/{key_id}/rotate", dependencies=[Depends(_require_recent_super_admin_step_up)])
 def rotate_org_integration_key(
     request: Request,
     org_id: int,
@@ -1458,7 +1866,7 @@ def rotate_org_integration_key(
     }
 
 
-@router.delete("/orgs/{org_id}/integration-keys/{key_id}")
+@router.delete("/orgs/{org_id}/integration-keys/{key_id}", dependencies=[Depends(_require_recent_super_admin_step_up)])
 def disable_org_integration_key(
     request: Request,
     org_id: int,
@@ -1501,37 +1909,75 @@ def run_maintenance(
     body: RunMaintenanceBody | None = None,
     db: Session = Depends(get_db),
 ):
-    admin = _require_super_admin(request, db)
-    now = datetime.utcnow()
-    payload = body or RunMaintenanceBody()
-
-    result = expire_and_purge_members(
-        db=db,
-        now=now,
-        purge_pii=payload.purge_pii,
+    _require_super_admin(request, db)
+    _ = body
+    raise HTTPException(
+        status_code=410,
+        detail=(
+            "La manutenzione distruttiva e la purga PII sono disabilitate. "
+            "Usare l'anteprima e la disattivazione annuale sicura."
+        ),
     )
+
+
+@router.post("/annual-cards/deactivation/preview")
+def preview_annual_card_deactivation(
+    request: Request,
+    body: AnnualCardDeactivationPreviewBody,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    preview = build_annual_deactivation_preview(
+        db,
+        membership_year=body.membership_year,
+    )
+    preview.pop("term_ids", None)
+    return {"ok": True, **preview}
+
+
+@router.post("/annual-cards/deactivation/execute")
+def run_annual_card_deactivation(
+    request: Request,
+    body: AnnualCardDeactivationExecuteBody,
+    db: Session = Depends(get_db),
+):
+    admin = require_recent_step_up(request, db).admin
+    expected_confirmation = f"DISATTIVA {body.membership_year}"
+    if body.confirmation != expected_confirmation:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Conferma non valida. Digita esattamente {expected_confirmation}",
+        )
+    try:
+        result = execute_annual_deactivation(
+            db,
+            membership_year=body.membership_year,
+            preview_hash=body.preview_hash,
+            actor_admin_id=admin.id,
+        )
+    except AnnualDeactivationNotAllowedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except AnnualDeactivationPreviewChangedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     audit.log_operation(
         db,
-        action="auto_expire_members",
-        entity_type="member",
+        action="annual_cards_deactivated",
+        entity_type="annual_membership_term",
         actor_admin_id=admin.id,
         actor_role=AdminRole.SUPER_ADMIN.value,
         metadata={
-            "expired_count": result["expired_count"],
-            "purged_count": result["purged_count"],
-            "current_year": result["current_year"],
+            "membership_year": result["membership_year"],
+            "valid_through": result["valid_through"],
+            "deactivated_count": result["deactivated_count"],
+            "run_id": result["run_id"],
+            "already_executed": result["already_executed"],
         },
         ip=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
     db.commit()
-
-    return {
-        "ok": True,
-        "ran_at": now.isoformat() + "Z",
-        **result,
-    }
+    return {"ok": True, **result}
 
 
 @router.post("/alerts/low-cards/run")
@@ -1782,7 +2228,7 @@ def _enqueue_org_admin_welcome_invite(
     )
 
 
-@router.post("/org-admins")
+@router.post("/org-admins", dependencies=[Depends(_require_recent_super_admin_step_up)])
 def create_org_admin(
     request: Request,
     body: CreateOrgAdmin,
@@ -1880,6 +2326,15 @@ def list_org_admins(
         query = query.filter(AdminUser.org_id == org_id)
 
     admins = query.order_by(AdminUser.id).all()
+    mfa_admin_ids = {
+        row[0]
+        for row in db.query(AdminMfaFactor.admin_id)
+        .filter(
+            AdminMfaFactor.admin_id.in_([item.id for item in admins] or [-1]),
+            AdminMfaFactor.status == "active",
+        )
+        .all()
+    }
 
     return [
         {
@@ -1889,12 +2344,84 @@ def list_org_admins(
             "org_name": a.organization.name if a.organization else None,
             "is_active": a.is_active,
             "created_at": a.created_at.isoformat() if a.created_at else None,
+            "mfa_enabled": a.id in mfa_admin_ids,
         }
         for a in admins
     ]
 
 
-@router.delete("/org-admins/{admin_id}")
+@router.post(
+    "/org-admins/{admin_id}/mfa/reset",
+    dependencies=[Depends(_require_recent_super_admin_step_up)],
+)
+def reset_org_admin_mfa(
+    request: Request,
+    admin_id: int,
+    db: Session = Depends(get_db),
+):
+    super_admin = _require_super_admin(request, db)
+    target = (
+        db.query(AdminUser)
+        .filter(
+            AdminUser.id == admin_id,
+            AdminUser.role == AdminRole.ORG_ADMIN,
+            AdminUser.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if target is None:
+        raise HTTPException(status_code=404, detail="Org admin not found")
+
+    now = datetime.utcnow()
+    revoked_sessions = (
+        db.query(OrgAdminSession)
+        .filter(
+            OrgAdminSession.admin_id == target.id,
+            OrgAdminSession.revoked_at.is_(None),
+        )
+        .update({OrgAdminSession.revoked_at: now}, synchronize_session=False)
+    )
+    (
+        db.query(AdminAuthChallenge)
+        .filter(
+            AdminAuthChallenge.admin_id == target.id,
+            AdminAuthChallenge.consumed_at.is_(None),
+        )
+        .update({AdminAuthChallenge.consumed_at: now}, synchronize_session=False)
+    )
+    db.query(AdminRecoveryCode).filter(
+        AdminRecoveryCode.admin_id == target.id
+    ).delete(synchronize_session=False)
+    removed_factors = (
+        db.query(AdminMfaFactor)
+        .filter(AdminMfaFactor.admin_id == target.id)
+        .delete(synchronize_session=False)
+    )
+    audit.log_operation(
+        db,
+        action="super_admin.org_admin_mfa_reset",
+        entity_type="admin_user",
+        entity_id=target.id,
+        actor_admin_id=super_admin.id,
+        org_id=target.org_id,
+        actor_role=AdminRole.SUPER_ADMIN.value,
+        category="security",
+        metadata={
+            "removed_factors": removed_factors,
+            "revoked_sessions": revoked_sessions,
+        },
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+    return {
+        "ok": True,
+        "mfa_reset": bool(removed_factors),
+        "revoked_sessions": revoked_sessions,
+    }
+
+
+@router.delete("/org-admins/{admin_id}", dependencies=[Depends(_require_recent_super_admin_step_up)])
 def delete_org_admin(
     request: Request,
     admin_id: int,
@@ -1952,7 +2479,7 @@ def delete_org_admin(
     return {"ok": True}
 
 
-@router.post("/org-admins/{admin_id}/restore")
+@router.post("/org-admins/{admin_id}/restore", dependencies=[Depends(_require_recent_super_admin_step_up)])
 def restore_org_admin(
     request: Request,
     admin_id: int,
@@ -1993,7 +2520,7 @@ def restore_org_admin(
     return {"ok": True}
 
 
-@router.patch("/org-admins/{admin_id}")
+@router.patch("/org-admins/{admin_id}", dependencies=[Depends(_require_recent_super_admin_step_up)])
 def patch_org_admin(
     request: Request,
     admin_id: int,
@@ -2027,7 +2554,7 @@ def patch_org_admin(
 # ── Organization Management ──────────────────────────────────────
 
 
-@router.post("/organizations")
+@router.post("/organizations", dependencies=[Depends(_require_recent_super_admin_step_up)])
 def create_organization(
     request: Request,
     body: CreateOrganization,
@@ -2131,7 +2658,7 @@ def _delete_association_handler(
     )
 
 
-@associations_router.delete("/associations/{association_id}")
+@associations_router.delete("/associations/{association_id}", dependencies=[Depends(_require_recent_super_admin_step_up)])
 def delete_association(
     request: Request,
     association_id: int,
@@ -2150,7 +2677,7 @@ def delete_association(
     )
 
 
-@router.delete("/organizations/{org_id}")
+@router.delete("/organizations/{org_id}", dependencies=[Depends(_require_recent_super_admin_step_up)])
 def delete_organization(
     request: Request,
     org_id: int,
@@ -2325,7 +2852,7 @@ def get_organization_membership_payment_settings(
     return serialize_super_admin_membership_payment_settings(org)
 
 
-@router.patch("/organizations/{org_id}/membership-payment-settings")
+@router.patch("/organizations/{org_id}/membership-payment-settings", dependencies=[Depends(_require_recent_super_admin_step_up)])
 def patch_organization_membership_payment_settings(
     request: Request,
     org_id: int,
@@ -2404,7 +2931,7 @@ def patch_organization_membership_payment_settings(
     return serialize_super_admin_membership_payment_settings(org)
 
 
-@router.post("/organizations/{org_id}/sumup-api-key")
+@router.post("/organizations/{org_id}/sumup-api-key", dependencies=[Depends(_require_recent_super_admin_step_up)])
 def save_organization_sumup_api_key(
     request: Request,
     org_id: int,
@@ -2441,7 +2968,7 @@ def save_organization_sumup_api_key(
     return serialize_super_admin_membership_payment_settings(org)
 
 
-@router.delete("/organizations/{org_id}/sumup-api-key")
+@router.delete("/organizations/{org_id}/sumup-api-key", dependencies=[Depends(_require_recent_super_admin_step_up)])
 def delete_organization_sumup_api_key(
     request: Request,
     org_id: int,
@@ -2536,7 +3063,7 @@ def get_organization_whatsapp_provider_settings(
     return _serialize_super_admin_whatsapp_settings(connection)
 
 
-@router.patch("/organizations/{org_id}/whatsapp-provider-settings")
+@router.patch("/organizations/{org_id}/whatsapp-provider-settings", dependencies=[Depends(_require_recent_super_admin_step_up)])
 def patch_organization_whatsapp_provider_settings(
     request: Request,
     org_id: int,
@@ -2696,7 +3223,7 @@ def get_organization_numbering_configuration(
     }
 
 
-@router.patch("/organizations/{org_id}/numbering")
+@router.patch("/organizations/{org_id}/numbering", dependencies=[Depends(_require_recent_super_admin_step_up)])
 def patch_organization_numbering_configuration(
     request: Request,
     org_id: int,
@@ -3621,6 +4148,13 @@ class PatchCardLot(BaseModel):
     range_end: Optional[int] = None
 
 
+class PatchCardReplenishmentAccountingBody(BaseModel):
+    billing_status: Literal["unpaid", "paid"]
+    paid_at: datetime | None = None
+    payment_reference: str | None = Field(default=None, max_length=160)
+    accounting_note: str | None = Field(default=None, max_length=2000)
+
+
 def check_card_overlap(
     db: Session,
     start_no: int,
@@ -3842,7 +4376,7 @@ def _begin_card_allocation_transaction(db: Session) -> None:
         return
 
 
-@router.post("/organizations/{org_id}/card-range")
+@router.post("/organizations/{org_id}/card-range", dependencies=[Depends(_require_recent_super_admin_step_up)])
 def set_initial_card_range(
     request: Request,
     org_id: int,
@@ -3934,7 +4468,7 @@ def set_initial_card_range(
     }
 
 
-@router.post("/orgs/{org_id}/cards/add-batch")
+@router.post("/orgs/{org_id}/cards/add-batch", dependencies=[Depends(_require_recent_super_admin_step_up)])
 def add_card_batch(
     request: Request,
     org_id: int,
@@ -4127,7 +4661,174 @@ def export_card_lot_registry(
     )
 
 
-@associations_router.patch("/organizations/{org_id}/card-lots/{lot_id}")
+@router.get("/recharge-credits")
+def list_recharge_credits(
+    request: Request,
+    billing_status: Literal["all", "unpaid", "paid", "not_applicable"] = "all",
+    allocation_status: str | None = Query(default=None, max_length=64),
+    org_id: int | None = Query(default=None, ge=1),
+    q: str | None = Query(default=None, max_length=120),
+    scope: Literal["portal", "historical", "all"] = "portal",
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    query = db.query(RechargeRequest).options(
+        joinedload(RechargeRequest.card_batch),
+        joinedload(RechargeRequest.accounting_events),
+    )
+    if scope == "portal":
+        query = query.filter(RechargeRequest.source == PORTAL_SOURCE)
+    elif scope == "historical":
+        query = query.filter(RechargeRequest.source != PORTAL_SOURCE)
+    if billing_status != "all":
+        query = query.filter(RechargeRequest.billing_status == billing_status)
+    if allocation_status:
+        query = query.filter(RechargeRequest.status == allocation_status.strip())
+    if org_id is not None:
+        query = query.filter(RechargeRequest.association_id == org_id)
+    normalized_q = (q or "").strip()
+    if normalized_q:
+        pattern = f"%{normalized_q}%"
+        query = query.filter(
+            or_(
+                RechargeRequest.association_name.ilike(pattern),
+                cast(RechargeRequest.id, String).ilike(pattern),
+            )
+        )
+
+    total = int(query.count())
+    items = (
+        query.order_by(RechargeRequest.created_at.desc(), RechargeRequest.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return {
+        "items": [
+            serialize_replenishment_request(item, include_events=True)
+            for item in items
+        ],
+        "total": total,
+        "summary": replenishment_summary(db),
+    }
+
+
+@router.patch(
+    "/recharge-credits/{recharge_request_id}/accounting",
+    dependencies=[Depends(_require_recent_super_admin_step_up)],
+)
+def patch_recharge_credit_accounting(
+    recharge_request_id: int,
+    body: PatchCardReplenishmentAccountingBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _require_super_admin(request, db)
+    recharge_request = load_replenishment_request(db, recharge_request_id)
+    if recharge_request is None:
+        raise HTTPException(status_code=404, detail="Richiesta tessere non trovata")
+
+    previous_status = recharge_request.billing_status
+    try:
+        event = update_replenishment_accounting(
+            db,
+            recharge_request=recharge_request,
+            actor=admin,
+            billing_status=body.billing_status,
+            paid_at=body.paid_at,
+            payment_reference=body.payment_reference,
+            accounting_note=body.accounting_note,
+        )
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    audit.log_operation(
+        db,
+        action="super_admin.cards.replenishment_accounting_updated",
+        entity_type="recharge_request",
+        entity_id=recharge_request.id,
+        actor_admin_id=admin.id,
+        org_id=recharge_request.association_id,
+        actor_role=AdminRole.SUPER_ADMIN.value,
+        category="cards",
+        request_id=getattr(request.state, "request_id", None),
+        metadata={
+            "org_id": recharge_request.association_id,
+            "previous_status": previous_status,
+            "new_status": recharge_request.billing_status,
+            "accounting_event_id": event.id,
+            "amount_due_cents": recharge_request.amount_due_cents,
+            "currency": recharge_request.currency,
+        },
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+    persisted = load_replenishment_request(db, recharge_request.id)
+    return {
+        "ok": True,
+        "item": serialize_replenishment_request(persisted, include_events=True),
+    }
+
+
+@router.post(
+    "/recharge-credits/{recharge_request_id}/retry-allocation",
+    dependencies=[Depends(_require_recent_super_admin_step_up)],
+)
+def retry_recharge_credit_allocation(
+    recharge_request_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _require_super_admin(request, db)
+    recharge_request = load_replenishment_request(db, recharge_request_id)
+    if recharge_request is None:
+        raise HTTPException(status_code=404, detail="Richiesta tessere non trovata")
+
+    try:
+        batch = ensure_recharge_request_batch(db, recharge_request.id)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    outcome = "success" if batch is not None else "blocked"
+    audit.log_operation(
+        db,
+        action="super_admin.cards.replenishment_allocation_retried",
+        entity_type="recharge_request",
+        entity_id=recharge_request.id,
+        actor_admin_id=admin.id,
+        org_id=recharge_request.association_id,
+        actor_role=AdminRole.SUPER_ADMIN.value,
+        category="cards",
+        outcome=outcome,
+        request_id=getattr(request.state, "request_id", None),
+        metadata={
+            "org_id": recharge_request.association_id,
+            "requested_year": recharge_request.requested_year,
+            "card_batch_id": batch.id if batch is not None else None,
+            "allocation_status": recharge_request.status,
+        },
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+    persisted = load_replenishment_request(db, recharge_request.id)
+    return {
+        "ok": batch is not None,
+        "message": (
+            "Lotto collegato correttamente"
+            if batch is not None
+            else "Allocazione automatica non disponibile per questa numerazione"
+        ),
+        "item": serialize_replenishment_request(persisted, include_events=True),
+    }
+
+
+@associations_router.patch("/organizations/{org_id}/card-lots/{lot_id}", dependencies=[Depends(_require_recent_super_admin_step_up)])
 def patch_org_card_lot(
     request: Request,
     org_id: int,
@@ -4255,7 +4956,7 @@ def patch_org_card_lot(
     }
 
 
-@associations_router.delete("/organizations/{org_id}/card-lots/{lot_id}")
+@associations_router.delete("/organizations/{org_id}/card-lots/{lot_id}", dependencies=[Depends(_require_recent_super_admin_step_up)])
 def delete_org_card_lot(
     request: Request,
     org_id: int,
@@ -4304,7 +5005,7 @@ def delete_org_card_lot(
 
 
 # Legacy endpoint redirect (deprecated)
-@router.post("/orgs/{org_id}/cards/increase")
+@router.post("/orgs/{org_id}/cards/increase", dependencies=[Depends(_require_recent_super_admin_step_up)])
 def increase_card_stock_legacy(
     request: Request,
     org_id: int,

@@ -1,24 +1,35 @@
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
+from types import SimpleNamespace
+from zoneinfo import ZoneInfo
 
 import pytest
+from fastapi import HTTPException
 
 from app.db import SessionLocal
 from app.models import (
-    AdminRole,
-    AdminUser,
+    AnnualMembershipTerm,
+    AnnualMembershipTermStatus,
     CardBatch,
-    IntegrationApiKey,
     Member,
     MemberStatus,
-    OperationLog,
-    OrgAdminToken,
     Organization,
 )
-from app.security import get_password_hash, hash_api_key
+from app.security import get_password_hash
+from app.services.annual_memberships import (
+    AnnualDeactivationNotAllowedError,
+    AnnualDeactivationPreviewChangedError,
+    build_annual_deactivation_preview,
+    execute_annual_deactivation,
+    sync_annual_membership_term,
+)
 from app.services.card_verification import build_card_verification_token
-from app.services.member_activity import is_member_active
-from app.utils import hash_token
+from app.services.member_activity import (
+    is_member_active,
+    member_active_filters,
+    member_expired_filters,
+)
+from app.routes import super_admin as super_admin_routes
 
 
 @pytest.fixture
@@ -26,19 +37,6 @@ def db():
     session = SessionLocal()
     yield session
     session.close()
-
-
-def _login_org_admin(client, db, admin_id: int):
-    token_str = f"expired-admin-{admin_id}-{uuid.uuid4().hex[:6]}"
-    token = OrgAdminToken(
-        admin_id=admin_id,
-        token_hash=hash_token(token_str),
-        expires_at=datetime.utcnow() + timedelta(minutes=15),
-    )
-    db.add(token)
-    db.commit()
-    res = client.get(f"/api/org-admin/auth/verify?token={token_str}", follow_redirects=False)
-    assert res.status_code == 302
 
 
 def _create_expired_member(db, *, suffix: str) -> tuple[Organization, Member]:
@@ -75,13 +73,7 @@ def _create_expired_member(db, *, suffix: str) -> tuple[Organization, Member]:
     return org, member
 
 
-def _member_status_value(member: Member) -> str:
-    if isinstance(member.status, MemberStatus):
-        return member.status.value
-    return str(member.status)
-
-
-def test_expired_card_blocks_login_and_qr_shows_scaduta(client, db):
+def test_expired_annual_card_allows_renewal_login_but_qr_stays_inactive(client, db):
     suffix = uuid.uuid4().hex[:8]
     org, member = _create_expired_member(db, suffix=suffix)
 
@@ -91,8 +83,8 @@ def test_expired_card_blocks_login_and_qr_shows_scaduta(client, db):
         "/api/auth/login",
         data={"email": member.email, "password": "Pass1234!"},
     )
-    assert login_res.status_code == 403, login_res.text
-    assert login_res.json()["detail"] == "account non attivo"
+    assert login_res.status_code == 200, login_res.text
+    assert login_res.json()["authenticated"] is True
 
     token = build_card_verification_token(
         member_id=member.id,
@@ -117,139 +109,288 @@ def test_expired_card_blocks_login_and_qr_shows_scaduta(client, db):
     assert "Motivo: Scaduta" in verify_html_res.text
 
 
-def test_maintenance_expire_and_purge_updates_member_and_hides_from_admin_lists(client, db):
+def test_annual_2026_card_remains_active_for_all_of_new_years_day(db):
     suffix = uuid.uuid4().hex[:8]
-    org, member = _create_expired_member(db, suffix=suffix)
-
-    org_admin = AdminUser(
-        email=f"expired.orgadmin.{suffix}@example.com",
-        role=AdminRole.ORG_ADMIN,
-        org_id=org.id,
-        is_active=True,
-    )
-    db.add(org_admin)
-    db.commit()
-    db.refresh(org_admin)
-
-    client.post("/api/super-admin/auth/logout")
-    super_admin_login = client.post(
-        "/api/super-admin/auth/login",
-        json={"email": "admin@assonam.it", "password": "admin"},
-    )
-    assert super_admin_login.status_code == 200, super_admin_login.text
-
-    maintenance_res = client.post("/api/super-admin/maintenance/run", json={"purge_pii": True})
-    assert maintenance_res.status_code == 200, maintenance_res.text
-    maintenance_payload = maintenance_res.json()
-    assert maintenance_payload["ok"] is True
-    assert maintenance_payload["expired_count"] >= 1
-    assert member.id in maintenance_payload["member_ids"]
-
-    db.refresh(member)
-    assert member.deleted_at is not None
-    assert member.expired_at is not None
-    assert member.purged_at is not None
-    assert _member_status_value(member) == MemberStatus.EXPIRED.value
-    assert member.email is None
-    assert member.phone is None
-    assert member.fiscal_code is None
-    assert member.password_hash is None
-    assert member.first_name == "EXPIRED"
-    assert member.last_name == "MEMBER"
-    assert member.card_no is None
-
-    detail_res = client.get(f"/api/super-admin/members/{member.id}")
-    assert detail_res.status_code == 404
-
-    auto_expire_log = (
-        db.query(OperationLog)
-        .filter(OperationLog.action == "auto_expire_members")
-        .order_by(OperationLog.id.desc())
-        .first()
-    )
-    assert auto_expire_log is not None
-
-    _login_org_admin(client, db, org_admin.id)
-    active_members_res = client.get("/api/org-admin/members?status=active")
-    assert active_members_res.status_code == 200, active_members_res.text
-    active_ids = [item["id"] for item in active_members_res.json()["items"]]
-    assert member.id not in active_ids
-
-
-def test_maintenance_frees_email_and_card_number_for_new_issue(client, db):
-    suffix = uuid.uuid4().hex[:8]
-    current_year = datetime.utcnow().year
-    expired_year = current_year - 1
-    reused_email = f"expired.reuse.{suffix}@example.com"
-
     org = Organization(
-        name=f"Reuse Org {suffix}",
-        slug=f"reuse-org-{suffix}",
+        name=f"New Year Org {suffix}",
+        slug=f"new-year-org-{suffix}",
         is_active=True,
     )
     db.add(org)
     db.commit()
-    db.refresh(org)
+    member = Member(
+        org_id=org.id,
+        first_name="Giulia",
+        last_name="Neri",
+        email=f"new.year.{suffix}@example.com",
+        status=MemberStatus.ACTIVE,
+        card_no=42000,
+        card_year=2026,
+        membership_type="annual",
+        joined_at=datetime(2026, 6, 1),
+    )
+    db.add(member)
+    db.commit()
+
+    rome = ZoneInfo("Europe/Rome")
+    assert is_member_active(
+        member,
+        now=datetime(2027, 1, 1, 23, 59, 59, 999999, tzinfo=rome),
+    ) is True
+    assert is_member_active(
+        member,
+        now=datetime(2027, 1, 2, 0, 0, 0, tzinfo=rome),
+    ) is False
+    assert (
+        db.query(Member)
+        .filter(Member.id == member.id, *member_active_filters(
+            datetime(2027, 1, 1, 23, 59, 59, tzinfo=rome)
+        ))
+        .count()
+        == 1
+    )
+    assert (
+        db.query(Member)
+        .filter(Member.id == member.id, *member_expired_filters(
+            datetime(2027, 1, 2, 0, 0, 0, tzinfo=rome)
+        ))
+        .count()
+        == 1
+    )
+
+
+def test_safe_deactivation_preserves_member_pii_card_number_and_stock(db):
+    suffix = uuid.uuid4().hex[:8]
+    org = Organization(
+        name=f"Safe Expiry Org {suffix}",
+        slug=f"safe-expiry-org-{suffix}",
+        is_active=True,
+        membership_fee_currency="EUR",
+    )
+    db.add(org)
+    db.commit()
 
     batch = CardBatch(
         org_id=org.id,
+        year=2026,
         start_no=52000,
         end_no=52020,
         next_no=52021,
     )
     db.add(batch)
-    db.commit()
-
-    expired_member = Member(
+    member = Member(
         org_id=org.id,
-        first_name="Old",
-        last_name="Member",
-        email=reused_email,
+        first_name="Maria",
+        last_name="Verdi",
+        email=f"safe.expiry.{suffix}@example.com",
+        phone="+390212345678",
+        fiscal_code=f"SAFE{suffix.upper()}",
+        password_hash=get_password_hash("Pass1234!"),
         status=MemberStatus.ACTIVE,
         card_no=52000,
-        card_year=expired_year,
-        external_customer_id=f"email:{reused_email}",
+        card_year=2026,
+        batch_id=None,
+        membership_type="annual",
+        joined_at=datetime(2026, 5, 10),
+        external_customer_id=f"external:{suffix}",
     )
-    db.add(expired_member)
+    db.add(member)
+    db.commit()
+    member.batch_id = batch.id
+    sync_annual_membership_term(
+        db,
+        member,
+        source="test",
+        now=datetime(2027, 1, 1, 12, 0, tzinfo=ZoneInfo("Europe/Rome")),
+    )
+    db.commit()
 
-    raw_key = f"pk_test_reuse_{uuid.uuid4().hex}"
-    integration_key = IntegrationApiKey(
-        org_id=org.id,
-        name="pienissimo",
-        key_hash=hash_api_key(raw_key),
-        scopes=["issue_member"],
+    preview_on_january_first = build_annual_deactivation_preview(
+        db,
+        membership_year=2026,
+        now=datetime(2027, 1, 1, 23, 59, 59, tzinfo=ZoneInfo("Europe/Rome")),
+    )
+    assert preview_on_january_first["can_execute"] is False
+    assert preview_on_january_first["total_count"] >= 1
+    with pytest.raises(AnnualDeactivationNotAllowedError):
+        execute_annual_deactivation(
+            db,
+            membership_year=2026,
+            preview_hash=preview_on_january_first["preview_hash"],
+            actor_admin_id=None,
+            now=datetime(2027, 1, 1, 23, 59, 59, tzinfo=ZoneInfo("Europe/Rome")),
+        )
+
+    preview = build_annual_deactivation_preview(
+        db,
+        membership_year=2026,
+        now=datetime(2027, 1, 2, 0, 0, tzinfo=ZoneInfo("Europe/Rome")),
+    )
+    result = execute_annual_deactivation(
+        db,
+        membership_year=2026,
+        preview_hash=preview["preview_hash"],
+        actor_admin_id=None,
+        now=datetime(2027, 1, 2, 0, 0, tzinfo=ZoneInfo("Europe/Rome")),
+    )
+    db.commit()
+
+    term = db.query(AnnualMembershipTerm).filter_by(member_id=member.id).one()
+    db.refresh(member)
+    db.refresh(batch)
+    assert result["deactivated_count"] >= 1
+    assert term.status == AnnualMembershipTermStatus.EXPIRED.value
+    assert term.valid_through.isoformat() == "2027-01-01"
+    assert term.deactivated_at is not None
+    assert member.deleted_at is None
+    assert member.purged_at is None
+    assert member.status == MemberStatus.ACTIVE
+    assert member.email == f"safe.expiry.{suffix}@example.com"
+    assert member.phone == "+390212345678"
+    assert member.fiscal_code == f"SAFE{suffix.upper()}"
+    assert member.password_hash is not None
+    assert member.card_no == 52000
+    assert member.card_year == 2026
+    assert member.batch_id == batch.id
+    assert member.external_customer_id == f"external:{suffix}"
+    assert batch.next_no == 52021
+
+    repeated = execute_annual_deactivation(
+        db,
+        membership_year=2026,
+        preview_hash=preview["preview_hash"],
+        actor_admin_id=None,
+        now=datetime(2027, 1, 2, 1, 0, tzinfo=ZoneInfo("Europe/Rome")),
+    )
+    assert repeated["already_executed"] is True
+    assert repeated["run_id"] == result["run_id"]
+
+
+def test_preview_hash_rejects_changed_annual_card_set(db):
+    suffix = uuid.uuid4().hex[:8]
+    org = Organization(
+        name=f"Preview Org {suffix}",
+        slug=f"preview-org-{suffix}",
         is_active=True,
     )
-    db.add(integration_key)
+    db.add(org)
     db.commit()
-    db.refresh(expired_member)
+    first = Member(
+        org_id=org.id,
+        first_name="First",
+        last_name="Member",
+        email=f"first.{suffix}@example.com",
+        status=MemberStatus.ACTIVE,
+        card_no=61001,
+        card_year=2026,
+        membership_type="annual",
+    )
+    db.add(first)
+    db.commit()
+    sync_annual_membership_term(db, first, source="test")
+    db.commit()
+    preview = build_annual_deactivation_preview(db, membership_year=2026)
 
+    second = Member(
+        org_id=org.id,
+        first_name="Second",
+        last_name="Member",
+        email=f"second.{suffix}@example.com",
+        status=MemberStatus.ACTIVE,
+        card_no=61002,
+        card_year=2026,
+        membership_type="annual",
+    )
+    db.add(second)
+    db.commit()
+    sync_annual_membership_term(db, second, source="test")
+    db.commit()
+
+    with pytest.raises(AnnualDeactivationPreviewChangedError):
+        execute_annual_deactivation(
+            db,
+            membership_year=2026,
+            preview_hash=preview["preview_hash"],
+            actor_admin_id=None,
+            now=datetime(2027, 1, 2, tzinfo=ZoneInfo("Europe/Rome")),
+        )
+
+
+def test_temporary_cards_are_excluded_from_annual_history(db):
+    suffix = uuid.uuid4().hex[:8]
+    org = Organization(
+        name=f"Temporary Org {suffix}",
+        slug=f"temporary-org-{suffix}",
+        is_active=True,
+    )
+    db.add(org)
+    db.commit()
+    member = Member(
+        org_id=org.id,
+        first_name="Temporary",
+        last_name="Member",
+        email=f"temporary.{suffix}@example.com",
+        status=MemberStatus.ACTIVE,
+        card_no=62001,
+        card_year=2026,
+        membership_type="temporary",
+        valid_until=datetime(2026, 7, 20, 12, 0),
+    )
+    db.add(member)
+    db.commit()
+
+    assert sync_annual_membership_term(db, member, source="test") is None
+    assert (
+        db.query(AnnualMembershipTerm)
+        .filter(AnnualMembershipTerm.member_id == member.id)
+        .count()
+        == 0
+    )
+
+
+def test_legacy_destructive_endpoint_is_gone_and_preview_is_read_only(client, db):
     client.post("/api/super-admin/auth/logout")
-    login_res = client.post(
+    login = client.post(
         "/api/super-admin/auth/login",
         json={"email": "admin@assonam.it", "password": "admin"},
     )
-    assert login_res.status_code == 200, login_res.text
+    assert login.status_code == 200, login.text
 
-    maintenance_res = client.post("/api/super-admin/maintenance/run", json={"purge_pii": True})
-    assert maintenance_res.status_code == 200, maintenance_res.text
-
-    db.refresh(expired_member)
-    assert expired_member.deleted_at is not None
-    assert expired_member.card_no is None
-
-    reissue_res = client.post(
-        "/api/integrations/members/issue",
-        json={
-            "org_slug": org.slug,
-            "external_customer_id": f"email:{reused_email}",
-            "email": reused_email,
-            "first_name": "New",
-            "last_name": "Member",
-            "send_email": False,
-        },
-        headers={"X-ASSONAM-API-KEY": raw_key},
+    before = db.query(AnnualMembershipTerm).filter_by(membership_year=2026).count()
+    preview = client.post(
+        "/api/super-admin/annual-cards/deactivation/preview",
+        json={"membership_year": 2026},
     )
-    assert reissue_res.status_code == 200, reissue_res.text
-    reissue_payload = reissue_res.json()
-    assert reissue_payload["card_number"] == 52000
+    assert preview.status_code == 200, preview.text
+    payload = preview.json()
+    assert payload["valid_through"] == "2027-01-01"
+    assert "term_ids" not in payload
+    assert db.query(AnnualMembershipTerm).filter_by(membership_year=2026).count() == before
+
+    legacy = client.post(
+        "/api/super-admin/maintenance/run",
+        json={"purge_pii": True},
+    )
+    assert legacy.status_code == 410, legacy.text
+    assert db.query(AnnualMembershipTerm).filter_by(membership_year=2026).count() == before
+
+
+def test_annual_deactivation_requires_exact_server_side_confirmation(db, monkeypatch):
+    membership_year = datetime.utcnow().year - 2
+    preview = build_annual_deactivation_preview(db, membership_year=membership_year)
+    monkeypatch.setattr(
+        super_admin_routes,
+        "require_recent_step_up",
+        lambda request, session: SimpleNamespace(admin=SimpleNamespace(id=None)),
+    )
+    body = super_admin_routes.AnnualCardDeactivationExecuteBody(
+        membership_year=membership_year,
+        preview_hash=preview["preview_hash"],
+        confirmation=f"DISATTIVA {membership_year} ",
+    )
+
+    with pytest.raises(HTTPException) as error:
+        super_admin_routes.run_annual_card_deactivation(None, body, db)
+
+    assert error.value.status_code == 409
+    assert f"DISATTIVA {membership_year}" in str(error.value.detail)

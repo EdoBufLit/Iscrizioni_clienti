@@ -192,6 +192,17 @@ def test_tag_signup_auto_issues_active_card_and_returns_active_page(client, db, 
         assert "/wallet/google/add" in text_body
         assert "Apri tessera" in text_body
         assert "Apri tessera" in html_body
+        assert "api.qrserver.com" not in html_body
+        assert (
+            f"/api/cards/{payload['card_verification_token']}/qr.png" in html_body
+        )
+        assert "cid:card_verification_qr@assonam" in html_body
+        assert any(
+            image.get("cid") == "card_verification_qr@assonam"
+            and image.get("content_type") == "image/png"
+            and int(image.get("size") or 0) > 500
+            for image in (captured[0].get("inline_images") or [])
+        )
         assert "Un amministratore li verificherà a breve" not in text_body
     finally:
         settings.EMAIL_MODE = previous_email_mode

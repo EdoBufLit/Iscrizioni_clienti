@@ -91,30 +91,38 @@ export default function IscrizionePagamentoEsito() {
   return (
     <section className="signup-wizard-shell py-16 md:py-20">
       <div className="container-shell max-w-3xl">
-        <div className="signup-wizard-card mx-auto px-8 py-10 text-center md:px-12 md:py-14">
+        <div
+          className="signup-wizard-card mx-auto px-8 py-10 text-center md:px-12 md:py-14"
+          aria-busy={loadState === "loading"}
+        >
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">
             Esito pagamento quota
           </p>
           <h1 className="mt-4 text-4xl font-semibold tracking-tight text-slate-950">
             {title}
           </h1>
-          <p className="mx-auto mt-4 max-w-2xl text-base leading-8 text-slate-500">
+          <p
+            className="mx-auto mt-4 max-w-2xl text-base leading-8 text-slate-500"
+            role={loadState === "error" ? "alert" : "status"}
+            aria-live={loadState === "error" ? "assertive" : "polite"}
+            aria-atomic="true"
+          >
             {error ||
               (readyCardUrl
                 ? "Pagamento confermato. Ti stiamo reindirizzando alla tua tessera."
                 : status?.message || "Stiamo attendendo la conferma dal backend.")}
           </p>
 
-          <div className="mt-8 rounded-[1.6rem] border border-slate-200 bg-slate-50/70 px-6 py-5 text-left">
-            <p className="text-sm text-slate-500">Stato pagamento</p>
-            <p className="mt-2 text-2xl font-semibold text-slate-950">
+          <dl className="mt-8 rounded-[1.6rem] border border-slate-200 bg-slate-50/70 px-6 py-5 text-left">
+            <dt className="text-sm text-slate-500">Stato pagamento</dt>
+            <dd className="mt-2 text-2xl font-semibold text-slate-950">
               {paymentStatus.label}
-            </p>
-            <p className="mt-4 text-sm text-slate-500">Stato tessera</p>
-            <p className="mt-2 text-lg font-medium text-slate-900">
+            </dd>
+            <dt className="mt-4 text-sm text-slate-500">Stato tessera</dt>
+            <dd className="mt-2 text-lg font-medium text-slate-900">
               {cardStatus.label}
-            </p>
-          </div>
+            </dd>
+          </dl>
 
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             {readyCardUrl ? (

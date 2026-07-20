@@ -7,6 +7,7 @@ import {
   fetchOrgAdmins,
   fetchOrganizations,
   patchOrgAdmin,
+  resetOrgAdminMfa,
   type OrgAdmin,
   type Organization,
   type SuperAdminProfile,
@@ -49,6 +50,7 @@ const SuperAdminOrgAdmins = () => {
   const [deleting, setDeleting] = useState<number | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<OrgAdmin | null>(null);
   const [deleteError, setDeleteError] = useState("");
+  const [resettingMfa, setResettingMfa] = useState<number | null>(null);
 
   useEffect(() => {
     if (!profile) return;
@@ -123,6 +125,20 @@ const SuperAdminOrgAdmins = () => {
       setDeleteError(err instanceof Error ? err.message : "Errore durante l'eliminazione.");
     } finally {
       setDeleting(null);
+    }
+  };
+
+  const handleResetMfa = async (admin: OrgAdmin) => {
+    if (!window.confirm(`Reimpostare l'MFA di ${admin.email}? Tutte le sue sessioni verranno revocate.`)) return;
+    setResettingMfa(admin.id);
+    setError("");
+    try {
+      await resetOrgAdminMfa(admin.id);
+      setAdmins((items) => items.map((item) => item.id === admin.id ? { ...item, mfa_enabled: false } : item));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Impossibile reimpostare l'MFA.");
+    } finally {
+      setResettingMfa(null);
     }
   };
 
@@ -283,9 +299,14 @@ const SuperAdminOrgAdmins = () => {
                     </td>
                     <td className="px-5 py-4 text-sm font-semibold text-neutral-600">{admin.org_name ?? "-"}</td>
                     <td className="px-5 py-4">
-                      <SuperAdminStatusChip tone={admin.is_active ? "success" : "warning"} dot>
-                        {admin.is_active ? "Attivo" : "Sospeso"}
-                      </SuperAdminStatusChip>
+                      <div className="flex flex-wrap gap-2">
+                        <SuperAdminStatusChip tone={admin.is_active ? "success" : "warning"} dot>
+                          {admin.is_active ? "Attivo" : "Sospeso"}
+                        </SuperAdminStatusChip>
+                        {admin.mfa_enabled ? (
+                          <SuperAdminStatusChip tone="info">MFA</SuperAdminStatusChip>
+                        ) : null}
+                      </div>
                     </td>
                     <td className="px-5 py-4 text-[11px] font-bold text-neutral-500 tabular-nums">{formatDate(admin.created_at)}</td>
                     <td className="px-5 py-4 text-right">
@@ -297,6 +318,14 @@ const SuperAdminOrgAdmins = () => {
                           onClick={() => void handleToggle(admin)}
                         >
                           {admin.is_active ? "Sospendi" : "Riattiva"}
+                        </SuperAdminActionButton>
+                        <SuperAdminActionButton
+                          tone="default"
+                          icon="shield"
+                          disabled={!admin.mfa_enabled || resettingMfa === admin.id}
+                          onClick={() => void handleResetMfa(admin)}
+                        >
+                          Reset MFA
                         </SuperAdminActionButton>
                         <SuperAdminActionButton
                           tone="danger"

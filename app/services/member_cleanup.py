@@ -4,6 +4,7 @@ from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.models import (
+    AnnualMembershipTerm,
     Booking,
     CardMovement,
     Member,
@@ -196,6 +197,9 @@ def purge_deleted_members_permanently(
         {MembershipPayment.socio_id: None},
         synchronize_session=False,
     )
+    db.query(AnnualMembershipTerm).filter(
+        AnnualMembershipTerm.member_id.in_(member_ids)
+    ).delete(synchronize_session=False)
     db.query(Booking).filter(Booking.member_id.in_(member_ids)).update(
         {Booking.member_id: None},
         synchronize_session=False,

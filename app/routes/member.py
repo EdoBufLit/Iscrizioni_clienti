@@ -1,14 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, status, UploadFile, File
 from fastapi.responses import RedirectResponse, FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field, TypeAdapter
 from sqlalchemy import func, update
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime, timedelta
+from typing import Literal
 from app.db import get_db
-from app.models import Booking, Member, Token, TokenType, MemberDocument, MemberStatus, PaymentMethod, Organization, AdminUser, AdminRole, DocStatus, SignupSource
+from app.models import Booking, Member, Token, TokenType, MemberDocument, MemberStatus, PaymentMethod, Organization, AdminUser, AdminRole, DocStatus, SignupSource, MemberContactChange
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
-from app.utils import generate_token, hash_token, save_upload_file
+from app.utils import generate_token, hash_token
 from app.security import MIN_MEMBER_PASSWORD_LENGTH, get_password_hash, verify_password
 from app.config import settings
 from app.middleware import get_client_ip
@@ -27,8 +28,26 @@ from app.services.member_membership import (
 )
 from app.services.org_branding import resolve_card_logo_url, resolve_club_display_name
 from app.services.org_admin_sessions import get_current_org_admin_from_request
+from app.services.super_admin_auth import resolve_super_admin_session
 from app.services.booking_customer_actions import submit_booking_customer_note
 from app.services.bookings import serialize_member_booking
+from app.services.member_document_correction import (
+    clear_document_correction_session,
+    create_replacement_document,
+    establish_document_correction_session,
+    get_document_correction_context,
+    serialize_document_correction_context,
+)
+from app.services.renewals import can_access_member_account
+from app.services.member_contact_changes import (
+    create_contact_change,
+    decrypt_contact_value,
+    email_in_use_for_membership,
+    encrypt_contact_value,
+    expire_stale_requests,
+    rotate_contact_change_token,
+    serialize_contact_change,
+)
 from app import audit
 import os
 import logging
@@ -49,6 +68,22 @@ _REGISTRATION_CONTINUATION_SESSION_KEY = "registration_continuations"
 
 class MemberBookingNoteBody(BaseModel):
     note: str = Field(..., min_length=1, max_length=4000)
+
+
+class DocumentCorrectionSessionBody(BaseModel):
+    token: str = Field(..., min_length=20, max_length=4096)
+
+
+class MemberContactChangeBody(BaseModel):
+    field: Literal["email", "phone"]
+    new_value: str = Field(..., min_length=3, max_length=320)
+
+
+class MemberContactChangeConfirmBody(BaseModel):
+    token: str = Field(..., min_length=20, max_length=512)
+
+
+_EMAIL_ADAPTER = TypeAdapter(EmailStr)
 
 
 def _hash_email_for_log(email: str | None) -> str:
@@ -176,6 +211,16 @@ def get_current_member(request: Request, db: Session):
     return member
 
 
+def get_authenticated_member(request: Request, db: Session):
+    """Resolve an active or expired annual account without widening feature access."""
+
+    member_id = request.session.get("member_id")
+    if not member_id:
+        return None
+    member = db.query(Member).filter(Member.id == member_id).first()
+    return member if can_access_member_account(member) else None
+
+
 # ── Legacy HTML redirects ─────────────────────────────────────────
 
 @router.get("/member/login")
@@ -218,7 +263,7 @@ def auth_magic_link(request: Request, token: str, db: Session = Depends(get_db))
     if not member:
         return RedirectResponse(url="/login")
 
-    if not is_member_active(member, now=now):
+    if not can_access_member_account(member):
         raise HTTPException(status_code=403, detail=_ACCOUNT_NOT_ACTIVE_DETAIL)
     request.session["member_id"] = token_entry.member_id
     audit.member_verified(member_id=token_entry.member_id, ip=get_client_ip(request))
@@ -331,6 +376,401 @@ def download_my_statute_via_documents_alias(request: Request, db: Session = Depe
     return download_my_organization_statute(request, db)
 
 
+def _queue_contact_change_confirmation(
+    db: Session,
+    *,
+    member: Member,
+    change_request: MemberContactChange,
+    raw_token: str,
+    normalized_value: str,
+) -> None:
+    frontend_base = settings.FRONTEND_URL.rstrip("/") or settings.BASE_URL.rstrip("/")
+    link = f"{frontend_base}/conferma-contatto?token={raw_token}"
+    target_email = normalized_value if change_request.field == "email" else member.email
+    field_label = "indirizzo email" if change_request.field == "email" else "numero di telefono"
+    enqueue_email(
+        db,
+        email_type="member_contact_change_confirmation",
+        to_email=target_email,
+        subject=f"Conferma il nuovo {field_label} - ASSONAM",
+        payload=build_email_payload(
+            text_body=(
+                f"Hai richiesto di modificare il tuo {field_label}.\n\n"
+                f"Per confermare, apri questo link e premi Conferma: {link}\n\n"
+                "Il link è monouso e scade tra 24 ore. Se non hai richiesto tu la modifica, "
+                "non confermare e contatta la tua associazione."
+            ),
+            sender=build_sender_payload(mode="association", association=member.organization),
+            meta={"member_id": member.id, "contact_change_id": change_request.id},
+        ),
+        priority=1,
+        dedupe_key=f"member-contact-change-confirm:{change_request.id}:{change_request.token_hash}",
+    )
+
+
+def _queue_email_change_security_notice(
+    db: Session,
+    *,
+    member: Member,
+    subject: str,
+    body: str,
+    dedupe_key: str,
+) -> None:
+    if not member.email:
+        return
+    enqueue_email(
+        db,
+        email_type="member_email_change_security_notice",
+        to_email=member.email,
+        subject=subject,
+        payload=build_email_payload(
+            text_body=body,
+            sender=build_sender_payload(mode="association", association=member.organization),
+            meta={"member_id": member.id},
+        ),
+        priority=1,
+        dedupe_key=dedupe_key,
+    )
+
+
+def _queue_email_change_authorization(
+    db: Session,
+    *,
+    member: Member,
+    change_request: MemberContactChange,
+    raw_token: str,
+) -> None:
+    if not member.email:
+        return
+    frontend_base = settings.FRONTEND_URL.rstrip("/") or settings.BASE_URL.rstrip("/")
+    link = f"{frontend_base}/conferma-contatto?token={raw_token}&action=authorize"
+    enqueue_email(
+        db,
+        email_type="member_email_change_authorization",
+        to_email=member.email,
+        subject="Autorizza la modifica del tuo indirizzo email - ASSONAM",
+        payload=build_email_payload(
+            text_body=(
+                "È stata richiesta la modifica dell'indirizzo email della tua area riservata.\n\n"
+                f"Per autorizzarla dalla casella attuale, apri questo link e premi Autorizza: {link}\n\n"
+                "La modifica sarà applicata soltanto dopo questa autorizzazione e la conferma "
+                "separata inviata al nuovo indirizzo. Il link è monouso e scade tra 24 ore. "
+                "Se non hai richiesto tu la modifica, non autorizzare e contatta la tua associazione."
+            ),
+            sender=build_sender_payload(mode="association", association=member.organization),
+            meta={"member_id": member.id, "contact_change_id": change_request.id},
+        ),
+        priority=1,
+        dedupe_key=(
+            f"member-email-change-authorize:{change_request.id}:"
+            f"{change_request.authorization_token_hash}"
+        ),
+    )
+
+
+@router.get("/api/member/contact-changes")
+def list_member_contact_changes(request: Request, db: Session = Depends(get_db)):
+    member = get_authenticated_member(request, db)
+    if not member:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    if expire_stale_requests(db, member_id=member.id):
+        db.commit()
+    rows = (
+        db.query(MemberContactChange)
+        .filter(MemberContactChange.member_id == member.id)
+        .order_by(MemberContactChange.created_at.desc(), MemberContactChange.id.desc())
+        .limit(20)
+        .all()
+    )
+    return {"items": [serialize_contact_change(row) for row in rows]}
+
+
+@router.post("/api/member/contact-changes")
+def request_member_contact_change(
+    payload: MemberContactChangeBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    member = get_authenticated_member(request, db)
+    if not member:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    enforce_auth_rate_limit(db, client_ip=get_client_ip(request))
+    new_value = payload.new_value
+    if payload.field == "email":
+        try:
+            new_value = str(_EMAIL_ADAPTER.validate_python(new_value))
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="Inserisci un indirizzo email valido") from exc
+    try:
+        change_request, raw_token, normalized, raw_authorization_token = create_contact_change(
+            db,
+            member=member,
+            field=payload.field,
+            new_value=new_value,
+            requested_ip_hash=hash_identifier(get_client_ip(request)),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    _queue_contact_change_confirmation(
+        db,
+        member=member,
+        change_request=change_request,
+        raw_token=raw_token,
+        normalized_value=normalized,
+    )
+    if payload.field == "email" and raw_authorization_token:
+        _queue_email_change_authorization(
+            db,
+            member=member,
+            change_request=change_request,
+            raw_token=raw_authorization_token,
+        )
+    audit.log_operation(
+        db,
+        action="member.contact_change_requested",
+        category="member",
+        entity_type="member_contact_change",
+        entity_id=change_request.id,
+        actor_member_id=member.id,
+        actor_role="member",
+        org_id=member.org_id,
+        metadata={"field": payload.field},
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+    db.refresh(change_request)
+    return {"ok": True, "request": serialize_contact_change(change_request)}
+
+
+@router.post("/api/member/contact-changes/{change_id}/resend")
+def resend_member_contact_change(
+    change_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    member = get_authenticated_member(request, db)
+    if not member:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    enforce_auth_rate_limit(db, client_ip=get_client_ip(request))
+    change_request = (
+        db.query(MemberContactChange)
+        .filter(
+            MemberContactChange.id == change_id,
+            MemberContactChange.member_id == member.id,
+            MemberContactChange.status.in_(["pending", "expired"]),
+        )
+        .first()
+    )
+    if not change_request:
+        raise HTTPException(status_code=404, detail="Richiesta non trovata")
+    try:
+        normalized = decrypt_contact_value(change_request.new_value_encrypted)
+    except ValueError as exc:
+        raise HTTPException(status_code=410, detail=str(exc)) from exc
+    raw_token, raw_authorization_token = rotate_contact_change_token(change_request)
+    _queue_contact_change_confirmation(
+        db,
+        member=member,
+        change_request=change_request,
+        raw_token=raw_token,
+        normalized_value=normalized,
+    )
+    if change_request.field == "email" and raw_authorization_token:
+        _queue_email_change_authorization(
+            db,
+            member=member,
+            change_request=change_request,
+            raw_token=raw_authorization_token,
+        )
+    db.commit()
+    return {"ok": True, "request": serialize_contact_change(change_request)}
+
+
+@router.delete("/api/member/contact-changes/{change_id}")
+def cancel_member_contact_change(
+    change_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    member = get_authenticated_member(request, db)
+    if not member:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    change_request = (
+        db.query(MemberContactChange)
+        .filter(
+            MemberContactChange.id == change_id,
+            MemberContactChange.member_id == member.id,
+            MemberContactChange.status == "pending",
+        )
+        .first()
+    )
+    if not change_request:
+        raise HTTPException(status_code=404, detail="Richiesta non trovata")
+    change_request.status = "cancelled"
+    change_request.cancelled_at = datetime.utcnow()
+    change_request.new_value_encrypted = encrypt_contact_value("")
+    change_request.authorization_token_hash = None
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/api/member/contact-changes/authorize")
+def authorize_member_email_change(
+    payload: MemberContactChangeConfirmBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Authorize an email change from the member's current mailbox."""
+
+    enforce_auth_rate_limit(db, client_ip=get_client_ip(request))
+    now = datetime.utcnow()
+    token_digest = hash_token(payload.token)
+    change_request = (
+        db.query(MemberContactChange)
+        .filter(
+            MemberContactChange.authorization_token_hash == token_digest,
+            MemberContactChange.field == "email",
+            MemberContactChange.status == "pending",
+            MemberContactChange.expires_at > now,
+            MemberContactChange.authorized_at.is_(None),
+        )
+        .first()
+    )
+    if not change_request:
+        raise HTTPException(status_code=410, detail="Link non valido, scaduto o già utilizzato")
+    consumed = db.execute(
+        update(MemberContactChange)
+        .where(
+            MemberContactChange.id == change_request.id,
+            MemberContactChange.authorization_token_hash == token_digest,
+            MemberContactChange.status == "pending",
+            MemberContactChange.expires_at > now,
+            MemberContactChange.authorized_at.is_(None),
+        )
+        .values(
+            authorized_at=now,
+            authorization_token_hash=None,
+            updated_at=now,
+        )
+    )
+    if consumed.rowcount != 1:
+        db.rollback()
+        raise HTTPException(status_code=410, detail="Link già utilizzato")
+    audit.log_operation(
+        db,
+        action="member.email_change_authorized",
+        category="member",
+        entity_type="member_contact_change",
+        entity_id=change_request.id,
+        actor_member_id=change_request.member_id,
+        actor_role="member_current_email_verification",
+        org_id=change_request.org_id,
+        metadata={"field": "email"},
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+    return {"ok": True, "field": "email", "stage": "authorized"}
+
+
+@router.post("/api/member/contact-changes/confirm")
+def confirm_member_contact_change(
+    payload: MemberContactChangeConfirmBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    enforce_auth_rate_limit(db, client_ip=get_client_ip(request))
+    now = datetime.utcnow()
+    token_digest = hash_token(payload.token)
+    change_request = (
+        db.query(MemberContactChange)
+        .filter(
+            MemberContactChange.token_hash == token_digest,
+            MemberContactChange.status == "pending",
+            MemberContactChange.expires_at > now,
+        )
+        .first()
+    )
+    if not change_request:
+        raise HTTPException(status_code=410, detail="Link non valido, scaduto o già utilizzato")
+    member = db.query(Member).filter(Member.id == change_request.member_id).first()
+    if not member or member.deleted_at is not None:
+        raise HTTPException(status_code=410, detail="Account non disponibile")
+    if change_request.field == "email" and change_request.authorized_at is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Autorizza prima la modifica dal link inviato al vecchio indirizzo email",
+        )
+    try:
+        new_value = decrypt_contact_value(change_request.new_value_encrypted)
+    except ValueError as exc:
+        raise HTTPException(status_code=410, detail=str(exc)) from exc
+
+    if change_request.field == "email":
+        if email_in_use_for_membership(
+            db,
+            member=member,
+            normalized_email=new_value.lower(),
+        ):
+            raise HTTPException(status_code=409, detail="L'indirizzo email non è più disponibile")
+
+    confirmation_conditions = [
+        MemberContactChange.id == change_request.id,
+        MemberContactChange.status == "pending",
+        MemberContactChange.expires_at > now,
+    ]
+    if change_request.field == "email":
+        confirmation_conditions.append(MemberContactChange.authorized_at.isnot(None))
+    consumed = db.execute(
+        update(MemberContactChange)
+        .where(*confirmation_conditions)
+        .values(
+            status="confirmed",
+            confirmed_at=now,
+            updated_at=now,
+            # Dopo l'uso resta soltanto la prova minimizzata dell'operazione.
+            new_value_encrypted=encrypt_contact_value(""),
+            authorization_token_hash=None,
+        )
+    )
+    if consumed.rowcount != 1:
+        db.rollback()
+        raise HTTPException(status_code=410, detail="Link già utilizzato")
+
+    old_email = member.email
+    setattr(member, change_request.field, new_value)
+    audit.log_operation(
+        db,
+        action="member.contact_change_confirmed",
+        category="member",
+        entity_type="member_contact_change",
+        entity_id=change_request.id,
+        actor_member_id=member.id,
+        actor_role="member_email_verification",
+        org_id=member.org_id,
+        metadata={"field": change_request.field},
+        ip=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    if change_request.field == "email" and old_email:
+        member.email = old_email
+        _queue_email_change_security_notice(
+            db,
+            member=member,
+            subject="Indirizzo email modificato - ASSONAM",
+            body=(
+                "L'indirizzo email della tua area riservata è stato modificato. "
+                "Se non riconosci questa operazione, contatta immediatamente la tua associazione."
+            ),
+            dedupe_key=f"member-email-change-confirmed:{change_request.id}",
+        )
+        member.email = new_value
+    db.commit()
+    return {"ok": True, "field": change_request.field}
+
+
 @router.post("/api/me/wallet/google/save-link")
 def create_google_wallet_save_link(request: Request, db: Session = Depends(get_db)):
     member = get_current_member(request, db)
@@ -392,31 +832,24 @@ async def resubmit_document(
     if not member:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    doc = db.query(MemberDocument).filter(
-        MemberDocument.id == doc_id,
-        MemberDocument.member_id == member.id,
-    ).first()
+    doc = (
+        db.query(MemberDocument)
+        .filter(
+            MemberDocument.id == doc_id,
+            MemberDocument.member_id == member.id,
+        )
+        .with_for_update()
+        .first()
+    )
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    if doc.status != DocStatus.REJECTED.value:
-        raise HTTPException(status_code=400, detail="Il documento può essere reinviato solo se rigettato.")
-
-    sub_path = f"{member.org_id}/{member.id}"
-    rel_path, size_bytes, sha256 = await save_upload_file(document, sub_directory=sub_path)
-
-    new_doc = MemberDocument(
-        member_id=member.id,
-        doc_type=doc.doc_type,
-        rel_path=rel_path,
-        original_filename=document.filename,
-        mime_type=document.content_type,
-        size_bytes=size_bytes,
-        sha256=sha256,
-        status=DocStatus.PENDING.value,
-        replaces_document_id=doc.id,
+    new_doc = await create_replacement_document(
+        db,
+        member=member,
+        document=doc,
+        upload=document,
     )
-    db.add(new_doc)
     db.commit()
     db.refresh(new_doc)
 
@@ -430,6 +863,68 @@ async def resubmit_document(
         ip=get_client_ip(request),
     )
     db.commit()
+
+    return {"ok": True, "id": new_doc.id, "status": new_doc.status}
+
+
+@router.post("/api/member/document-correction/session")
+def create_document_correction_session(
+    body: DocumentCorrectionSessionBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    enforce_auth_rate_limit(db, client_ip=get_client_ip(request))
+    context = establish_document_correction_session(request, db, body.token)
+    return serialize_document_correction_context(context)
+
+
+@router.get("/api/member/document-correction")
+def get_document_correction(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    context = get_document_correction_context(request, db)
+    return serialize_document_correction_context(context)
+
+
+@router.post("/api/member/document-correction/documents/{doc_id}/resubmit")
+async def resubmit_document_from_correction_session(
+    request: Request,
+    doc_id: int,
+    document: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    context = get_document_correction_context(
+        request,
+        db,
+        document_id=doc_id,
+        lock_document=True,
+    )
+
+    new_doc = await create_replacement_document(
+        db,
+        member=context.member,
+        document=context.document,
+        upload=document,
+    )
+    db.commit()
+    db.refresh(new_doc)
+
+    audit.log_operation(
+        db,
+        action="member.document.resubmit_limited_session",
+        entity_type="member_document",
+        entity_id=new_doc.id,
+        actor_member_id=context.member.id,
+        metadata={
+            "replaces_document_id": context.document.id,
+            "doc_type": context.document.doc_type,
+            "limited_session": True,
+        },
+        ip=get_client_ip(request),
+    )
+    db.commit()
+    clear_document_correction_session(request, doc_id)
 
     return {"ok": True, "id": new_doc.id, "status": new_doc.status}
 
@@ -566,7 +1061,7 @@ def api_auth_login(request: Request, email: str = Form(...), password: str = For
     )
 
     member = next(
-        (candidate for candidate in matching_members if is_member_active(candidate, now=now)),
+        (candidate for candidate in matching_members if can_access_member_account(candidate)),
         None,
     )
     if member is None and matching_members:
@@ -648,7 +1143,7 @@ def api_auth_password_reset_request(
         .all()
     )
     member = next(
-        (candidate for candidate in matching_members if is_member_active(candidate, now=now)),
+        (candidate for candidate in matching_members if can_access_member_account(candidate)),
         None,
     )
 
@@ -696,7 +1191,7 @@ def api_auth_password_reset_confirm(
 
     token_entry = db.query(Token).filter(Token.token_hash == token_hash).first()
     member = db.query(Member).filter(Member.id == token_entry.member_id).first() if token_entry else None
-    if not member or not is_member_active(member, now=now):
+    if not member or not can_access_member_account(member):
         db.rollback()
         raise HTTPException(status_code=400, detail="Link non valido o scaduto.")
 
@@ -831,7 +1326,7 @@ def api_auth_change_password(
     db: Session = Depends(get_db),
 ):
     """Set or change password for the authenticated member."""
-    member = get_current_member(request, db)
+    member = get_authenticated_member(request, db)
     if not member:
         raise HTTPException(status_code=401, detail="Not authenticated")
     if len(new_password) < MIN_MEMBER_PASSWORD_LENGTH:
@@ -843,7 +1338,7 @@ def api_auth_change_password(
 
 @router.get("/api/auth/me")
 def api_auth_me(request: Request, db: Session = Depends(get_db)):
-    member = get_current_member(request, db)
+    member = get_authenticated_member(request, db)
     if not member:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
@@ -911,14 +1406,12 @@ def api_auth_me(request: Request, db: Session = Depends(get_db)):
 def api_auth_whoami(request: Request, db: Session = Depends(get_db)):
     """Unified session check. Returns authenticated role and redirect target."""
     # 1. Super admin (highest priority)
-    admin_id = request.session.get("admin_id")
-    if admin_id:
-        admin = db.query(AdminUser).filter(
-            AdminUser.id == admin_id,
-            AdminUser.role == AdminRole.SUPER_ADMIN,
-        ).first()
-        if admin:
-            return {"authenticated": True, "role": "super_admin", "redirect_to": "/super-admin/org-admins"}
+    try:
+        resolve_super_admin_session(request, db)
+    except HTTPException:
+        pass
+    else:
+        return {"authenticated": True, "role": "super_admin", "redirect_to": "/super-admin/org-admins"}
 
     # 2. Org admin
     admin = get_current_org_admin_from_request(request, db)
@@ -929,7 +1422,7 @@ def api_auth_whoami(request: Request, db: Session = Depends(get_db)):
     member_id = request.session.get("member_id")
     if member_id:
         member = db.query(Member).filter(Member.id == member_id).first()
-        if is_member_active(member, now=datetime.utcnow()):
+        if can_access_member_account(member):
             return {"authenticated": True, "role": "member", "redirect_to": "/dashboard"}
 
     return {"authenticated": False}

@@ -11,6 +11,7 @@ type ModalShellProps = {
   zIndexClassName?: string;
   closeOnOverlay?: boolean;
   closeOnEscape?: boolean;
+  closeDisabled?: boolean;
   contentClassName?: string;
   initialFocusRef?: RefObject<HTMLElement>;
 };
@@ -26,6 +27,7 @@ const ModalShell = ({
   zIndexClassName = "z-[90]",
   closeOnOverlay = true,
   closeOnEscape = true,
+  closeDisabled = false,
   contentClassName = "p-6",
   initialFocusRef,
 }: ModalShellProps) => {
@@ -127,6 +129,7 @@ const ModalShell = ({
             className="modal-close absolute right-4 top-4 rounded-full p-2 transition"
             onClick={onClose}
             aria-label="Chiudi finestra"
+            disabled={closeDisabled}
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6l-12 12" />

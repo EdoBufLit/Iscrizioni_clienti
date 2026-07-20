@@ -5,7 +5,17 @@ import pytest
 
 from app.config import settings
 from app.db import SessionLocal
-from app.models import AdminRole, AdminUser, Member, MemberStatus, OperationLog, OrgAdminToken, Organization
+from app.models import (
+    AdminRole,
+    AdminUser,
+    AnnualMembershipTermStatus,
+    Member,
+    MemberStatus,
+    OperationLog,
+    OrgAdminToken,
+    Organization,
+)
+from app.services.annual_memberships import sync_annual_membership_term
 from app.services.fiscal_code import calculate_fiscal_code
 from app.utils import clear_captured_emails, get_captured_emails, hash_token
 
@@ -60,11 +70,18 @@ def test_org_admin_can_update_member_profile_and_audit_fields(client, db):
         first_name="Mario",
         last_name="Rossi",
         email=f"mario-{suffix}@example.com",
-        status=MemberStatus.PENDING_DOCS,
+        status=MemberStatus.ACTIVE,
+        membership_type="annual",
+        card_no=8300,
+        card_year=datetime.utcnow().year,
+        joined_at=datetime.utcnow(),
     )
     db.add(member)
     db.commit()
     db.refresh(member)
+    annual_term = sync_annual_membership_term(db, member, source="profile-test")
+    db.commit()
+    assert annual_term is not None
 
     _login_org_admin(client, db, admin.id)
 
@@ -109,6 +126,8 @@ def test_org_admin_can_update_member_profile_and_audit_fields(client, db):
     assert member.membership_type == "temporary"
     assert float(member.membership_fee_snapshot) == 18.0
     assert member.valid_until is not None
+    db.refresh(annual_term)
+    assert annual_term.status == AnnualMembershipTermStatus.CANCELLED.value
 
     audit_row = (
         db.query(OperationLog)

@@ -35,6 +35,7 @@ from app.routes import (
     onboarding,
     org_admin,
     public,
+    renewals,
     stripe_connect_demo,
     stripe_webhooks,
     super_admin,
@@ -262,7 +263,11 @@ app.include_router(join.router)
 app.include_router(marketing_preferences.router)
 app.include_router(membership_payments.router)
 app.include_router(member.router)
-app.include_router(admin.router)
+app.include_router(renewals.router)
+# The historical HTML admin router carried a second password-only super-admin
+# login and mutation surface. The public `/admin` React demo remains available
+# through the SPA catch-all, but its legacy backend routes are intentionally not
+# mounted so privileged access has exactly one MFA-protected entry point.
 app.include_router(org_admin.router)
 app.include_router(super_admin.router)
 app.include_router(super_admin.associations_router)

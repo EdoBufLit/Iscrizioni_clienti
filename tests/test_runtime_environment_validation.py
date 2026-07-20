@@ -22,6 +22,12 @@ def _set_secure_deployment(monkeypatch: pytest.MonkeyPatch, *, app_env: str) -> 
     monkeypatch.setattr(settings, "FRONTEND_URL", "https://app.assonam.it")
     monkeypatch.setattr(settings, "SUPER_ADMIN_EMAIL", "security-admin@assonam.it")
     monkeypatch.setattr(settings, "SUPER_ADMIN_PASSWORD", "deployment-password-changed")
+    monkeypatch.setattr(settings, "SUPER_ADMIN_MFA_REQUIRED", True)
+    monkeypatch.setattr(
+        settings,
+        "MFA_ENCRYPTION_KEY",
+        "deployment-mfa-encryption-key-at-least-32-bytes",
+    )
 
 
 @pytest.mark.parametrize("app_env", ["production", "staging"])

@@ -1,5 +1,4 @@
 import html
-from urllib.parse import quote_plus
 
 
 def build_member_card_email(
@@ -14,8 +13,10 @@ def build_member_card_email(
     download_url: str,
     magic_link_url: str,
     assonam_logo_url: str,
+    qr_image_url: str,
     organization_logo_url: str | None = None,
     card_image_cid: str | None = None,
+    qr_image_cid: str | None = None,
     header_title: str | None = None,
     header_subtitle: str | None = None,
     access_email_hint: str | None = None,
@@ -55,11 +56,11 @@ def build_member_card_email(
     safe_header_title = html.escape(resolved_header_title)
     safe_header_subtitle = html.escape(resolved_header_subtitle)
     safe_access_email_hint = html.escape((access_email_hint or "").strip())
-    qr_url = (
-        "https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=0&data="
-        f"{quote_plus(verification_url)}"
+    safe_qr_image_url = html.escape(qr_image_url.strip())
+    safe_qr_image_cid = html.escape((qr_image_cid or "").strip())
+    qr_image_src = (
+        f"cid:{safe_qr_image_cid}" if safe_qr_image_cid else safe_qr_image_url
     )
-    safe_qr_url = html.escape(qr_url)
 
     # ── Card visual block ─────────────────────────────────────────────────────
     if card_image_cid:
@@ -228,8 +229,10 @@ def build_member_card_email(
                        style="background:#2a0010;border-radius:16px;border:1px solid rgba(198,160,79,0.20);">
                   <tr>
                     <td align="center" style="padding:20px 20px 10px 20px;">
-                      <img src="{safe_qr_url}" alt="QR verifica tessera"
+                      <a href="{safe_qr_image_url or safe_verification_url}" style="display:inline-block;text-decoration:none;">
+                      <img src="{qr_image_src}" alt="QR verifica tessera"
                            style="width:160px;height:160px;border-radius:12px;background:#fff;padding:8px;border:1px solid #3d0018;" />
+                      </a>
                       <p style="margin:10px 0 0;font-size:12px;color:#c9a8b0;">Scansiona il QR per verificare la validit&agrave; della tessera.</p>
                     </td>
                   </tr>

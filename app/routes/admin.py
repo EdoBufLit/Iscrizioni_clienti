@@ -5,6 +5,7 @@ from sqlalchemy import func
 from app.db import get_db
 from app.models import AdminUser, AdminRole, Member, CardBatch, MemberDocument, DocStatus, MemberStatus, Organization, PaymentMethod
 from app.services.card_allocation import allocate_next_card
+from app.services.annual_memberships import sync_annual_membership_term
 from app.services.sqlite_card_allocation_guard import (
     sqlite_card_allocation_request_guard,
 )
@@ -182,6 +183,7 @@ def assign_card_manual(request: Request, member_id: int, db: Session = Depends(g
                 member.status = MemberStatus.ACTIVE
                 if not member.joined_at:
                     member.joined_at = datetime.utcnow()
+            sync_annual_membership_term(db, member, source="legacy_admin")
             db.commit()
         except HTTPException:
             # Cards exhausted - leave member in current state

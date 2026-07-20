@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { ASSONAM_LOGO_SRC, getCurrentCardYearLabel } from "../../lib/brand";
+import { buildMemberCardQrImageUrl } from "../../lib/memberCardQr";
 
 export type MemberCardPreviewData = {
   firstName?: string | null;
@@ -49,13 +50,6 @@ const toDisplayYear = (value?: string | number | null): string => {
   if (value === null || value === undefined) return EMPTY;
   const raw = String(value).trim();
   return raw.length ? raw : EMPTY;
-};
-
-const toQrImageUrl = (value?: string | null): string | null => {
-  if (!value) return null;
-  const normalized = value.trim();
-  if (!normalized.length) return null;
-  return `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=0&data=${encodeURIComponent(normalized)}`;
 };
 
 export const isMemberCardPreviewData = (value: unknown): value is MemberCardPreviewData => {
@@ -116,6 +110,7 @@ const LogoImg = ({ src, alt, className = "", style }: LogoProps) => {
 
 export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPreviewProps) => {
   const [isFlipped, setIsFlipped] = useState(false);
+  const cardDescriptionId = useId();
   const rootClassName = className ? `w-full ${className}` : "w-full";
 
   const displayName = toDisplayName(cardData);
@@ -129,7 +124,10 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
   const cardYear = toDisplayYear(cardData.cardYear) || getCurrentCardYearLabel();
   const membershipTypeLabel = toSafeText(cardData.membershipTypeLabel).toUpperCase();
   const validUntil = toSafeText(cardData.validUntil);
-  const qrImageUrl = useMemo(() => toQrImageUrl(cardData.verificationUrl), [cardData.verificationUrl]);
+  const qrImageUrl = useMemo(
+    () => buildMemberCardQrImageUrl(cardData.verificationUrl),
+    [cardData.verificationUrl],
+  );
   const verificationUrl = cardData.verificationUrl?.trim() ? cardData.verificationUrl.trim() : null;
 
   // Bordeaux palette
@@ -144,10 +142,12 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
         className="member-card-flip group relative block w-full cursor-pointer select-none"
         onClick={() => setIsFlipped((prev) => !prev)}
         aria-pressed={isFlipped}
-        aria-label="Ruota tessera"
+        aria-label={isFlipped ? "Mostra il fronte della tessera" : "Mostra il retro e il codice QR della tessera"}
+        aria-describedby={cardDescriptionId}
       >
         <span
           className="member-card-flip-stage"
+          aria-hidden="true"
           style={{
             aspectRatio: "1.586 / 1",
             transformStyle: "preserve-3d",
@@ -421,8 +421,11 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
       </button>
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-neutral-500">
+        <p id={cardDescriptionId} className="text-xs text-neutral-500">
           Clicca la tessera per vedere {isFlipped ? "il fronte" : "il retro"}.
+          <span className="sr-only">
+            {` Tessera ${membershipTypeLabel || "associativa"} ${cardNumber ? `numero ${cardNumber}` : "senza numero"}, intestata a ${displayName || "socio"}, anno ${cardYear}${validUntil ? `, scadenza ${new Date(validUntil).toLocaleDateString("it-IT")}` : ""}.`}
+          </span>
         </p>
         {verificationUrl && (
           <a
@@ -431,7 +434,7 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
             rel="noreferrer"
             className="inline-flex items-center text-xs font-semibold text-brand transition hover:text-brand-light"
           >
-            Verifica endpoint
+            Verifica online lo stato della tessera
           </a>
         )}
       </div>

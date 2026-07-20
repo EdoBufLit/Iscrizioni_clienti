@@ -659,7 +659,7 @@ def build_template_context(
         card_no = card_no or 12345
         card_year = card_year or datetime.utcnow().year
 
-    expiry = f"31/12/{int(card_year)}" if card_year else ""
+    expiry = f"01/01/{int(card_year) + 1}" if card_year else ""
     today = datetime.utcnow().strftime("%d/%m/%Y")
     if base_url and association_slug:
         signup_link = f"{base_url}/associazioni/{association_slug}/iscrizione"

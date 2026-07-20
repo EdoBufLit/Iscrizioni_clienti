@@ -177,6 +177,7 @@ SMTP_PASSWORD_VALUE="$(dotenv_value SMTP_PASSWORD)"
 ENABLE_WHATSAPP="$(dotenv_value ENABLE_WHATSAPP)"
 WHATSAPP_PROVIDER="$(dotenv_value WHATSAPP_PROVIDER)"
 SUMUP_CREDENTIALS_ENCRYPTION_KEY_VALUE="$(dotenv_value SUMUP_CREDENTIALS_ENCRYPTION_KEY)"
+MFA_ENCRYPTION_KEY_VALUE="$(dotenv_value MFA_ENCRYPTION_KEY)"
 ENABLE_WHATSAPP_EVOLUTION="$(dotenv_value ENABLE_WHATSAPP_EVOLUTION)"
 EVOLUTION_API_KEY_PRESENT="$(dotenv_value EVOLUTION_API_KEY)"
 AFFILIATION_VIDEO_WORKER_ENABLED="$(dotenv_value AFFILIATION_VIDEO_WORKER_ENABLED)"
@@ -194,6 +195,10 @@ fi
 if [ "$ENABLE_WHATSAPP" = "true" ] && [ "$WHATSAPP_PROVIDER" = "green_api" ] \
   && [ -z "$SUMUP_CREDENTIALS_ENCRYPTION_KEY_VALUE" ]; then
   echo "::error::Green API requires the provider-token encryption key"
+  exit 1
+fi
+if [ -z "$MFA_ENCRYPTION_KEY_VALUE" ]; then
+  echo "::error::Privileged MFA requires MFA_ENCRYPTION_KEY"
   exit 1
 fi
 

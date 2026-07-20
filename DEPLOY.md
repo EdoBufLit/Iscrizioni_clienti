@@ -66,6 +66,7 @@ Creare o verificare in GitHub:
 - `FRONTEND_URL`
 - `SUPER_ADMIN_EMAIL`
 - `SUPER_ADMIN_PASSWORD`
+- `MFA_ENCRYPTION_KEY` (segreto casuale dedicato, almeno 32 caratteri; non riutilizzare `SECRET_KEY`)
 - `DATABASE_URL`
 - `POSTGRES_PASSWORD`
 - `SMTP_HOST`

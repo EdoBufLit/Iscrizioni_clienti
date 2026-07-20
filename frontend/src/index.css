@@ -30,6 +30,39 @@
   min-height: 100vh;
 }
 
+/* Essential WCAG focus and motion safeguards for privileged and signup flows. */
+.super-admin-v2 button:focus-visible,
+.super-admin-v2 a:focus-visible,
+.super-admin-v2 select:focus-visible,
+.super-admin-v2 input:focus-visible,
+.super-admin-v2 textarea:focus-visible {
+  outline: 2px solid var(--sa-brand, #006358);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--sa-brand, #006358) 16%, transparent);
+}
+
+.signup-wizard-shell label[for="documentoIdentita"]:focus-within {
+  outline: 3px solid color-mix(in srgb, #4f46e5 72%, white);
+  outline-offset: 3px;
+}
+
+.modal-close:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signup-wizard-shell *,
+  .super-admin-v2 *,
+  .modal-overlay,
+  .modal-panel {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 .org-admin-v2,
 .org-admin-v2 *,
 .org-admin-v2 *::before,

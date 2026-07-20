@@ -6,6 +6,7 @@ import {
   type SelectHTMLAttributes,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
@@ -49,6 +50,22 @@ const primaryActionClass =
   "signup-wizard-primary inline-flex items-center justify-center gap-3 rounded-[1.35rem] px-7 py-4 text-base font-semibold";
 const secondaryActionClass =
   "signup-wizard-secondary inline-flex items-center justify-center gap-2 rounded-[1.2rem] px-5 py-3 text-base font-medium";
+
+const FIELD_LABELS: Record<string, string> = {
+  nome: "Nome",
+  cognome: "Cognome",
+  dataNascita: "Data di nascita",
+  sesso: "Sesso",
+  comuneNascita: "Luogo di nascita",
+  codiceFiscale: "Codice fiscale",
+  email: "Indirizzo email",
+  telefono: "Numero di telefono",
+  modalitaPagamento: "Modalità di pagamento",
+  password: "Password",
+  documentoIdentita: "Documento di identità",
+  privacy: "Informativa privacy",
+  statuto: "Statuto dell'associazione",
+};
 
 type FormData = {
   membershipType: "annual" | "temporary";
@@ -214,7 +231,10 @@ type StepIndicatorProps = {
 };
 
 const StepIndicator = ({ current, progress, shouldReduceMotion }: StepIndicatorProps) => (
-  <div className="mx-auto max-w-3xl">
+  <nav className="mx-auto max-w-3xl" aria-label="Avanzamento iscrizione">
+    <p className="sr-only" aria-live="polite">
+      Passaggio {current} di {STEPS.length}: {STEPS[current - 1].title}
+    </p>
     <div className="relative px-2 pt-2">
       <div
         className="absolute left-[16.66%] right-[16.66%] top-8 h-[3px] rounded-full bg-slate-200"
@@ -227,14 +247,18 @@ const StepIndicator = ({ current, progress, shouldReduceMotion }: StepIndicatorP
         transition={shouldReduceMotion ? { duration: 0.01 } : { duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
         aria-hidden="true"
       />
-      <div className="grid grid-cols-3 gap-3">
+      <ol className="grid grid-cols-3 gap-3">
         {STEPS.map((stepItem, index) => {
           const number = index + 1;
           const completed = number < current;
           const active = number === current;
 
           return (
-            <div key={stepItem.label} className="flex flex-col items-center text-center">
+            <li
+              key={stepItem.label}
+              className="flex flex-col items-center text-center"
+              aria-current={active ? "step" : undefined}
+            >
               <motion.div
                 initial={false}
                 animate={{
@@ -280,12 +304,12 @@ const StepIndicator = ({ current, progress, shouldReduceMotion }: StepIndicatorP
               >
                 {stepItem.label}
               </p>
-            </div>
+            </li>
           );
         })}
-      </div>
+      </ol>
     </div>
-  </div>
+  </nav>
 );
 
 type CardHeaderProps = {
@@ -327,22 +351,30 @@ const TextField = ({
   hintTone = "muted",
   inputClassName = "",
   ...props
-}: TextFieldProps) => (
-  <div>
-    <label htmlFor={id} className={labelClass}>
-      {label}
-    </label>
-    <input
-      id={id}
-      className={`${error ? fieldErrClass : fieldOkClass} ${inputClassName}`.trim()}
-      {...props}
-    />
-    <FieldMessage
-      message={error || hint}
-      tone={error ? "error" : hintTone}
-    />
-  </div>
-);
+}: TextFieldProps) => {
+  const messageId = `${id}-message`;
+  const hasMessage = Boolean(error || hint);
+
+  return (
+    <div>
+      <label htmlFor={id} className={labelClass}>
+        {label}
+      </label>
+      <input
+        id={id}
+        className={`${error ? fieldErrClass : fieldOkClass} ${inputClassName}`.trim()}
+        {...props}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={hasMessage ? messageId : undefined}
+      />
+      <FieldMessage
+        id={hasMessage ? messageId : undefined}
+        message={error || hint}
+        tone={error ? "error" : hintTone}
+      />
+    </div>
+  );
+};
 
 type SelectFieldProps = {
   id: keyof FormData | string;
@@ -352,33 +384,45 @@ type SelectFieldProps = {
   children: ReactNode;
 } & Omit<SelectHTMLAttributes<HTMLSelectElement>, "id" | "children">;
 
-const SelectField = ({ id, label, error, hint, children, ...props }: SelectFieldProps) => (
-  <div>
-    <label htmlFor={id} className={labelClass}>
-      {label}
-    </label>
-    <div className="relative">
-      <select
-        id={id}
-        className={`${error ? fieldErrClass : fieldOkClass} appearance-none pr-14`}
-        {...props}
-      >
-        {children}
-      </select>
-      <div className="pointer-events-none absolute inset-y-0 right-5 flex items-center text-slate-400">
-        {iconFor("m6 9 6 6 6-6", "h-5 w-5")}
+const SelectField = ({ id, label, error, hint, children, ...props }: SelectFieldProps) => {
+  const messageId = `${id}-message`;
+  const hasMessage = Boolean(error || hint);
+
+  return (
+    <div>
+      <label htmlFor={id} className={labelClass}>
+        {label}
+      </label>
+      <div className="relative">
+        <select
+          id={id}
+          className={`${error ? fieldErrClass : fieldOkClass} appearance-none pr-14`}
+          {...props}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={hasMessage ? messageId : undefined}
+        >
+          {children}
+        </select>
+        <div className="pointer-events-none absolute inset-y-0 right-5 flex items-center text-slate-400">
+          {iconFor("m6 9 6 6 6-6", "h-5 w-5")}
+        </div>
       </div>
+      <FieldMessage
+        id={hasMessage ? messageId : undefined}
+        message={error || hint}
+        tone={error ? "error" : "muted"}
+      />
     </div>
-    <FieldMessage message={error || hint} tone={error ? "error" : "muted"} />
-  </div>
-);
+  );
+};
 
 type FieldMessageProps = {
+  id?: string;
   message?: string;
   tone: "muted" | "warning" | "error";
 };
 
-const FieldMessage = ({ message, tone }: FieldMessageProps) => {
+const FieldMessage = ({ id, message, tone }: FieldMessageProps) => {
   if (!message) return null;
 
   const toneClass =
@@ -389,17 +433,17 @@ const FieldMessage = ({ message, tone }: FieldMessageProps) => {
         : "text-slate-500";
 
   return (
-    <motion.p
-      initial={{ opacity: 0, y: -4 }}
-      animate={{ opacity: 1, y: 0 }}
+    <p
+      id={id}
       className={`mt-2 text-sm leading-6 ${toneClass}`}
     >
       {message}
-    </motion.p>
+    </p>
   );
 };
 
 type CheckboxCardProps = {
+  id: string;
   checked: boolean;
   error?: string;
   label: string;
@@ -407,7 +451,7 @@ type CheckboxCardProps = {
   onChange: (event: ChangeEvent<HTMLInputElement>) => void;
 };
 
-const CheckboxCard = ({ checked, error, label, description, onChange }: CheckboxCardProps) => (
+const CheckboxCard = ({ id, checked, error, label, description, onChange }: CheckboxCardProps) => (
   <label
     className={`block rounded-[1.8rem] border px-5 py-5 transition md:px-7 ${
       error
@@ -419,17 +463,20 @@ const CheckboxCard = ({ checked, error, label, description, onChange }: Checkbox
   >
     <div className="flex items-start gap-4">
       <input
+        id={id}
         className="mt-1 h-6 w-6 rounded-full border-2 border-slate-300 text-indigo-600 focus:ring-indigo-200"
         type="checkbox"
         checked={checked}
         onChange={onChange}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? `${id}-message` : undefined}
       />
       <div className="min-w-0">
         <div className="text-lg font-semibold text-slate-950">{label}</div>
         <div className="mt-2 text-base leading-7 text-slate-600">{description}</div>
       </div>
     </div>
-    {error ? <FieldMessage message={error} tone="error" /> : null}
+    {error ? <FieldMessage id={`${id}-message`} message={error} tone="error" /> : null}
   </label>
 );
 
@@ -470,6 +517,9 @@ const Iscrizione = () => {
   const [municipalityLoading, setMunicipalityLoading] = useState(false);
   const [municipalityLookupError, setMunicipalityLookupError] = useState("");
   const [showMunicipalitySuggestions, setShowMunicipalitySuggestions] = useState(false);
+  const errorSummaryRef = useRef<HTMLDivElement | null>(null);
+  const stepHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const previousStepRef = useRef(step);
 
   const hasUnsavedMembershipChanges = useMemo(
     () => !submitted && !submitting && serializeMembershipForm(form) !== serializeMembershipForm(initial),
@@ -502,6 +552,19 @@ const Iscrizione = () => {
       noindex: true,
     });
   }, [org, slug]);
+
+  useEffect(() => {
+    if (Object.keys(errors).length === 0) return;
+    const frameId = window.requestAnimationFrame(() => errorSummaryRef.current?.focus());
+    return () => window.cancelAnimationFrame(frameId);
+  }, [errors]);
+
+  useEffect(() => {
+    if (previousStepRef.current === step) return;
+    previousStepRef.current = step;
+    const frameId = window.requestAnimationFrame(() => stepHeadingRef.current?.focus());
+    return () => window.cancelAnimationFrame(frameId);
+  }, [step]);
 
   useEffect(() => {
     if (step !== STEPS.length) {
@@ -1080,17 +1143,45 @@ const Iscrizione = () => {
           <form className="mt-10 md:mt-14" onSubmit={handleSubmit}>
             <div className="space-y-4">
               {hasErrors ? (
-                <div className="rounded-[1.6rem] border border-rose-200 bg-rose-50/70 px-6 py-4 text-base text-rose-700 shadow-[0_18px_40px_-34px_rgba(244,63,94,0.5)]">
-                  Compila correttamente i campi evidenziati per continuare.
+                <div
+                  ref={errorSummaryRef}
+                  className="rounded-[1.6rem] border border-rose-200 bg-rose-50/70 px-6 py-4 text-base text-rose-700 shadow-[0_18px_40px_-34px_rgba(244,63,94,0.5)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500"
+                  role="alert"
+                  tabIndex={-1}
+                  aria-labelledby="signup-error-summary-title"
+                >
+                  <p id="signup-error-summary-title" className="font-semibold">
+                    Correggi i campi indicati per continuare:
+                  </p>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+                    {Object.entries(errors).map(([field, message]) => (
+                      <li key={field}>
+                        <button
+                          type="button"
+                          className="min-h-11 rounded underline decoration-rose-300 underline-offset-2 hover:decoration-rose-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600"
+                          onClick={() => document.getElementById(field)?.focus()}
+                        >
+                          {FIELD_LABELS[field] || field}: {message}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               ) : null}
 
               {submitError ? (
-                <div className="rounded-[1.6rem] border border-rose-200 bg-rose-50/70 px-6 py-4 text-base text-rose-700 shadow-[0_18px_40px_-34px_rgba(244,63,94,0.5)]">
+                <div
+                  className="rounded-[1.6rem] border border-rose-200 bg-rose-50/70 px-6 py-4 text-base text-rose-700 shadow-[0_18px_40px_-34px_rgba(244,63,94,0.5)]"
+                  role="alert"
+                >
                   {submitError}
                 </div>
               ) : null}
             </div>
+
+            <h2 ref={stepHeadingRef} className="sr-only" tabIndex={-1}>
+              Passaggio {step} di {STEPS.length}: {STEPS[step - 1].title}
+            </h2>
 
             <AnimatePresence custom={stepDirection} initial={false} mode="wait">
               <motion.div
@@ -1260,6 +1351,8 @@ const Iscrizione = () => {
                               className={fieldError("comuneNascita") ? fieldErrClass : fieldOkClass}
                               value={form.comuneNascitaCode}
                               onChange={handleForeignBirthCountryChange}
+                              aria-invalid={fieldError("comuneNascita") ? true : undefined}
+                              aria-describedby="comuneNascita-message"
                             >
                               <option value="">Seleziona lo Stato estero...</option>
                               {FOREIGN_BIRTH_PLACES.map((country) => (
@@ -1278,6 +1371,22 @@ const Iscrizione = () => {
                               value={form.comuneNascita}
                               onChange={handleBirthPlaceChange}
                               onFocus={() => setShowMunicipalitySuggestions(true)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Escape") {
+                                  setShowMunicipalitySuggestions(false);
+                                } else if (event.key === "ArrowDown" && municipalitySuggestions.length > 0) {
+                                  event.preventDefault();
+                                  document
+                                    .querySelector<HTMLElement>("#municipality-suggestions [role='option']")
+                                    ?.focus();
+                                }
+                              }}
+                              role="combobox"
+                              aria-autocomplete="list"
+                              aria-expanded={showMunicipalitySuggestions && form.comuneNascita.trim().length >= 2}
+                              aria-controls="municipality-suggestions"
+                              aria-invalid={fieldError("comuneNascita") ? true : undefined}
+                              aria-describedby="comuneNascita-message"
                             />
                           )}
                           {!form.statoEsteroNascita &&
@@ -1288,16 +1397,19 @@ const Iscrizione = () => {
                               {municipalityLoading ? (
                                 <p className="px-5 py-4 text-sm text-slate-500">Ricerca comuni in corso...</p>
                               ) : municipalitySuggestions.length > 0 ? (
-                                <ul className="max-h-72 overflow-y-auto py-2">
+                                <ul id="municipality-suggestions" className="max-h-72 overflow-y-auto py-2" role="listbox">
                                   {municipalitySuggestions.map((item) => (
                                     <li key={item.code}>
                                       <button
                                         className="flex w-full items-center justify-between gap-3 px-5 py-3 text-left text-sm text-slate-700 transition hover:bg-slate-50"
                                         type="button"
+                                        role="option"
+                                        aria-selected={false}
                                         onMouseDown={(event) => {
                                           event.preventDefault();
                                           selectMunicipality(item);
                                         }}
+                                        onClick={() => selectMunicipality(item)}
                                       >
                                         <span className="font-medium">{item.name}</span>
                                         <span className="text-xs text-slate-400">
@@ -1313,6 +1425,7 @@ const Iscrizione = () => {
                             </div>
                           ) : null}
                           <FieldMessage
+                            id="comuneNascita-message"
                             message={birthPlaceHint}
                             tone={
                               fieldError("comuneNascita")
@@ -1514,6 +1627,8 @@ const Iscrizione = () => {
                                   type="file"
                                   accept=".pdf,.jpg,.jpeg,.png"
                                   onChange={handleFile}
+                                  aria-invalid={errors.documentoIdentita ? true : undefined}
+                                  aria-describedby="documentoIdentita-message"
                                 />
                               </label>
                             </motion.div>
@@ -1521,6 +1636,7 @@ const Iscrizione = () => {
                         </AnimatePresence>
 
                         <FieldMessage
+                          id="documentoIdentita-message"
                           message={
                             errors.documentoIdentita
                               ? errors.documentoIdentita
@@ -1548,6 +1664,7 @@ const Iscrizione = () => {
 
                       <div className="mt-8 space-y-4">
                         <CheckboxCard
+                          id="privacy"
                           checked={form.privacy}
                           error={errors.privacy}
                           label="Presa visione dell'informativa privacy"
@@ -1571,6 +1688,7 @@ const Iscrizione = () => {
                         />
 
                         <CheckboxCard
+                          id="marketingEmailConsent"
                           checked={form.marketingEmailConsent}
                           label="Comunicazioni promozionali via email (facoltativo)"
                           onChange={handleCheck("marketingEmailConsent")}
@@ -1579,6 +1697,7 @@ const Iscrizione = () => {
 
                         {org.has_statute ? (
                           <CheckboxCard
+                            id="statuto"
                             checked={form.statuto}
                             error={errors.statuto}
                             label="Statuto dell'associazione"

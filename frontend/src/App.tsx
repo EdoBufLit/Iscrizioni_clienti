@@ -19,6 +19,8 @@ const Privacy = lazy(() => import("./pages/Privacy"));
 const Login = lazy(() => import("./pages/Login"));
 const PasswordReset = lazy(() => import("./pages/PasswordReset"));
 const MagicLinkVerify = lazy(() => import("./pages/MagicLinkVerify"));
+const MemberDocumentCorrection = lazy(() => import("./pages/MemberDocumentCorrection"));
+const MemberContactConfirmation = lazy(() => import("./pages/MemberContactConfirmation"));
 const BookingReminderResponsePage = lazy(() => import("./pages/BookingReminderResponsePage"));
 const WalletGoogleAdd = lazy(() => import("./pages/WalletGoogleAdd"));
 const ReservedAreaRedirect = lazy(() => import("./pages/ReservedAreaRedirect"));
@@ -47,6 +49,10 @@ const SuperAdminMemberDetail = lazy(() => import("./pages/super-admin/SuperAdmin
 const SuperAdminAffiliations = lazy(() => import("./pages/super-admin/SuperAdminAffiliations"));
 const SuperAdminDocuments = lazy(() => import("./pages/super-admin/SuperAdminDocuments"));
 const SuperAdminCardLots = lazy(() => import("./pages/super-admin/SuperAdminCardLots"));
+const SuperAdminCardCredits = lazy(() => import("./pages/super-admin/SuperAdminCardCredits"));
+const SuperAdminSecurity = lazy(() => import("./pages/super-admin/SuperAdminSecurity"));
+const SuperAdminAnnualClosure = lazy(() => import("./pages/super-admin/SuperAdminAnnualClosure"));
+const SuperAdminAudit = lazy(() => import("./pages/super-admin/SuperAdminAudit"));
 
 const OrgAdminLogin = lazy(() => import("./pages/org-admin/OrgAdminLogin"));
 const OrgAdminCallback = lazy(() => import("./pages/org-admin/OrgAdminCallback"));
@@ -56,12 +62,15 @@ const OrgAdminInvites = lazy(() => import("./pages/org-admin/OrgAdminInvites"));
 const OrgAdminMembers = lazy(() => import("./pages/org-admin/OrgAdminMembers"));
 const OrgAdminMemberDetail = lazy(() => import("./pages/org-admin/OrgAdminMemberDetail"));
 const OrgAdminCards = lazy(() => import("./pages/org-admin/OrgAdminCards"));
+const OrgAdminQuote = lazy(() => import("./pages/org-admin/OrgAdminQuote"));
 const OrgAdminCommunications = lazy(() => import("./pages/org-admin/OrgAdminCommunications"));
 const OrgAdminBookings = lazy(() => import("./pages/org-admin/OrgAdminBookings"));
 const OrgAdminStripeDemoBilling = lazy(() => import("./pages/org-admin/OrgAdminStripeDemoBilling"));
 const OrgAdminSettings = lazy(() => import("./pages/org-admin/OrgAdminSettings"));
 const OrgAdminSharedDocuments = lazy(() => import("./pages/org-admin/OrgAdminSharedDocuments"));
 const OrgAdminAccounting = lazy(() => import("./pages/org-admin/OrgAdminAccounting"));
+const OrgAdminAudit = lazy(() => import("./pages/org-admin/OrgAdminAudit"));
+const OrgAdminSecurity = lazy(() => import("./pages/org-admin/OrgAdminSecurity"));
 
 const Loading = () => (
   <div className="flex justify-center py-16">
@@ -126,6 +135,8 @@ const App = () => {
               <Route path="stripe-demo/storefront/cancel" element={<StripeDemoStorefrontResultPage />} />
               <Route path="stripe-demo/storefront/:accountId" element={<StripeDemoStorefrontPage />} />
               <Route path="auth/verify" element={<MagicLinkVerify />} />
+              <Route path="dashboard/documenti/correzione" element={<MemberDocumentCorrection />} />
+              <Route path="conferma-contatto" element={<MemberContactConfirmation />} />
               <Route path="b/:token" element={<BookingReminderResponsePage />} />
               <Route path="wallet/google/add" element={<WalletGoogleAdd />} />
               <Route path="dashboard" element={<DashboardLayout />}>
@@ -145,7 +156,11 @@ const App = () => {
                 <Route path="documenti" element={<SuperAdminDocuments />} />
                 <Route path="org-admins" element={<SuperAdminOrgAdmins />} />
                 <Route path="registro-lotti" element={<SuperAdminCardLots />} />
+                <Route path="crediti-tessere" element={<SuperAdminCardCredits />} />
                 <Route path="soci" element={<SuperAdminMemberDetail />} />
+                <Route path="sicurezza" element={<SuperAdminSecurity />} />
+                <Route path="chiusura-annuale" element={<SuperAdminAnnualClosure />} />
+                <Route path="registro-attivita" element={<SuperAdminAudit />} />
               </Route>
               <Route path="org-admin/login" element={<OrgAdminLogin />} />
               <Route path="org-admin/callback" element={<OrgAdminCallback />} />
@@ -155,6 +170,7 @@ const App = () => {
                 <Route path="soci" element={<OrgAdminMembers />} />
                 <Route path="soci/:id" element={<OrgAdminMemberDetail />} />
                 <Route path="tessere" element={<OrgAdminCards />} />
+                <Route path="quote" element={<OrgAdminQuote />} />
                 <Route path="prenotazioni" element={<OrgAdminBookings />} />
                 <Route path="documenti" element={<OrgAdminSharedDocuments />} />
                 <Route path="comunicazioni" element={<OrgAdminCommunications />} />
@@ -162,6 +178,8 @@ const App = () => {
                 <Route path="forms" element={<Navigate to="/org-admin/comunicazioni?tab=moduli" replace />} />
                 <Route path="contabilita" element={<OrgAdminAccounting />} />
                 <Route path="associazione" element={<OrgAdminSettings />} />
+                <Route path="registro-attivita" element={<OrgAdminAudit />} />
+                <Route path="sicurezza" element={<OrgAdminSecurity />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Route>

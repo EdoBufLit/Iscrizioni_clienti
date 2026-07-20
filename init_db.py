@@ -242,6 +242,78 @@ def _run_legacy_table_bootstrap() -> None:
             "run 'alembic upgrade head' to align schema history."
         )
         RechargeRequest.__table__.create(bind=engine, checkfirst=True)
+    else:
+        with engine.begin() as conn:
+            _add_column_if_missing(
+                conn,
+                "recharge_requests",
+                "requested_year",
+                "INTEGER",
+            )
+            _add_column_if_missing(
+                conn,
+                "recharge_requests",
+                "source",
+                "VARCHAR DEFAULT 'whatsapp' NOT NULL",
+            )
+            _add_column_if_missing(
+                conn, "recharge_requests", "requested_by_admin_id", "INTEGER"
+            )
+            _add_column_if_missing(conn, "recharge_requests", "idempotency_key", "VARCHAR(64)")
+            _add_column_if_missing(
+                conn,
+                "recharge_requests",
+                "unit_price_cents",
+                "INTEGER DEFAULT 100 NOT NULL",
+            )
+            _add_column_if_missing(
+                conn,
+                "recharge_requests",
+                "amount_due_cents",
+                "INTEGER DEFAULT 0 NOT NULL",
+            )
+            _add_column_if_missing(
+                conn,
+                "recharge_requests",
+                "currency",
+                "VARCHAR(3) DEFAULT 'EUR' NOT NULL",
+            )
+            _add_column_if_missing(
+                conn,
+                "recharge_requests",
+                "billing_status",
+                "VARCHAR DEFAULT 'not_applicable' NOT NULL",
+            )
+            _add_column_if_missing(conn, "recharge_requests", "paid_at", "DATETIME")
+            _add_column_if_missing(conn, "recharge_requests", "paid_by_admin_id", "INTEGER")
+            _add_column_if_missing(conn, "recharge_requests", "payment_reference", "VARCHAR(160)")
+            _add_column_if_missing(conn, "recharge_requests", "accounting_note", "TEXT")
+            _add_column_if_missing(conn, "recharge_requests", "accounting_updated_at", "DATETIME")
+            _add_column_if_missing(
+                conn, "recharge_requests", "notification_email_outbox_id", "VARCHAR(36)"
+            )
+            _add_column_if_missing(
+                conn, "recharge_requests", "super_admin_notified_at", "DATETIME"
+            )
+            _add_column_if_missing(conn, "recharge_requests", "updated_at", "DATETIME")
+            conn.execute(
+                text(
+                    """
+                    UPDATE recharge_requests
+                       SET source = COALESCE(NULLIF(source, ''), 'whatsapp'),
+                           requested_year = COALESCE(requested_year, :current_year),
+                           unit_price_cents = 100,
+                           amount_due_cents = requested_cards * 100,
+                           currency = 'EUR',
+                           billing_status = COALESCE(
+                               NULLIF(billing_status, ''),
+                               'not_applicable'
+                           ),
+                           updated_at = COALESCE(updated_at, created_at, CURRENT_TIMESTAMP)
+                    """
+                ),
+                {"current_year": datetime.utcnow().year},
+            )
 
     if "numbering_scopes" not in inspect(engine).get_table_names():
         logger.warning(
@@ -395,6 +467,12 @@ def _run_legacy_column_migrations() -> None:
 
     with engine.begin() as conn:
         table_names = set(inspect(conn).get_table_names())
+        _add_column_if_missing(
+            conn,
+            "org_admin_sessions",
+            "mfa_setup_authorized_at",
+            "DATETIME",
+        )
         _add_column_if_missing(
             conn, "card_movements", "admin_id", "INTEGER REFERENCES admin_users(id)"
         )

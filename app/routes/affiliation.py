@@ -68,6 +68,7 @@ from app.services.affiliation_identity import (
 from app.services.email_outbox import enqueue_email
 from app.services.file_deletion import enqueue_file_deletion
 from app.services.org_admin_welcome_guide import build_org_admin_welcome_email_payload
+from app.services.super_admin_auth import require_recent_step_up, resolve_super_admin_session
 from app.utils import generate_token, hash_token, save_upload_file
 
 logger = logging.getLogger(__name__)
@@ -535,23 +536,14 @@ def _can_approve(application: AffiliationApplication) -> bool:
 
 
 def _ensure_super_admin(request: Request, db: Session) -> AdminUser:
-    admin_id = request.session.get("admin_id")
-    if not admin_id:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+    return resolve_super_admin_session(request, db).admin
 
-    admin = (
-        db.query(AdminUser)
-        .filter(
-            AdminUser.id == admin_id,
-            AdminUser.role == AdminRole.SUPER_ADMIN,
-            AdminUser.is_active.is_(True),
-            AdminUser.deleted_at.is_(None),
-        )
-        .first()
-    )
-    if admin is None:
-        raise HTTPException(status_code=403, detail="Forbidden")
-    return admin
+
+def _ensure_recent_super_admin(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> AdminUser:
+    return require_recent_step_up(request, db).admin
 
 
 def _find_application_by_token(db: Session, public_token: str) -> AffiliationApplication:
@@ -2006,7 +1998,7 @@ def download_affiliation_document_admin(
     return FileResponse(full_path, filename=filename, content_disposition_type="attachment")
 
 
-@super_admin_router.post("/affiliations/{application_id}/documents/{document_id}/review")
+@super_admin_router.post("/affiliations/{application_id}/documents/{document_id}/review", dependencies=[Depends(_ensure_recent_super_admin)])
 def review_affiliation_document(
     request: Request,
     application_id: int,
@@ -2097,7 +2089,7 @@ def review_affiliation_document(
     }
 
 
-@super_admin_router.post("/affiliations/{application_id}/payment/verify")
+@super_admin_router.post("/affiliations/{application_id}/payment/verify", dependencies=[Depends(_ensure_recent_super_admin)])
 def verify_affiliation_payment(
     request: Request,
     application_id: int,
@@ -2155,7 +2147,7 @@ def verify_affiliation_payment(
     }
 
 
-@super_admin_router.post("/affiliations/{application_id}/request-changes")
+@super_admin_router.post("/affiliations/{application_id}/request-changes", dependencies=[Depends(_ensure_recent_super_admin)])
 def request_affiliation_changes(
     request: Request,
     application_id: int,
@@ -2201,7 +2193,7 @@ def request_affiliation_changes(
     }
 
 
-@super_admin_router.post("/affiliations/{application_id}/approve")
+@super_admin_router.post("/affiliations/{application_id}/approve", dependencies=[Depends(_ensure_recent_super_admin)])
 def approve_affiliation_application(
     request: Request,
     application_id: int,
@@ -2310,7 +2302,7 @@ def approve_affiliation_application(
     }
 
 
-@super_admin_router.post("/affiliations/{application_id}/reject")
+@super_admin_router.post("/affiliations/{application_id}/reject", dependencies=[Depends(_ensure_recent_super_admin)])
 def reject_affiliation_application(
     request: Request,
     application_id: int,
@@ -2368,7 +2360,7 @@ def reject_affiliation_application(
     }
 
 
-@super_admin_router.delete("/affiliations/{application_id}")
+@super_admin_router.delete("/affiliations/{application_id}", dependencies=[Depends(_ensure_recent_super_admin)])
 def delete_affiliation_draft(
     request: Request,
     application_id: int,

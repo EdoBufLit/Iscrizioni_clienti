@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { fetchWhoAmI, loginWithPassword, requestMagicLink } from "../lib/api";
 import { applySeo } from "../lib/seo";
@@ -11,6 +11,7 @@ const Login = () => {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const sentHeadingRef = useRef<HTMLHeadingElement | null>(null);
 
   useEffect(() => {
     applySeo({
@@ -31,6 +32,12 @@ const Login = () => {
       })
       .catch(() => {});
   }, [navigate]);
+
+  useEffect(() => {
+    if (!sent) return;
+    const frameId = window.requestAnimationFrame(() => sentHeadingRef.current?.focus());
+    return () => window.cancelAnimationFrame(frameId);
+  }, [sent]);
 
   const canSubmit =
     email.trim().length > 0 &&
@@ -73,8 +80,8 @@ const Login = () => {
         <div className="container-shell w-full">
           <div className="auth-shell mx-auto max-w-3xl p-8 md:p-10">
             <p className="section-title">Area riservata</p>
-            <h1 className="section-heading auth-title">Controlla la tua email</h1>
-            <p className="auth-copy mt-5 max-w-2xl text-sm leading-7">
+            <h1 ref={sentHeadingRef} className="section-heading auth-title" tabIndex={-1}>Controlla la tua email</h1>
+            <p className="auth-copy mt-5 max-w-2xl text-sm leading-7" role="status">
               Se l'indirizzo e associato a un account, riceverai un link di accesso sicuro entro
               pochi istanti.
             </p>
@@ -108,10 +115,10 @@ const Login = () => {
             </p>
 
             {error ? (
-              <div className="auth-alert mt-6 px-4 py-3 text-sm">{error}</div>
+              <div id="login-error" className="auth-alert mt-6 px-4 py-3 text-sm" role="alert">{error}</div>
             ) : null}
 
-            <form className="mt-7 space-y-4" onSubmit={handleSubmit}>
+            <form className="mt-7 space-y-4" onSubmit={handleSubmit} aria-describedby={error ? "login-error" : undefined}>
               <div>
                 <label htmlFor="login-email" className="auth-label text-sm font-semibold">
                   Email
@@ -124,6 +131,7 @@ const Login = () => {
                   placeholder="nome@esempio.it"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
+                  required
                 />
               </div>
 
@@ -140,6 +148,7 @@ const Login = () => {
                     placeholder="La tua password"
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
+                    required
                   />
                 </div>
               ) : null}
@@ -149,6 +158,7 @@ const Login = () => {
                 type="submit"
                 disabled={!canSubmit}
                 data-component="login-submit"
+                aria-busy={submitting}
               >
                 {submitting
                   ? "Accesso in corso..."
