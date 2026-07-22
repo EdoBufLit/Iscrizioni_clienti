@@ -352,50 +352,41 @@ def _build_generic_object_payload(*, member: Member, class_id: str, object_id: s
     card_logo_fallback_url = resolve_card_logo_url(org, base_url=backend_base_url) if org_wallet_logo_url is None else None
     logo_url = org_wallet_logo_url or card_logo_fallback_url or assonam_logo_url
     logo_description = "Logo associazione" if (org_wallet_logo_url or card_logo_fallback_url) else "Logo ASSO.N.A.M."
-    card_title = resolve_wallet_title_override(org) or "ASSO.N.A.M."
+    # Google defines cardTitle as the business/program name. Keep the title
+    # aligned with the association logo instead of giving every unconfigured
+    # tenant the same generic label.
+    card_title = resolve_wallet_title_override(org) or organization_label or "ASSO.N.A.M."
     card_title = f"{_wallet_test_prefix(org)}{card_title}".strip()
 
     payload: dict[str, Any] = {
         "id": object_id,
         "classId": class_id,
+        "genericType": "GENERIC_OTHER",
         "state": member_state,
         "cardTitle": _localized_string(card_title),
         "header": _localized_string(full_name),
-        "subheader": _localized_string(
-            f"Tessera {card_year} - n. {card_number} - {membership_label}"
-        ),
+        "subheader": _localized_string("Tessera socio"),
         "hexBackgroundColor": resolve_wallet_bg_color(org),
         "textModulesData": [
             {
-                "id": "association",
-                "header": "Associazione",
-                "body": organization_label,
-            },
-            {
-                "id": "status",
-                "header": "Stato",
-                "body": "Attivo" if member_state == "ACTIVE" else "Non attivo",
+                "id": "membership",
+                "header": "Tessera",
+                "body": f"N. {card_number} · {card_year} · {membership_label}",
             },
             {
                 "id": "validity",
                 "header": "Validità",
-                "body": validity_label,
-            },
-            {
-                "id": "membership_type",
-                "header": "Tipo tessera",
-                "body": membership_label,
-            },
-            {
-                "id": "email",
-                "header": "Email",
-                "body": member.email or "-",
+                "body": (
+                    f"Attiva · fino al {validity_label}"
+                    if member_state == "ACTIVE"
+                    else f"Non attiva · {validity_label}"
+                ),
             },
         ],
         "barcode": {
             "type": "QR_CODE",
             "value": verify_url,
-            "alternateText": "Verifica tessera",
+            "alternateText": f"Tessera n. {card_number}",
         },
         "linksModuleData": {
             "uris": [

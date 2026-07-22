@@ -5,11 +5,12 @@
 Personalizzare l'aspetto della tessera Google Wallet (Android) per singola associazione usando:
 
 - logo
-- hero image (immagine larga)
+- hero image (immagine quasi quadrata, visibile nel pass aperto)
 - colore di sfondo
 - titolo card (override opzionale)
 
 Nota: Google Wallet non supporta layout HTML/CSS libero. La personalizzazione avviene via payload `genericObject` e (opzionalmente) `genericClass`.
+La miniatura di un pass Generic resta compatta e non può assumere il formato verticale di un Event Ticket: dimensioni e ritaglio della home sono controllati da Google.
 
 ## Campi Organization (DB)
 
@@ -59,6 +60,16 @@ Fallback automatici configurati per `slug = oasi-2`:
 
 Questo permette di avere un branding Wallet sensato anche senza upload manuale iniziale.
 
+## Fallback ASSO.N.A.M.
+
+Per le associazioni senza una hero dedicata viene usata:
+
+- hero image: `/static/wallet-heroes/assonam-default-hero.png`
+- formato: `1032x812` (rapporto circa `5:4`)
+- palette: blu notte, blu istituzionale e oro, senza testo incorporato
+
+Il logo della miniatura deve essere un marchio quadrato (PNG consigliato, almeno `660x660`, con 15% di margine di sicurezza). Non usare il QR come logo: il QR è già renderizzato dal campo `barcode` del pass.
+
 ## Variabili env rilevanti
 
 - `GOOGLE_WALLET_ISSUER_ID`
@@ -85,5 +96,7 @@ Questa etichetta non dipende dal codice ASSONAM e non si rimuove via `wallet_is_
    - logo corretto
    - hero image presente
    - colore di sfondo corretto
-   - titolo e testi (Associazione / Stato / Validita)
+   - titolo e testi (nome associazione / tessera / validità)
    - QR di verifica funzionante
+
+Per aggiornare un pass già salvato, il socio deve riaprire `Aggiungi a Google Wallet`: il backend esegue una PATCH dello stesso oggetto, senza creare un duplicato.

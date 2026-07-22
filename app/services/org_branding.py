@@ -27,6 +27,7 @@ _WALLET_BRANDING_BY_SLUG_FALLBACK = {
     }
 }
 _DEFAULT_WALLET_BG_COLOR = "#0B3C75"
+_DEFAULT_WALLET_HERO_IMAGE_URL = "/static/wallet-heroes/assonam-default-hero.png"
 
 
 def _normalize_text(value: str | None) -> str | None:
@@ -204,7 +205,7 @@ def resolve_wallet_hero_image_url(
     fallback = _normalize_text(defaults.get("hero_image_url"))
     if fallback:
         return _to_absolute_url(fallback, base_url=base_url)
-    return None
+    return _to_absolute_url(_DEFAULT_WALLET_HERO_IMAGE_URL, base_url=base_url)
 
 
 def resolve_wallet_title_override(org: Organization | None) -> str | None:

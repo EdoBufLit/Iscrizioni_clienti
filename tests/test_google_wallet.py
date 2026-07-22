@@ -226,8 +226,11 @@ def test_google_wallet_object_payload_applies_org_branding(db, monkeypatch):
 
     assert payload["hexBackgroundColor"] == "#123ABC"
     assert payload["cardTitle"]["defaultValue"]["value"] == "Golden Age Club"
+    assert payload["genericType"] == "GENERIC_OTHER"
+    assert payload["subheader"]["defaultValue"]["value"] == "Tessera socio"
     assert payload["logo"]["sourceUri"]["uri"] == "https://cdn.example.com/wallet/logo.png"
     assert payload["heroImage"]["sourceUri"]["uri"] == "https://cdn.example.com/wallet/hero.png"
+    assert [item["id"] for item in payload["textModulesData"]] == ["membership", "validity"]
     assert any(item["id"] == "validity" for item in payload["textModulesData"])
 
 
@@ -243,9 +246,11 @@ def test_google_wallet_object_payload_uses_assonam_fallback_without_org_branding
     )
 
     assert payload["hexBackgroundColor"] == "#0B3C75"
-    assert payload["cardTitle"]["defaultValue"]["value"] == "ASSO.N.A.M."
+    assert payload["cardTitle"]["defaultValue"]["value"] == member.organization.name
     assert payload["logo"]["sourceUri"]["uri"].endswith("/logo-transparent.png")
-    assert "heroImage" not in payload
+    assert payload["heroImage"]["sourceUri"]["uri"].endswith(
+        "/static/wallet-heroes/assonam-default-hero.png"
+    )
 
 
 def test_google_wallet_object_payload_uses_oasi2_branding_fallback(db, monkeypatch):

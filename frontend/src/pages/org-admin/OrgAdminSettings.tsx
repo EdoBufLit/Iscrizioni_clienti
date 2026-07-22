@@ -452,6 +452,10 @@ const OrgAdminSettings = () => {
     systemSender: org?.system_email_sender,
   });
   const communicationsLocked = !Boolean(org?.communications_enabled);
+  const walletPreviewLogo =
+    org?.wallet_logo_url || org?.wallet_effective_logo_url || "/logo-transparent.png";
+  const walletPreviewHero = org?.wallet_hero_image_url || org?.wallet_effective_hero_image_url;
+  const walletPreviewTitle = walletForm.wallet_title_override.trim() || org?.name || "ASSO.N.A.M.";
   const hasUnsavedSettingsChanges = useMemo(() => {
     if (
       loading
@@ -901,81 +905,138 @@ const OrgAdminSettings = () => {
       <div className="surface mt-8 p-7">
         <h3 className="text-sm font-semibold text-neutral-900">Google Wallet Branding</h3>
         <p className="mt-1 text-sm text-neutral-500">
-          Personalizza logo, hero image e colore della tessera in Google Wallet (Android).
+          Personalizza la tessera aperta e la miniatura compatta mostrata in Google Wallet (Android).
         </p>
 
-        <div className="mt-6 grid gap-5 md:grid-cols-2">
+        <div className="mt-5 rounded-xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm text-blue-900">
+          <p className="font-medium">Il formato della miniatura lo decide Google.</p>
+          <p className="mt-1 text-blue-800">
+            Un pass socio non può diventare alto come un biglietto cinema. Possiamo renderlo più curato
+            con logo reale, colore e hero; il QR resta nell'area di verifica e non va usato come logo.
+          </p>
+        </div>
+
+        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
           <div>
-            <label htmlFor="wallet-bg-color" className={labelClass}>
-              Colore sfondo Wallet
-            </label>
-            <div className="mt-1 flex items-center gap-3">
-              <input
-                id="wallet-bg-color"
-                type="color"
-                className="h-10 w-14 rounded-md border border-neutral-200 bg-white p-1"
-                value={
-                  /^#[0-9A-Fa-f]{6}$/.test(walletForm.wallet_bg_color.trim())
-                    ? walletForm.wallet_bg_color.trim()
-                    : "#0B3C75"
-                }
-                onChange={(e) =>
-                  setWalletForm((prev) => ({ ...prev, wallet_bg_color: e.target.value }))
-                }
-              />
-              <input
-                className={inputClass}
-                type="text"
-                placeholder="#0B3C75"
-                value={walletForm.wallet_bg_color}
-                onChange={(e) =>
-                  setWalletForm((prev) => ({ ...prev, wallet_bg_color: e.target.value }))
-                }
-              />
+            <div className="grid gap-5 md:grid-cols-2">
+              <div>
+                <label htmlFor="wallet-bg-color" className={labelClass}>
+                  Colore sfondo Wallet
+                </label>
+                <div className="mt-1 flex items-center gap-3">
+                  <input
+                    id="wallet-bg-color"
+                    type="color"
+                    className="h-10 w-14 rounded-md border border-neutral-200 bg-white p-1"
+                    value={
+                      /^#[0-9A-Fa-f]{6}$/.test(walletForm.wallet_bg_color.trim())
+                        ? walletForm.wallet_bg_color.trim()
+                        : "#0B3C75"
+                    }
+                    onChange={(e) =>
+                      setWalletForm((prev) => ({ ...prev, wallet_bg_color: e.target.value }))
+                    }
+                  />
+                  <input
+                    className={inputClass}
+                    type="text"
+                    placeholder="#0B3C75"
+                    value={walletForm.wallet_bg_color}
+                    onChange={(e) =>
+                      setWalletForm((prev) => ({ ...prev, wallet_bg_color: e.target.value }))
+                    }
+                  />
+                </div>
+                {org?.wallet_effective_bg_color && !org.wallet_bg_color && (
+                  <p className="mt-2 text-xs text-neutral-500">
+                    Fallback attivo: {org.wallet_effective_bg_color} (es. Golden Age).
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label htmlFor="wallet-title" className={labelClass}>
+                  Titolo Wallet (override)
+                </label>
+                <input
+                  id="wallet-title"
+                  className={inputClass}
+                  type="text"
+                  placeholder="ASSO.N.A.M. / Golden Age Club"
+                  value={walletForm.wallet_title_override}
+                  onChange={(e) =>
+                    setWalletForm((prev) => ({ ...prev, wallet_title_override: e.target.value }))
+                  }
+                />
+                {org?.wallet_effective_title_override && !org.wallet_title_override && (
+                  <p className="mt-2 text-xs text-neutral-500">
+                    Fallback attivo: {org.wallet_effective_title_override}
+                  </p>
+                )}
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="inline-flex items-center gap-3 text-sm text-neutral-700">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-neutral-300 text-brand focus:ring-brand/30"
+                    checked={walletForm.wallet_is_test_prefix}
+                    onChange={(e) =>
+                      setWalletForm((prev) => ({
+                        ...prev,
+                        wallet_is_test_prefix: e.target.checked,
+                      }))
+                    }
+                  />
+                  Abilita prefisso demo ("[SOLO TEST]") solo quando `WALLET_DEMO_MODE=true`
+                </label>
+              </div>
             </div>
-            {org?.wallet_effective_bg_color && !org.wallet_bg_color && (
-              <p className="mt-2 text-xs text-neutral-500">
-                Fallback attivo: {org.wallet_effective_bg_color} (es. Golden Age).
-              </p>
-            )}
           </div>
 
           <div>
-            <label htmlFor="wallet-title" className={labelClass}>
-              Titolo Wallet (override)
-            </label>
-            <input
-              id="wallet-title"
-              className={inputClass}
-              type="text"
-              placeholder="ASSO.N.A.M. / Golden Age Club"
-              value={walletForm.wallet_title_override}
-              onChange={(e) =>
-                setWalletForm((prev) => ({ ...prev, wallet_title_override: e.target.value }))
-              }
-            />
-            {org?.wallet_effective_title_override && !org.wallet_title_override && (
-              <p className="mt-2 text-xs text-neutral-500">
-                Fallback attivo: {org.wallet_effective_title_override}
-              </p>
-            )}
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="inline-flex items-center gap-3 text-sm text-neutral-700">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-neutral-300 text-brand focus:ring-brand/30"
-                checked={walletForm.wallet_is_test_prefix}
-                onChange={(e) =>
-                  setWalletForm((prev) => ({
-                    ...prev,
-                    wallet_is_test_prefix: e.target.checked,
-                  }))
-                }
-              />
-              Abilita prefisso demo ("[SOLO TEST]") solo quando `WALLET_DEMO_MODE=true`
-            </label>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">
+              Anteprima indicativa
+            </p>
+            <div
+              className="mt-2 overflow-hidden rounded-2xl shadow-[0_18px_45px_rgba(15,23,42,0.22)]"
+              style={{ backgroundColor: walletForm.wallet_bg_color || "#0B3C75" }}
+            >
+              <div className="flex items-center gap-3 px-4 py-4 text-white">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white shadow-sm">
+                  <img
+                    src={walletPreviewLogo}
+                    alt="Logo Wallet in anteprima"
+                    className="h-full w-full object-contain p-1"
+                  />
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-base font-semibold">{walletPreviewTitle}</p>
+                  <p className="text-sm text-white/75">Tessera socio</p>
+                </div>
+              </div>
+              {walletPreviewHero && (
+                <img
+                  src={walletPreviewHero}
+                  alt="Hero Wallet in anteprima"
+                  className="aspect-[1032/812] w-full object-cover"
+                />
+              )}
+              <div className="grid grid-cols-2 gap-3 px-4 py-4 text-white">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-white/60">Tessera</p>
+                  <p className="mt-0.5 text-sm font-medium">N. 0000 · 2026</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-white/60">Validità</p>
+                  <p className="mt-0.5 text-sm font-medium">Attiva</p>
+                </div>
+              </div>
+            </div>
+            <p className="mt-3 text-xs leading-relaxed text-neutral-500">
+              La hero appare quando la tessera viene aperta; nella home Wallet restano visibili soprattutto logo,
+              titolo e colore.
+            </p>
           </div>
         </div>
 
@@ -1004,12 +1065,16 @@ const OrgAdminSettings = () => {
         <div className="mt-8 border-t border-neutral-100 pt-6">
           <h4 className="text-sm font-semibold text-neutral-900">Asset immagini</h4>
           <p className="mt-1 text-sm text-neutral-500">
-            Logo (PNG/JPG/SVG) e Hero image larga (PNG/JPG, consigliata ~1032x336).
+            Logo quadrato (PNG consigliato, almeno 660x660) e hero quasi quadrata
+            (PNG/JPG, consigliata 1032x812). Non inserire testo o QR nella hero.
           </p>
 
           <div className="mt-5 grid gap-5 md:grid-cols-2">
             <div>
               <label className={labelClass}>Logo Wallet</label>
+              <p className="mt-1 text-xs text-neutral-500">
+                Usa il marchio vero con 15% di margine: Google lo ritaglia automaticamente in un cerchio.
+              </p>
               <input
                 type="file"
                 accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml"
