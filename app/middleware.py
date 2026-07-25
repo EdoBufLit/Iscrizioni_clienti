@@ -50,8 +50,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "SAMEORIGIN" if allow_same_origin_embed else "DENY"
         )
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        # The authenticated attendance scanner needs first-party camera access.
+        # Keep every other origin and the unused sensors denied.
         response.headers["Permissions-Policy"] = (
-            "camera=(), microphone=(), geolocation=()"
+            "camera=(self), microphone=(), geolocation=()"
         )
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
         is_public_upload = request.url.path.startswith("/uploads/")

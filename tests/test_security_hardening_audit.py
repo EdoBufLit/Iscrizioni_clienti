@@ -134,6 +134,10 @@ def test_security_headers_include_csp(client):
     assert "default-src 'self'" in response.headers.get("content-security-policy", "")
     assert response.headers.get("x-frame-options") == "DENY"
     assert response.headers.get("x-content-type-options") == "nosniff"
+    assert (
+        response.headers.get("permissions-policy")
+        == "camera=(self), microphone=(), geolocation=()"
+    )
 
 
 def test_public_organization_detail_hides_inactive_org(client):

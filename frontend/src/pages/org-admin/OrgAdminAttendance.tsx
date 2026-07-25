@@ -6,6 +6,10 @@ import {
   type OrgAdminAttendance,
 } from "../../lib/api";
 import {
+  cameraAccessErrorMessage,
+  isCameraAllowedByDocumentPolicy,
+} from "../../lib/cameraAccess";
+import {
   extractMemberCardVerificationToken,
 } from "../../lib/memberCardQr";
 import {
@@ -31,6 +35,11 @@ function formatTime(value: string) {
 
 function membershipLabel(value: string) {
   return value === "temporary" ? "Temporanea" : "Annuale";
+}
+
+function stopMediaStream(stream: MediaStream | null | undefined) {
+  if (typeof stream?.getTracks !== "function") return;
+  stream.getTracks().forEach((track) => track.stop());
 }
 
 const OrgAdminAttendancePage = () => {
@@ -80,10 +89,8 @@ const OrgAdminAttendancePage = () => {
   const stopScanner = useCallback(() => {
     scannerControlsRef.current?.stop();
     scannerControlsRef.current = null;
-    const stream = videoRef.current?.srcObject;
-    if (stream instanceof MediaStream) {
-      stream.getTracks().forEach((track) => track.stop());
-    }
+    const stream = videoRef.current?.srcObject as MediaStream | null | undefined;
+    stopMediaStream(stream);
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
@@ -130,23 +137,39 @@ const OrgAdminAttendancePage = () => {
     setScanError("");
     setScannerState("starting");
     scanLockedRef.current = false;
+    let pendingStream: MediaStream | null = null;
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
         throw new Error("Fotocamera non supportata da questo browser.");
       }
+      if (!window.isSecureContext) {
+        throw new Error(
+          "La fotocamera richiede una connessione sicura HTTPS. Apri nuovamente questa pagina dal sito ASSONAM.",
+        );
+      }
+      if (!isCameraAllowedByDocumentPolicy()) {
+        throw new Error(
+          "La configurazione di sicurezza del sito sta bloccando la fotocamera. Ricarica la pagina e riprova.",
+        );
+      }
       const video = videoRef.current;
       if (!video) throw new Error("Anteprima fotocamera non disponibile.");
+
+      // Ask the browser directly from the button action, before loading the QR
+      // decoder. This preserves the native first-use permission prompt.
+      pendingStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: "environment" },
+        },
+        audio: false,
+      });
+
       const { BrowserQRCodeReader } = await import("@zxing/browser");
       const reader = new BrowserQRCodeReader(undefined, {
         delayBetweenScanAttempts: 250,
       });
-      const controls = await reader.decodeFromConstraints(
-        {
-          video: {
-            facingMode: { ideal: "environment" },
-          },
-          audio: false,
-        },
+      const controls = await reader.decodeFromStream(
+        pendingStream,
         video,
         (result) => {
           if (result && !scanLockedRef.current) {
@@ -154,16 +177,17 @@ const OrgAdminAttendancePage = () => {
           }
         },
       );
+      pendingStream = null;
+      if (scanLockedRef.current) {
+        controls.stop();
+        return;
+      }
       scannerControlsRef.current = controls;
       setScannerState("scanning");
     } catch (error) {
+      stopMediaStream(pendingStream);
       stopScanner();
-      const message = error instanceof Error ? error.message : "";
-      setScanError(
-        /permission|denied|notallowed/i.test(message)
-          ? "Permesso fotocamera negato. Abilitalo nel browser oppure incolla il link della tessera."
-          : message || "Impossibile avviare la fotocamera.",
-      );
+      setScanError(cameraAccessErrorMessage(error));
     }
   }, [registerPresence, stopScanner]);
 
