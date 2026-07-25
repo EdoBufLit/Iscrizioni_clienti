@@ -297,8 +297,18 @@ const OrgAdminMembers = () => {
             >
               Importa CSV
             </button>
+            <button
+              type="button"
+              onClick={() => navigate("/org-admin/presenze")}
+              className="btn-secondary"
+            >
+              <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4M8 8h3v3H8V8Zm5 0h3v3h-3V8Zm-5 5h3v3H8v-3Zm6 0h2v2h-2v-2Z" />
+              </svg>
+              Registra presenza
+            </button>
             <a
-              href="/api/org-admin/members.csv"
+              href="/api/org-admin/members.xlsx"
               className="btn-ghost !px-4 !py-2 text-xs font-bold uppercase tracking-widest flex items-center gap-2"
             >
               <svg
@@ -312,7 +322,7 @@ const OrgAdminMembers = () => {
               >
                 <path d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
               </svg>
-              Export CSV
+              Esporta Excel
             </a>
           </div>
           ) : null
@@ -531,8 +541,8 @@ function MemberSidePanel({
           <button type="button" className="btn-primary w-full justify-center" onClick={() => onOpenMember(member.id)}>
             Vedi profilo completo
           </button>
-          <a className="btn-secondary w-full justify-center" href="/api/org-admin/members.csv">
-            Esporta elenco
+          <a className="btn-secondary w-full justify-center" href="/api/org-admin/members.xlsx">
+            Esporta Excel
           </a>
         </div>
       </div>

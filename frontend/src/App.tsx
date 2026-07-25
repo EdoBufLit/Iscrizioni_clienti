@@ -61,6 +61,7 @@ const OrgAdminDashboard = lazy(() => import("./pages/org-admin/OrgAdminDashboard
 const OrgAdminInvites = lazy(() => import("./pages/org-admin/OrgAdminInvites"));
 const OrgAdminMembers = lazy(() => import("./pages/org-admin/OrgAdminMembers"));
 const OrgAdminMemberDetail = lazy(() => import("./pages/org-admin/OrgAdminMemberDetail"));
+const OrgAdminAttendance = lazy(() => import("./pages/org-admin/OrgAdminAttendance"));
 const OrgAdminCards = lazy(() => import("./pages/org-admin/OrgAdminCards"));
 const OrgAdminQuote = lazy(() => import("./pages/org-admin/OrgAdminQuote"));
 const OrgAdminCommunications = lazy(() => import("./pages/org-admin/OrgAdminCommunications"));
@@ -169,6 +170,7 @@ const App = () => {
                 <Route path="inviti" element={<OrgAdminInvites />} />
                 <Route path="soci" element={<OrgAdminMembers />} />
                 <Route path="soci/:id" element={<OrgAdminMemberDetail />} />
+                <Route path="presenze" element={<OrgAdminAttendance />} />
                 <Route path="tessere" element={<OrgAdminCards />} />
                 <Route path="quote" element={<OrgAdminQuote />} />
                 <Route path="prenotazioni" element={<OrgAdminBookings />} />

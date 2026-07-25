@@ -36,6 +36,7 @@ type IconName =
   | "message"
   | "renew"
   | "room"
+  | "scan"
   | "send"
   | "settings"
   | "support"
@@ -156,6 +157,12 @@ function MiniIcon({ name, className = "h-4 w-4" }: { name: IconName; className?:
         <path d="M6 20V6l8-2v16" />
         <path d="M14 8h4v12" />
         <path d="M10 12h.01" />
+      </>
+    ),
+    scan: (
+      <>
+        <path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4" />
+        <path d="M8 8h3v3H8zM13 8h3v3h-3zM8 13h3v3H8zM14 13h2v2h-2z" />
       </>
     ),
     send: (
@@ -292,6 +299,7 @@ const OrgAdminLayout = () => {
         label: "Soci e tessere",
         items: [
           { to: "/org-admin/soci", label: "Soci", match: ["/org-admin/soci"], icon: "users" },
+          { to: "/org-admin/presenze", label: "Presenze", match: ["/org-admin/presenze"], icon: "scan" },
           { to: "/org-admin/tessere", label: "Tessere", match: ["/org-admin/tessere"], icon: "cards" },
           { to: "/org-admin/quote", label: "Quote e rinnovi", match: ["/org-admin/quote"], icon: "renew" },
           { to: "/org-admin/inviti", label: "Inviti", match: ["/org-admin/inviti"], icon: "renew" },
@@ -320,7 +328,7 @@ const OrgAdminLayout = () => {
     (): MobileDashboardNavItem[] => [
       { key: "overview", label: "Panoramica", to: "/org-admin", exact: true, icon: "home" as const },
       { key: "members", label: "Soci", to: "/org-admin/soci", activeMatch: ["/org-admin/soci"], icon: "users" as const },
-      { key: "cards", label: "Tessere", to: "/org-admin/tessere", activeMatch: ["/org-admin/tessere"], icon: "cards" as const },
+      { key: "attendance", label: "Presenze", to: "/org-admin/presenze", activeMatch: ["/org-admin/presenze"], icon: "scan" as const },
       { key: "bookings", label: "Prenotazioni", to: "/org-admin/prenotazioni", activeMatch: ["/org-admin/prenotazioni"], icon: "book" as const },
     ],
     [],
@@ -328,6 +336,7 @@ const OrgAdminLayout = () => {
 
   const mobileMoreNav = useMemo(() => {
     const items: MobileDashboardNavItem[] = [
+      { key: "cards", label: "Tessere", to: "/org-admin/tessere", activeMatch: ["/org-admin/tessere"], icon: "cards" as const },
       { key: "communications", label: "Comunicazioni", to: "/org-admin/comunicazioni", activeMatch: ["/org-admin/comunicazioni"], icon: "book" as const },
       { key: "documents", label: "Documenti", to: "/org-admin/documenti", activeMatch: ["/org-admin/documenti"], icon: "docs" as const },
       { key: "invites", label: "Inviti", to: "/org-admin/inviti", activeMatch: ["/org-admin/inviti"], icon: "book" as const },

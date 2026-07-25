@@ -357,6 +357,9 @@ class Organization(Base):
     payment_required_before_card = Column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    cash_only_signup_payment = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     membership_payment_label = Column(String, nullable=True)
     membership_fee_amount = Column(Numeric(10, 2), nullable=True)
     temporary_membership_fee_amount = Column(Numeric(10, 2), nullable=True)
@@ -2559,6 +2562,72 @@ class MemberDocument(Base):
     )
 
     member = relationship("Member", back_populates="documents")
+
+
+class MemberAttendance(Base):
+    __tablename__ = "member_attendances"
+
+    id = Column(Integer, primary_key=True, index=True)
+    org_id = Column(
+        Integer,
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    member_id = Column(
+        Integer,
+        ForeignKey("members.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    checked_in_by_admin_id = Column(
+        Integer,
+        ForeignKey("admin_users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    card_no = Column(Integer, nullable=False)
+    card_year = Column(Integer, nullable=False)
+    attendance_date = Column(Date, nullable=False, index=True)
+    membership_type = Column(String, nullable=False)
+    source = Column(
+        String,
+        nullable=False,
+        default="qr",
+        server_default="qr",
+    )
+    checked_in_at = Column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        server_default=sa.func.now(),
+        index=True,
+    )
+
+    member = relationship("Member")
+    organization = relationship("Organization")
+    checked_in_by_admin = relationship("AdminUser")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "org_id",
+            "member_id",
+            "attendance_date",
+            name="uq_member_attendance_org_member_day",
+        ),
+        Index(
+            "ix_member_attendances_org_checked_in",
+            "org_id",
+            "attendance_date",
+            "checked_in_at",
+        ),
+        Index(
+            "ix_member_attendances_org_member_checked_in",
+            "org_id",
+            "member_id",
+            "checked_in_at",
+        ),
+    )
 
 
 class MemberPayment(Base):

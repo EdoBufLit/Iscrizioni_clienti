@@ -158,6 +158,9 @@ def serialize_super_admin_membership_payment_settings(org: Organization) -> dict
         "membership_fee_amount": float(amount) if amount is not None else None,
         "membership_fee_currency": getattr(org, "membership_fee_currency", "EUR"),
         "payment_button_label": getattr(org, "payment_button_label", "Paga con carta"),
+        "cash_only_signup_payment": bool(
+            getattr(org, "cash_only_signup_payment", False)
+        ),
         "temporary_membership_fee_amount": membership_amount_to_float(
             getattr(org, "temporary_membership_fee_amount", None)
         ),

@@ -2,15 +2,34 @@ import base64
 import hashlib
 import hmac
 import json
+import re
 from datetime import datetime
 from types import SimpleNamespace
 from typing import Optional, TypedDict
+from urllib.parse import parse_qs, unquote, urlparse
+
+from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.services.member_activity import is_card_active
+from app.models import (
+    AnnualMembershipTerm,
+    AnnualMembershipTermStatus,
+    Member,
+    MembershipType,
+)
+from app.services.annual_memberships import as_rome_datetime
+from app.services.member_activity import (
+    MEMBER_INACTIVE_REASON_DELETED,
+    MEMBER_INACTIVE_REASON_EXPIRED,
+    MEMBER_INACTIVE_REASON_NOT_APPROVED,
+    get_member_inactive_reason,
+    is_card_active,
+)
+from app.services.member_membership import resolve_member_membership_type
 
 # HMAC domain separator/version string; not a secret.
 _TOKEN_PREFIX = "card-verify-v1"  # nosec hardcoded_secret_name
+_VERIFY_PATH_RE = re.compile(r"/api/cards/verify/([^/?#]+)")
 
 
 class CardVerificationPayload(TypedDict):
@@ -92,6 +111,97 @@ def parse_card_verification_token(token: str) -> Optional[CardVerificationPayloa
         "card_number": card_number,
         "card_year": card_year,
     }
+
+
+def extract_card_verification_token(raw_value: str | None) -> str | None:
+    """Extract a signed token from a raw token or one of the existing card URLs."""
+
+    value = (raw_value or "").strip()
+    if not value:
+        return None
+    if parse_card_verification_token(value):
+        return value
+
+    parsed = urlparse(value)
+    query_token = parse_qs(parsed.query).get("card_token", [None])[0]
+    candidates = [query_token]
+    path_match = _VERIFY_PATH_RE.search(parsed.path or value)
+    if path_match:
+        candidates.append(path_match.group(1))
+
+    for candidate in candidates:
+        normalized = unquote((candidate or "").strip())
+        if normalized and parse_card_verification_token(normalized):
+            return normalized
+    return None
+
+
+def resolve_card_verification_membership(
+    db: Session,
+    *,
+    payload: CardVerificationPayload,
+    checked_at: datetime,
+) -> tuple[Member | None, AnnualMembershipTerm | None, str]:
+    """Resolve the signed card snapshot using the public verifier semantics."""
+
+    member = (
+        db.query(Member)
+        .filter(
+            Member.id == payload["member_id"],
+            Member.org_id == payload["org_id"],
+        )
+        .first()
+    )
+    term = (
+        db.query(AnnualMembershipTerm)
+        .filter(
+            AnnualMembershipTerm.member_id == payload["member_id"],
+            AnnualMembershipTerm.org_id == payload["org_id"],
+            AnnualMembershipTerm.card_no == payload["card_number"],
+            AnnualMembershipTerm.card_year == payload["card_year"],
+        )
+        .first()
+    )
+    if member is None or member.deleted_at is not None:
+        return member, term, MEMBER_INACTIVE_REASON_DELETED
+
+    member_inactive_reason = get_member_inactive_reason(member, now=checked_at)
+    current_membership_type = resolve_member_membership_type(member)
+    if current_membership_type != MembershipType.ANNUAL.value:
+        if member_inactive_reason == "" and (
+            member.card_no != payload["card_number"]
+            or member.card_year != payload["card_year"]
+        ):
+            member_inactive_reason = MEMBER_INACTIVE_REASON_NOT_APPROVED
+        return member, None, member_inactive_reason
+    if member_inactive_reason:
+        return member, term, member_inactive_reason
+
+    if term is None:
+        inactive_reason = member_inactive_reason
+        if inactive_reason == "" and (
+            member.card_no != payload["card_number"]
+            or member.card_year != payload["card_year"]
+        ):
+            inactive_reason = MEMBER_INACTIVE_REASON_NOT_APPROVED
+        return member, None, inactive_reason
+
+    local_today = as_rome_datetime(checked_at).date()
+    if (
+        term.status == AnnualMembershipTermStatus.EXPIRED.value
+        or local_today > term.valid_through
+    ):
+        return member, term, MEMBER_INACTIVE_REASON_EXPIRED
+    if (
+        term.status
+        not in {
+            AnnualMembershipTermStatus.ACTIVE.value,
+            AnnualMembershipTermStatus.SCHEDULED.value,
+        }
+        or local_today < term.starts_on
+    ):
+        return member, term, MEMBER_INACTIVE_REASON_NOT_APPROVED
+    return member, term, ""
 
 
 def to_card_status(

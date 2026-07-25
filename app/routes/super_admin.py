@@ -2875,6 +2875,8 @@ def patch_organization_membership_payment_settings(
             status_code=400,
             detail="Se il pagamento ? obbligatorio il provider deve essere SumUp.",
         )
+    if requires_payment:
+        org.cash_only_signup_payment = False
     if provider == "sumup":
         if not payment_label:
             raise HTTPException(status_code=400, detail="Causale pagamento obbligatoria.")
@@ -2922,6 +2924,9 @@ def patch_organization_membership_payment_settings(
             "membership_fee_currency": org.membership_fee_currency,
             "payment_button_label": org.payment_button_label,
             "sumup_enabled": org.sumup_enabled,
+            "cash_only_signup_payment": bool(
+                getattr(org, "cash_only_signup_payment", False)
+            ),
         },
         ip=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),

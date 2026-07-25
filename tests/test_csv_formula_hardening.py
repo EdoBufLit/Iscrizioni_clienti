@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
+from openpyxl import load_workbook
 
 from app.db import SessionLocal
 from app.models import (
@@ -87,7 +88,18 @@ def test_member_csv_neutralizes_formula_cells_without_changing_normal_values(cli
     response = client.get("/api/org-admin/members.csv")
 
     assert response.status_code == 200, response.text
-    rows = list(csv.reader(io.StringIO(response.text)))
+    assert response.content.startswith(b"\xef\xbb\xbf")
+    rows = list(csv.reader(io.StringIO(response.content.decode("utf-8-sig")), delimiter=";"))
+    assert rows[0] == [
+        "Nome",
+        "Cognome",
+        "Email",
+        "Codice Fiscale",
+        "Telefono",
+        "Stato",
+        "Tessera",
+        "Data iscrizione",
+    ]
     exported = next(row for row in rows[1:] if row[3] == member.fiscal_code)
     assert exported[0] == "'=2+2"
     assert exported[1] == "'\t+SUM(1,1)"
@@ -95,6 +107,32 @@ def test_member_csv_neutralizes_formula_cells_without_changing_normal_values(cli
     assert exported[3] == member.fiscal_code
     assert exported[4] == "' @cmd"
     assert exported[7] == "2026-07-15"
+
+    workbook_response = client.get("/api/org-admin/members.xlsx")
+
+    assert workbook_response.status_code == 200, workbook_response.text
+    assert (
+        workbook_response.headers["content-type"]
+        == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    workbook = load_workbook(io.BytesIO(workbook_response.content))
+    sheet = workbook["Libro soci"]
+    assert sheet.sheet_view.showGridLines is False
+    assert sheet.freeze_panes == "A5"
+    assert sheet["A1"].value == f"Libro soci - {organization.name}"
+    assert sheet["A4"].value == "Nome"
+    assert sheet["H4"].value == "Data iscrizione"
+    exported_row = next(
+        row
+        for row in sheet.iter_rows(min_row=5, values_only=False)
+        if row[3].value == member.fiscal_code
+    )
+    assert exported_row[0].value == "'=2+2"
+    assert exported_row[4].value == " @cmd"
+    assert exported_row[5].value == "Attivo"
+    assert exported_row[7].value.date() == datetime(2026, 7, 15).date()
+    assert exported_row[7].number_format == "dd/mm/yyyy"
+    assert sheet.tables["LibroSociTable"].ref.startswith("A4:H")
 
 
 def test_form_submission_csv_neutralizes_scalar_and_joined_list_formulas():

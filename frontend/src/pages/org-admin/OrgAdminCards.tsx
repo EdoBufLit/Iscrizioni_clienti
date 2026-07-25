@@ -316,6 +316,7 @@ const OrgAdminCards = () => {
         temporary_membership_duration_unit: membershipSettings?.custom_membership_types_enabled
           ? (String(data.get("temporary_membership_duration_unit") || "").trim() as "hours" | "days")
           : undefined,
+        cash_only_signup_payment: data.get("cash_only_signup_payment") === "on",
       };
       const response = await patchOrgAdminMembershipSettings(payload);
       const membersData = await fetchOrgAdminMembers({ limit: 1, offset: 0 });
@@ -384,8 +385,8 @@ const OrgAdminCards = () => {
         title="Tessere"
         subtitle="Gestisci l'emissione delle tessere, il monitoraggio dei lotti e le regole quota."
         actions={
-          <a href="/api/org-admin/members.csv" className="btn-secondary">
-            Esporta elenco
+          <a href="/api/org-admin/members.xlsx" className="btn-secondary">
+            Esporta Excel
           </a>
         }
       />
@@ -799,6 +800,33 @@ const OrgAdminCards = () => {
                       </div>
                     </div>
                   ) : null}
+
+                  <label
+                    className={`flex items-start gap-3 rounded-[0.85rem] border px-4 py-4 ${
+                      membershipSettings?.online_payment_required
+                        ? "cursor-not-allowed border-slate-200 bg-slate-100 opacity-70"
+                        : "cursor-pointer border-slate-200 bg-slate-50"
+                    }`}
+                  >
+                    <input
+                      key={`cash-only-${membershipSettings?.cash_only_signup_payment ?? false}`}
+                      className="mt-1 rounded border-slate-300 text-brand focus:ring-brand"
+                      type="checkbox"
+                      name="cash_only_signup_payment"
+                      defaultChecked={membershipSettings?.cash_only_signup_payment ?? false}
+                      disabled={membershipSettings?.online_payment_required}
+                    />
+                    <span>
+                      <span className="block text-sm font-semibold text-slate-800">
+                        Solo contanti nel modulo di iscrizione
+                      </span>
+                      <span className="mt-1 block text-xs leading-5 text-slate-500">
+                        {membershipSettings?.online_payment_required
+                          ? "Disattiva prima il pagamento online obbligatorio dalla configurazione dell'associazione."
+                          : "Il socio vedrà Contanti come unica modalità, senza menu a tendina."}
+                      </span>
+                    </span>
+                  </label>
 
                   {membershipSettingsError ? <p className="text-sm text-rose-600">{membershipSettingsError}</p> : null}
 

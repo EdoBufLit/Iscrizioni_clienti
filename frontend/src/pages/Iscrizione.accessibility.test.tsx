@@ -61,4 +61,52 @@ describe("Iscrizione accessibility", () => {
     fireEvent.click(screen.getByRole("button", { name: /Nome:/ }));
     expect(firstName).toHaveFocus();
   });
+
+  it("mostra Contanti come scelta fissa quando l'associazione attiva la modalità dedicata", async () => {
+    fetchOrganizationDetail.mockResolvedValueOnce({
+      id: 1,
+      name: "Associazione Demo",
+      slug: "demo",
+      description: null,
+      address_line1: null,
+      address_line2: null,
+      city: null,
+      province: null,
+      postal_code: null,
+      country: null,
+      email: null,
+      phone: null,
+      website: null,
+      logo_url: null,
+      is_active: true,
+      has_statute: false,
+      require_membership_document: false,
+      cash_only_signup_payment: true,
+      membership_payment: {
+        enabled: false,
+        required: false,
+        label: null,
+        amount: null,
+        currency: "EUR",
+        button_label: null,
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/associazioni/demo/iscrizione"]}>
+        <Routes>
+          <Route path="/associazioni/:slug/iscrizione" element={<Iscrizione />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole("status", {
+        name: "Modalità di pagamento: Contanti",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("combobox", { name: "Modalità di pagamento" }),
+    ).not.toBeInTheDocument();
+  });
 });

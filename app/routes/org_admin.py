@@ -193,6 +193,11 @@ from app.services.member_imports import (
     rollback_member_import,
     serialize_import_batch,
 )
+from app.services.member_exports import (
+    MEMBER_EXPORT_HEADERS,
+    build_members_workbook,
+    member_export_values,
+)
 from app.services.card_lot_registry import format_card_number
 from app.services.card_replenishments import (
     create_portal_replenishment_request,
@@ -947,6 +952,10 @@ def _serialize_org_membership_settings(org: Organization) -> dict[str, object]:
         "membership_fee_currency": getattr(org, "membership_fee_currency", "EUR"),
         "temporary_membership_duration_value": duration_value,
         "temporary_membership_duration_unit": duration_unit,
+        "cash_only_signup_payment": bool(
+            getattr(org, "cash_only_signup_payment", False)
+        ),
+        "online_payment_required": organization_requires_membership_payment(org),
         "card_logo_url": getattr(org, "card_logo_url", None),
         "card_style": _serialize_card_style(org),
         "card_style_locked": (getattr(org, "slug", "") or "").strip().lower() in {"oasi-2", "golden-age-club"},
@@ -2927,6 +2936,7 @@ class PatchOrgMembershipSettings(BaseModel):
     membership_fee_currency: Optional[str] = Field(default=None, min_length=1, max_length=8)
     temporary_membership_duration_value: Optional[int] = Field(default=None, ge=1, le=8760)
     temporary_membership_duration_unit: Optional[Literal["hours", "days"]] = None
+    cash_only_signup_payment: Optional[bool] = None
     card_style: Optional[dict[str, object]] = None
 
 
@@ -3351,6 +3361,19 @@ def patch_org_membership_settings(
             raise HTTPException(status_code=422, detail="Valuta quota obbligatoria.")
         org.membership_fee_currency = currency
         changed_fields["membership_fee_currency"] = currency
+
+    if "cash_only_signup_payment" in updates:
+        cash_only = bool(updates["cash_only_signup_payment"])
+        if cash_only and organization_requires_membership_payment(org):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Disattiva prima il pagamento online obbligatorio: "
+                    "la modalità solo contanti non può essere attiva insieme a SumUp obbligatorio."
+                ),
+            )
+        org.cash_only_signup_payment = cash_only
+        changed_fields["cash_only_signup_payment"] = cash_only
 
     if organization_allows_custom_membership_types(org):
         if "temporary_membership_fee_amount" in updates:
@@ -7404,37 +7427,63 @@ def export_members_csv(
     )
 
     buf = io.StringIO()
-    writer = csv.writer(buf)
-    writer.writerow(
-        [
-            "Nome",
-            "Cognome",
-            "Email",
-            "Codice Fiscale",
-            "Telefono",
-            "Stato",
-            "Tessera",
-            "Data iscrizione",
-        ]
-    )
+    buf.write("\ufeff")
+    writer = csv.writer(buf, delimiter=";", lineterminator="\r\n")
+    writer.writerow(MEMBER_EXPORT_HEADERS)
     for m in members:
-        values = [
-            m.first_name or "",
-            m.last_name or "",
-            m.email or "",
-            m.fiscal_code or "",
-            m.phone or "",
-            m.status.value if m.status else "",
-            m.card_no if m.card_no is not None else "",
-            m.joined_at.strftime("%Y-%m-%d") if m.joined_at else "",
-        ]
-        writer.writerow([neutralize_csv_formula(value) for value in values])
+        values = member_export_values(m)
+        values[7] = m.joined_at.strftime("%Y-%m-%d") if m.joined_at else ""
+        writer.writerow(values)
 
     buf.seek(0)
     return StreamingResponse(
         buf,
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": "attachment; filename=soci.csv"},
+    )
+
+
+@router.get("/members.xlsx")
+def export_members_xlsx(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Export a styled, filterable member register for Excel."""
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    now = datetime.utcnow()
+    pending_statuses = [
+        MemberStatus.PENDING_VERIFICATION,
+        MemberStatus.PENDING_DOCS,
+        MemberStatus.PENDING_CARDS,
+    ]
+    members = (
+        db.query(Member)
+        .filter(
+            Member.org_id == admin.org_id,
+            Member.deleted_at.is_(None),
+            or_(
+                and_(*member_active_filters(now=now)),
+                Member.status.in_(pending_statuses),
+            ),
+        )
+        .order_by(Member.last_name, Member.first_name)
+        .all()
+    )
+    organization = admin.organization
+    payload = build_members_workbook(
+        organization=organization,
+        members=members,
+        generated_at=now,
+    )
+    safe_slug = re.sub(r"[^a-z0-9-]+", "-", (organization.slug or "associazione").lower()).strip("-")
+    filename = f"libro-soci-{safe_slug or 'associazione'}-{now.strftime('%Y%m%d')}.xlsx"
+    return StreamingResponse(
+        payload,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

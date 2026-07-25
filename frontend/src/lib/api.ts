@@ -115,6 +115,7 @@ export type OrganizationDetail = {
   privacy_version?: string;
   require_membership_document: boolean;
   adults_only_banner_enabled?: boolean;
+  cash_only_signup_payment?: boolean;
   membership_payment?: {
     enabled: boolean;
     required: boolean;
@@ -1046,6 +1047,8 @@ export type OrgAdminMembershipSettings = {
   membership_fee_currency: string | null;
   temporary_membership_duration_value: number;
   temporary_membership_duration_unit: "hours" | "days";
+  cash_only_signup_payment: boolean;
+  online_payment_required: boolean;
   card_logo_url?: string | null;
   card_style_locked?: boolean;
   card_style: OrgAdminCardStyle;
@@ -1848,6 +1851,7 @@ export async function patchOrgAdminMembershipSettings(data: {
   membership_fee_currency?: string | null;
   temporary_membership_duration_value?: number | null;
   temporary_membership_duration_unit?: "hours" | "days" | null;
+  cash_only_signup_payment?: boolean;
   card_style?: OrgAdminCardStyle;
 }): Promise<{ ok: boolean; settings: OrgAdminMembershipSettings }> {
   const res = await fetch("/api/org-admin/organization/membership-settings", {
@@ -3878,6 +3882,59 @@ export type OrgAdminMembersResponse = {
     issued_members_count: number;
   };
 };
+
+export type OrgAdminAttendance = {
+  id: number;
+  member_id: number;
+  member_name: string;
+  card_no: number;
+  card_year: number;
+  membership_type: "annual" | "temporary";
+  attendance_date: string;
+  checked_in_at: string;
+  source: "qr";
+};
+
+export type OrgAdminAttendancesResponse = {
+  day: string;
+  total: number;
+  items: OrgAdminAttendance[];
+};
+
+export async function fetchOrgAdminAttendances(params?: {
+  day?: string;
+  q?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<OrgAdminAttendancesResponse> {
+  const search = new URLSearchParams();
+  if (params?.day) search.set("day", params.day);
+  if (params?.q) search.set("q", params.q);
+  if (params?.limit != null) search.set("limit", String(params.limit));
+  if (params?.offset != null) search.set("offset", String(params.offset));
+  const query = search.toString();
+  const res = await fetch(`/api/org-admin/attendances${query ? `?${query}` : ""}`);
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) {
+    throw new Error(await parseApiErrorDetail(res, "Errore caricamento presenze"));
+  }
+  return res.json();
+}
+
+export async function checkInOrgAdminAttendance(
+  qrValue: string,
+): Promise<{ created: boolean; item: OrgAdminAttendance }> {
+  const res = await fetch("/api/org-admin/attendances/check-in", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ qr_value: qrValue }),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) {
+    throw new Error(await parseApiErrorDetail(res, "Impossibile registrare la presenza"));
+  }
+  return res.json();
+}
 
 export type CreateOrgAdminMemberInput = {
   first_name: string;

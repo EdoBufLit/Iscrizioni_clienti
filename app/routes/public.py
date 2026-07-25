@@ -14,7 +14,6 @@ from app.db import get_db
 from app.models import (
     AccountingShareLink,
     AnnualMembershipTerm,
-    AnnualMembershipTermStatus,
     BookingEvent,
     Member,
     MembershipPayment,
@@ -29,7 +28,10 @@ from app.services.accounting import (
     build_accounting_file_response,
     resolve_accounting_share_link,
 )
-from app.services.card_verification import parse_card_verification_token
+from app.services.card_verification import (
+    parse_card_verification_token,
+    resolve_card_verification_membership,
+)
 from app.services.db_rate_limit import enforce_db_rate_limit
 from app.services.forms import (
     create_booking_from_form_submission,
@@ -67,12 +69,9 @@ from app.services.booking_customer_actions import (
 )
 from app.services.member_activity import (
     MEMBER_INACTIVE_REASON_DELETED,
-    MEMBER_INACTIVE_REASON_EXPIRED,
     MEMBER_INACTIVE_REASON_NOT_APPROVED,
-    get_member_inactive_reason,
     member_inactive_reason_label,
 )
-from app.services.annual_memberships import as_rome_datetime
 from app.services.member_membership import (
     membership_type_badge_label,
     membership_type_label,
@@ -315,6 +314,9 @@ def _org_to_dict_detail(org: Organization) -> dict:
         ),
         "adults_only_banner_enabled": bool(
             getattr(org, "adults_only_banner_enabled", False)
+        ),
+        "cash_only_signup_payment": bool(
+            getattr(org, "cash_only_signup_payment", False)
         ),
         "membership_payment": serialize_public_membership_payment(org),
         "membership_config": serialize_membership_configuration(org),
@@ -1283,79 +1285,6 @@ def _render_card_download_html(
 </html>"""
 
 
-def _resolve_verification_membership(
-    db: Session,
-    *,
-    payload: dict,
-    checked_at: datetime,
-) -> tuple[Member | None, AnnualMembershipTerm | None, str]:
-    """Resolve a v1 token against annual history before legacy member fields.
-
-    This keeps the previous year's QR valid through 1 January while a renewed
-    card for the new year is already active. The public token and payload stay
-    byte-for-byte compatible.
-    """
-
-    member = (
-        db.query(Member)
-        .filter(
-            Member.id == payload["member_id"],
-            Member.org_id == payload["org_id"],
-        )
-        .first()
-    )
-    term = (
-        db.query(AnnualMembershipTerm)
-        .filter(
-            AnnualMembershipTerm.member_id == payload["member_id"],
-            AnnualMembershipTerm.org_id == payload["org_id"],
-            AnnualMembershipTerm.card_no == payload["card_number"],
-            AnnualMembershipTerm.card_year == payload["card_year"],
-        )
-        .first()
-    )
-    if member is None or member.deleted_at is not None:
-        return member, term, MEMBER_INACTIVE_REASON_DELETED
-
-    # Annual history extends a valid annual card across renewals; it must never
-    # override the member's real lifecycle state or a later conversion to a
-    # temporary membership.
-    member_inactive_reason = get_member_inactive_reason(member, now=checked_at)
-    current_membership_type = resolve_member_membership_type(member)
-    if current_membership_type != MembershipType.ANNUAL.value:
-        if member_inactive_reason == "" and (
-            member.card_no != payload["card_number"]
-            or member.card_year != payload["card_year"]
-        ):
-            member_inactive_reason = MEMBER_INACTIVE_REASON_NOT_APPROVED
-        return member, None, member_inactive_reason
-    if member_inactive_reason:
-        return member, term, member_inactive_reason
-
-    if term is None:
-        inactive_reason = member_inactive_reason
-        if inactive_reason == "" and (
-            member.card_no != payload["card_number"]
-            or member.card_year != payload["card_year"]
-        ):
-            inactive_reason = MEMBER_INACTIVE_REASON_NOT_APPROVED
-        return member, None, inactive_reason
-
-    local_today = as_rome_datetime(checked_at).date()
-    if term.status == AnnualMembershipTermStatus.EXPIRED.value or local_today > term.valid_through:
-        return member, term, MEMBER_INACTIVE_REASON_EXPIRED
-    if (
-        term.status
-        not in {
-            AnnualMembershipTermStatus.ACTIVE.value,
-            AnnualMembershipTermStatus.SCHEDULED.value,
-        }
-        or local_today < term.starts_on
-    ):
-        return member, term, MEMBER_INACTIVE_REASON_NOT_APPROVED
-    return member, term, ""
-
-
 def _term_valid_until(term: AnnualMembershipTerm | None, member: Member | None):
     if term is not None:
         return datetime.combine(term.valid_through, time.max)
@@ -1390,7 +1319,7 @@ def verify_member_card(request: Request, token: str, db: Session = Depends(get_d
             status_code=200,
         )
 
-    member, annual_term, inactive_reason = _resolve_verification_membership(
+    member, annual_term, inactive_reason = resolve_card_verification_membership(
         db,
         payload=payload,
         checked_at=checked_at,
@@ -1522,7 +1451,7 @@ def download_member_card(token: str, request: Request, db: Session = Depends(get
     annual_term = None
 
     if payload:
-        member, annual_term, inactive_reason = _resolve_verification_membership(
+        member, annual_term, inactive_reason = resolve_card_verification_membership(
             db,
             payload=payload,
             checked_at=checked_at,
@@ -1665,7 +1594,7 @@ def download_card_pdf(token: str, request: Request, db: Session = Depends(get_db
     if not payload:
         raise HTTPException(status_code=404, detail="Tessera non valida")
 
-    member, annual_term, inactive_reason = _resolve_verification_membership(
+    member, annual_term, inactive_reason = resolve_card_verification_membership(
         db,
         payload=payload,
         checked_at=checked_at,
@@ -1738,7 +1667,7 @@ def card_image_png(token: str, request: Request, db: Session = Depends(get_db)):
     if not payload:
         raise HTTPException(status_code=404, detail="Tessera non valida")
 
-    member, annual_term, inactive_reason = _resolve_verification_membership(
+    member, annual_term, inactive_reason = resolve_card_verification_membership(
         db,
         payload=payload,
         checked_at=checked_at,

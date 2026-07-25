@@ -79,6 +79,7 @@ def repair_db():
             ("is_active", "BOOLEAN DEFAULT 1"),
             ("require_membership_document", "BOOLEAN DEFAULT 0"),
             ("adults_only_banner_enabled", "BOOLEAN DEFAULT 0"),
+            ("cash_only_signup_payment", "BOOLEAN DEFAULT 0"),
             ("stripe_connected_account_id", "VARCHAR"),
             ("stripe_platform_subscription_status", "VARCHAR"),
             ("stripe_platform_subscription_id", "VARCHAR"),

@@ -887,7 +887,22 @@ async def api_join_submit_multipart(
             detail="È necessario dichiarare di aver letto l'informativa privacy.",
         )
 
-    normalized_payment_method = _normalize_payment_method(payment_method, required=True)
+    cash_only_signup_payment = bool(
+        getattr(org, "cash_only_signup_payment", False)
+    )
+    if cash_only_signup_payment:
+        submitted_payment_method = (payment_method or "").strip().upper()
+        if submitted_payment_method not in {"", PaymentMethod.CASH.value}:
+            raise HTTPException(
+                status_code=400,
+                detail="Per questa associazione è disponibile solo il pagamento in contanti.",
+            )
+        normalized_payment_method = PaymentMethod.CASH.value
+    else:
+        normalized_payment_method = _normalize_payment_method(
+            payment_method,
+            required=True,
+        )
     auto_issue_enabled = _is_auto_issue_signup(org)
     client_ip = get_client_ip(request)
     normalized_email = email.strip().lower()

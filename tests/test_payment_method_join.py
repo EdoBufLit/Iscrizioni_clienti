@@ -97,6 +97,36 @@ def test_join_submit_bonifico_saves_payment_method(client, db):
     assert member.payment_method == PaymentMethod.BONIFICO
 
 
+def test_cash_only_signup_defaults_to_cash_and_rejects_bank_transfer(client, db):
+    suffix = str(int(datetime.utcnow().timestamp() * 1000))
+    org = _ensure_org(db, f"cash-only-org-{suffix}")
+    org.cash_only_signup_payment = True
+    db.commit()
+
+    public_response = client.get(f"/api/organizations/{org.slug}")
+    assert public_response.status_code == 200, public_response.text
+    assert public_response.json()["cash_only_signup_payment"] is True
+
+    missing_email = f"cash-only-missing-{suffix}@example.com"
+    missing_response = _join_submit(client, org.slug, missing_email, None)
+    assert missing_response.status_code == 200, missing_response.text
+    missing_member = (
+        db.query(Member)
+        .filter(Member.org_id == org.id, Member.email == missing_email)
+        .one()
+    )
+    assert missing_member.payment_method == PaymentMethod.CASH
+
+    transfer_response = _join_submit(
+        client,
+        org.slug,
+        f"cash-only-transfer-{suffix}@example.com",
+        "BONIFICO",
+    )
+    assert transfer_response.status_code == 400, transfer_response.text
+    assert "solo il pagamento in contanti" in transfer_response.json()["detail"]
+
+
 def test_join_submit_without_payment_method_returns_400(client, db):
     org = _ensure_org(db, "payment-method-org")
     email = f"missing-method-{int(datetime.utcnow().timestamp() * 1000)}@example.com"

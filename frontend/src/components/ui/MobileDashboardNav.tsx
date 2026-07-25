@@ -8,6 +8,7 @@ type IconName =
   | "logout"
   | "users"
   | "cards"
+  | "scan"
   | "more"
   | "building"
   | "chart"
@@ -76,6 +77,12 @@ const NavIcon = ({ icon }: { icon: IconName }) => {
       return (
         <svg className={iconClassName} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9h16.5M6 15h2.25m2.25 0h3.75m-8.625 4.125h12.75A2.625 2.625 0 0 0 21 16.5v-9A2.625 2.625 0 0 0 18.375 4.875H5.625A2.625 2.625 0 0 0 3 7.5v9a2.625 2.625 0 0 0 2.625 2.625Z" />
+        </svg>
+      );
+    case "scan":
+      return (
+        <svg className={iconClassName} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4M8 8h3v3H8V8Zm5 0h3v3h-3V8Zm-5 5h3v3H8v-3Zm6 0h2v2h-2v-2Z" />
         </svg>
       );
     case "more":

@@ -19,6 +19,7 @@ from app.models import (
     IngestRateLimit,
     IntegrationApiKey,
     Member,
+    MemberAttendance,
     MemberDocument,
     MemberPayment,
     OperationLog,
@@ -53,6 +54,7 @@ def _collect_dependency_counts(db: Session, org_id: int, org_slug: str) -> dict[
         "members": db.query(Member).filter(Member.org_id == org_id).count(),
         "member_tokens": db.query(Token).filter(Token.member_id.in_(member_ids_query)).count(),
         "member_documents": db.query(MemberDocument).filter(MemberDocument.member_id.in_(member_ids_query)).count(),
+        "member_attendances": db.query(MemberAttendance).filter(MemberAttendance.org_id == org_id).count(),
         "member_payments": db.query(MemberPayment).filter(MemberPayment.org_id == org_id).count(),
         "org_admins": db.query(AdminUser).filter(
             AdminUser.org_id == org_id,
@@ -149,6 +151,9 @@ def _purge_association_dependencies(db: Session, *, org: Organization) -> None:
         ).update({RechargeRequest.card_batch_id: None}, synchronize_session=False)
 
     if member_ids:
+        db.query(MemberAttendance).filter(
+            MemberAttendance.member_id.in_(member_ids)
+        ).delete(synchronize_session=False)
         db.query(Booking).filter(Booking.member_id.in_(member_ids)).update(
             {Booking.member_id: None},
             synchronize_session=False,

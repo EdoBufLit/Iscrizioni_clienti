@@ -718,6 +718,12 @@ def _run_legacy_column_migrations() -> None:
                 "INTEGER DEFAULT 0",
             )
             _add_column_if_missing(
+                conn,
+                "organizations",
+                "cash_only_signup_payment",
+                "INTEGER DEFAULT 0",
+            )
+            _add_column_if_missing(
                 conn, "organizations", "membership_payment_label", "TEXT"
             )
             _add_column_if_missing(
@@ -984,6 +990,15 @@ def _run_legacy_column_migrations() -> None:
                 UPDATE organizations
                    SET custom_membership_types_enabled = FALSE
                  WHERE custom_membership_types_enabled IS NULL
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                UPDATE organizations
+                   SET cash_only_signup_payment = FALSE
+                 WHERE cash_only_signup_payment IS NULL
                 """
             )
         )

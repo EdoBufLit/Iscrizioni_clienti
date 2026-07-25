@@ -164,6 +164,7 @@ def test_org_admin_can_manage_membership_settings_and_create_temporary_member(cl
     assert get_res.status_code == 200, get_res.text
     assert get_res.json()["custom_membership_types_enabled"] is True
     assert get_res.json()["temporary_membership_duration_value"] == 6
+    assert get_res.json()["cash_only_signup_payment"] is False
 
     patch_res = client.patch(
         "/api/org-admin/organization/membership-settings",
@@ -172,6 +173,7 @@ def test_org_admin_can_manage_membership_settings_and_create_temporary_member(cl
             "temporary_membership_fee_amount": 12,
             "temporary_membership_duration_value": 8,
             "temporary_membership_duration_unit": "hours",
+            "cash_only_signup_payment": True,
         },
     )
     assert patch_res.status_code == 200, patch_res.text
@@ -180,6 +182,7 @@ def test_org_admin_can_manage_membership_settings_and_create_temporary_member(cl
     assert patched["temporary_membership_fee_amount"] == 12.0
     assert patched["temporary_membership_duration_value"] == 8
     assert patched["temporary_membership_duration_unit"] == "hours"
+    assert patched["cash_only_signup_payment"] is True
 
     style_res = client.patch(
         "/api/org-admin/organization/membership-settings",

@@ -626,7 +626,6 @@ export default function OrgAdminMemberDetail() {
   if (!member) return <div className="p-8 text-center">Socio non trovato</div>;
 
   const workflowStatus = member.workflow_status ?? "";
-  const isDecisionMade = workflowStatus === "active" || workflowStatus === "rejected";
   const documentStatus =
     member.document_status ??
     (docs.length === 0
@@ -1217,7 +1216,7 @@ export default function OrgAdminMemberDetail() {
                           </button>
                           <AsyncActionButton
                             onClick={() => handleApprove(doc.id)}
-                            disabled={reviewingDocId === doc.id || isDecisionMade}
+                            disabled={reviewingDocId === doc.id}
                             state={docActionStates[doc.id] ?? "idle"}
                             idleLabel="Approva"
                             loadingLabel="Invio..."
@@ -1227,7 +1226,7 @@ export default function OrgAdminMemberDetail() {
                           />
                           <button
                             onClick={() => openRejectModal(doc)}
-                            disabled={reviewingDocId === doc.id || isDecisionMade}
+                            disabled={reviewingDocId === doc.id}
                             className="px-3 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-sm font-medium flex items-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             data-tour="admin-document-reject"
                           >

@@ -34,6 +34,7 @@ from app.routes import (
     member,
     onboarding,
     org_admin,
+    org_admin_attendance,
     public,
     renewals,
     stripe_connect_demo,
@@ -269,6 +270,7 @@ app.include_router(renewals.router)
 # through the SPA catch-all, but its legacy backend routes are intentionally not
 # mounted so privileged access has exactly one MFA-protected entry point.
 app.include_router(org_admin.router)
+app.include_router(org_admin_attendance.router)
 app.include_router(super_admin.router)
 app.include_router(super_admin.associations_router)
 _include_affiliation_routers()

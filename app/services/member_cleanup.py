@@ -8,6 +8,7 @@ from app.models import (
     Booking,
     CardMovement,
     Member,
+    MemberAttendance,
     MemberDocument,
     MemberPayment,
     MembershipPayment,
@@ -188,6 +189,9 @@ def purge_deleted_members_permanently(
             synchronize_session=False,
         )
     db.query(MemberDocument).filter(MemberDocument.member_id.in_(member_ids)).delete(
+        synchronize_session=False
+    )
+    db.query(MemberAttendance).filter(MemberAttendance.member_id.in_(member_ids)).delete(
         synchronize_session=False
     )
     db.query(MemberPayment).filter(MemberPayment.member_id.in_(member_ids)).delete(

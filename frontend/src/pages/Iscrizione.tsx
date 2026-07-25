@@ -122,6 +122,7 @@ const serializeMembershipForm = (value: FormData) =>
 function validateStep1(
   f: FormData,
   requireOnlinePayment: boolean,
+  cashOnlySignupPayment: boolean,
   adultsOnlyEnabled: boolean,
 ): Record<string, string> {
   const e: Record<string, string> = {};
@@ -161,7 +162,7 @@ function validateStep1(
     e.email = "L'indirizzo email non sembra valido.";
   }
   if (!f.telefono.trim()) e.telefono = "Il numero di telefono è obbligatorio.";
-  if (!requireOnlinePayment && !f.modalitaPagamento) {
+  if (!requireOnlinePayment && !cashOnlySignupPayment && !f.modalitaPagamento) {
     e.modalitaPagamento = "Seleziona la modalità di pagamento.";
   }
   if (!f.password || f.password.length < MEMBER_PASSWORD_MIN_LENGTH) {
@@ -671,6 +672,7 @@ const Iscrizione = () => {
   const membershipConfig = org?.membership_config;
   const customMembershipTypesEnabled = Boolean(membershipConfig?.custom_types_enabled);
   const membershipPaymentRequired = Boolean(membershipPaymentConfig?.required);
+  const cashOnlySignupPayment = Boolean(org?.cash_only_signup_payment);
   const membershipPaymentAmount = membershipPaymentConfig?.amount ?? null;
   const membershipPaymentCurrency = membershipPaymentConfig?.currency ?? "EUR";
   const membershipPaymentLabel = membershipPaymentConfig?.label || "Quota associativa";
@@ -860,6 +862,7 @@ const Iscrizione = () => {
       newErrors = validateStep1(
         form,
         membershipPaymentRequired,
+        cashOnlySignupPayment,
         adultsOnlyBannerEnabled,
       );
     } else if (step === 2) {
@@ -893,7 +896,11 @@ const Iscrizione = () => {
       return;
     }
 
-    if (!membershipPaymentRequired && !form.modalitaPagamento) {
+    if (
+      !membershipPaymentRequired
+      && !cashOnlySignupPayment
+      && !form.modalitaPagamento
+    ) {
       setSubmitError("Seleziona la modalità di pagamento.");
       return;
     }
@@ -941,7 +948,9 @@ const Iscrizione = () => {
         accept_privacy: form.privacy,
         marketing_email_consent: form.marketingEmailConsent,
         password: form.password,
-        payment_method: form.modalitaPagamento as "CASH" | "BONIFICO",
+        payment_method: (
+          cashOnlySignupPayment ? "CASH" : form.modalitaPagamento
+        ) as "CASH" | "BONIFICO",
         membership_type: form.membershipType,
         id_document: form.documentoIdentita,
       });
@@ -993,6 +1002,8 @@ const Iscrizione = () => {
   const paymentMethodLabel =
     membershipPaymentRequired
       ? membershipPaymentButtonLabel
+      : cashOnlySignupPayment
+        ? "Contanti"
       : form.modalitaPagamento === "CASH"
       ? "Contanti"
       : form.modalitaPagamento === "BONIFICO"
@@ -1493,6 +1504,22 @@ const Iscrizione = () => {
                             <p className="mt-2 text-sm leading-7 text-slate-700">
                               Per completare l&apos;iscrizione è necessario effettuare il pagamento online. Nel passaggio finale vedrai solo il bottone{" "}
                               <span className="font-semibold text-slate-950">{membershipPaymentButtonLabel}</span>.
+                            </p>
+                          </div>
+                        ) : cashOnlySignupPayment ? (
+                          <div
+                            className="md:col-span-2 rounded-[1.35rem] border border-emerald-200 bg-emerald-50/70 px-5 py-4"
+                            role="status"
+                            aria-label="Modalità di pagamento: Contanti"
+                          >
+                            <p className="text-sm font-semibold text-emerald-900">
+                              Modalità di pagamento
+                            </p>
+                            <p className="mt-1 text-base text-emerald-800">
+                              Contanti
+                            </p>
+                            <p className="mt-1 text-sm leading-6 text-emerald-700">
+                              La quota verrà registrata in contanti direttamente dall&apos;associazione.
                             </p>
                           </div>
                         ) : (

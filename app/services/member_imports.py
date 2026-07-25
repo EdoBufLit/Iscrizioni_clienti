@@ -22,6 +22,7 @@ from app.models import (
     Booking,
     FormSubmission,
     Member,
+    MemberAttendance,
     MemberContactChange,
     MemberDocument,
     MemberImportBatch,
@@ -535,6 +536,7 @@ def rollback_member_import(db: Session, *, batch: MemberImportBatch) -> int:
             )
             for model, foreign_key in (
                 (MemberDocument, "member_id"),
+                (MemberAttendance, "member_id"),
                 (MemberPayment, "member_id"),
                 (MembershipPayment, "socio_id"),
                 (Token, "member_id"),
