@@ -109,4 +109,65 @@ describe("Iscrizione accessibility", () => {
       screen.queryByRole("combobox", { name: "Modalità di pagamento" }),
     ).not.toBeInTheDocument();
   });
+
+  it("annuncia la tessera selezionata come gruppo di opzioni", async () => {
+    fetchOrganizationDetail.mockResolvedValueOnce({
+      id: 1,
+      name: "Associazione Demo",
+      slug: "demo",
+      description: null,
+      address_line1: null,
+      address_line2: null,
+      city: null,
+      province: null,
+      postal_code: null,
+      country: null,
+      email: null,
+      phone: null,
+      website: null,
+      logo_url: null,
+      is_active: true,
+      has_statute: false,
+      require_membership_document: false,
+      membership_payment: {
+        enabled: false,
+        required: false,
+        label: null,
+        amount: null,
+        currency: "EUR",
+        button_label: null,
+      },
+      membership_config: {
+        custom_types_enabled: true,
+        available_types: ["annual", "temporary"],
+        annual_fee_amount: 20,
+        temporary_fee_amount: 5,
+        currency: "EUR",
+        temporary_duration_value: 1,
+        temporary_duration_unit: "days",
+        temporary_duration_label: "1 giorno",
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/associazioni/demo/iscrizione"]}>
+        <Routes>
+          <Route path="/associazioni/:slug/iscrizione" element={<Iscrizione />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const group = await screen.findByRole("radiogroup", { name: "Tipo di tessera" });
+    const annual = screen.getByRole("radio", { name: /Tessera annuale/ });
+    const temporary = screen.getByRole("radio", { name: /Tessera temporanea/ });
+
+    expect(group).toContainElement(annual);
+    expect(annual).toHaveAttribute("aria-checked", "true");
+    expect(temporary).toHaveAttribute("aria-checked", "false");
+
+    fireEvent.click(temporary);
+
+    expect(annual).toHaveAttribute("aria-checked", "false");
+    expect(temporary).toHaveAttribute("aria-checked", "true");
+  });
 });

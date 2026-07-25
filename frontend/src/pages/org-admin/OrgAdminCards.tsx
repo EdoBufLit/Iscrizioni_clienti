@@ -377,6 +377,76 @@ const OrgAdminCards = () => {
       }),
     [movementIdFilter, movementStatusFilter, movements],
   );
+  const membershipRulesPanel = (
+    <SectionPanel title="Regole emissione" eyebrow="Quota e validità">
+      <form className="space-y-4" onSubmit={handleMembershipSettingsSubmit}>
+        <label
+          className={`flex min-h-11 items-start gap-3 rounded-[0.85rem] border px-4 py-4 ${
+            membershipSettings?.online_payment_required
+              ? "cursor-not-allowed border-slate-200 bg-slate-100 opacity-70"
+              : "cursor-pointer border-slate-200 bg-slate-50"
+          }`}
+        >
+          <input
+            key={`cash-only-${membershipSettings?.cash_only_signup_payment ?? false}`}
+            className="mt-0.5 h-6 w-6 shrink-0 rounded border-slate-300 text-brand focus:ring-brand"
+            type="checkbox"
+            name="cash_only_signup_payment"
+            defaultChecked={membershipSettings?.cash_only_signup_payment ?? false}
+            disabled={membershipSettings?.online_payment_required}
+          />
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-slate-800">
+              Solo contanti nel modulo di iscrizione
+            </span>
+            <span className="mt-1 block text-xs leading-5 text-slate-500">
+              {membershipSettings?.online_payment_required
+                ? "Disattiva prima il pagamento online obbligatorio dalla configurazione dell'associazione."
+                : "Il socio vedrà Contanti come unica modalità, senza menu a tendina."}
+            </span>
+          </span>
+        </label>
+
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-700">Prezzo annuale</span>
+            <input className="mt-2 h-11 w-full rounded-[0.75rem] border border-slate-200 bg-white px-4 text-sm" type="number" step="0.01" min="0.01" name="membership_fee_amount" defaultValue={membershipSettings?.membership_fee_amount ?? ""} />
+          </label>
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-700">Valuta</span>
+            <input className="mt-2 h-11 w-full rounded-[0.75rem] border border-slate-200 bg-white px-4 text-sm uppercase" type="text" name="membership_fee_currency" maxLength={8} defaultValue={membershipSettings?.membership_fee_currency ?? "EUR"} />
+          </label>
+          {membershipSettings?.custom_membership_types_enabled ? (
+            <>
+              <label className="block">
+                <span className="text-sm font-semibold text-slate-700">Prezzo temporanea</span>
+                <input className="mt-2 h-11 w-full rounded-[0.75rem] border border-slate-200 bg-white px-4 text-sm" type="number" step="0.01" min="0.01" name="temporary_membership_fee_amount" defaultValue={membershipSettings?.temporary_membership_fee_amount ?? ""} />
+              </label>
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3 sm:col-span-2 xl:col-span-1">
+                <label className="block">
+                  <span className="text-sm font-semibold text-slate-700">Durata</span>
+                  <input className="mt-2 h-11 w-full rounded-[0.75rem] border border-slate-200 bg-white px-4 text-sm" type="number" min="1" name="temporary_membership_duration_value" defaultValue={membershipSettings?.temporary_membership_duration_value ?? 1} />
+                </label>
+                <label className="block">
+                  <span className="text-sm font-semibold text-slate-700">Unità</span>
+                  <select className="mt-2 h-11 w-full rounded-[0.75rem] border border-slate-200 bg-white px-4 text-sm" name="temporary_membership_duration_unit" defaultValue={membershipSettings?.temporary_membership_duration_unit ?? "days"}>
+                    <option value="days">Giorni</option>
+                    <option value="hours">Ore</option>
+                  </select>
+                </label>
+              </div>
+            </>
+          ) : null}
+        </div>
+
+        {membershipSettingsError ? <p className="text-sm text-rose-600">{membershipSettingsError}</p> : null}
+
+        <button type="submit" className="btn-primary w-full justify-center sm:w-auto" disabled={savingMembershipSettings}>
+          {savingMembershipSettings ? "Salvataggio..." : "Salva regole"}
+        </button>
+      </form>
+    </SectionPanel>
+  );
 
   return (
     <div className="container-shell org-admin-mobile-page org-admin-cards-page py-10 space-y-6" data-tour="admin-cards">
@@ -426,6 +496,8 @@ const OrgAdminCards = () => {
               Limite tessere raggiunto. Contatta ASSONAM per richiedere l'estensione del pacchetto tessere.
             </div>
           ) : null}
+
+          {membershipRulesPanel}
 
           <SectionPanel title="Rifornimento tessere" eyebrow="1 tessera = 1 euro">
             <div className="grid gap-5 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.4fr)]">
@@ -737,7 +809,7 @@ const OrgAdminCards = () => {
                 </form>
               </SectionPanel>
 
-            <div className="org-admin-mobile-secondary-panels grid gap-5 xl:grid-cols-3">
+            <div className="org-admin-mobile-secondary-panels grid gap-5 xl:grid-cols-2">
 
               <SectionPanel title="Registro lotti" eyebrow="Disponibilità">
                 <div className="space-y-4">
@@ -764,76 +836,6 @@ const OrgAdminCards = () => {
                     </StatusChip>
                   </div>
                 </div>
-              </SectionPanel>
-
-              <SectionPanel title="Regole emissione" eyebrow="Quota e validità">
-                <form className="space-y-4" onSubmit={handleMembershipSettingsSubmit}>
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                    <label className="block">
-                      <span className="text-sm font-semibold text-slate-700">Prezzo annuale</span>
-                      <input className="mt-2 h-11 w-full rounded-[0.75rem] border border-slate-200 bg-white px-4 text-sm" type="number" step="0.01" min="0.01" name="membership_fee_amount" defaultValue={membershipSettings?.membership_fee_amount ?? ""} />
-                    </label>
-                    <label className="block">
-                      <span className="text-sm font-semibold text-slate-700">Valuta</span>
-                      <input className="mt-2 h-11 w-full rounded-[0.75rem] border border-slate-200 bg-white px-4 text-sm uppercase" type="text" name="membership_fee_currency" maxLength={8} defaultValue={membershipSettings?.membership_fee_currency ?? "EUR"} />
-                    </label>
-                  </div>
-
-                  {membershipSettings?.custom_membership_types_enabled ? (
-                    <div className="space-y-3 border-t border-slate-100 pt-4">
-                      <label className="block">
-                        <span className="text-sm font-semibold text-slate-700">Prezzo temporanea</span>
-                        <input className="mt-2 h-11 w-full rounded-[0.75rem] border border-slate-200 bg-white px-4 text-sm" type="number" step="0.01" min="0.01" name="temporary_membership_fee_amount" defaultValue={membershipSettings?.temporary_membership_fee_amount ?? ""} />
-                      </label>
-                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                        <label className="block">
-                          <span className="text-sm font-semibold text-slate-700">Durata</span>
-                          <input className="mt-2 h-11 w-full rounded-[0.75rem] border border-slate-200 bg-white px-4 text-sm" type="number" min="1" name="temporary_membership_duration_value" defaultValue={membershipSettings?.temporary_membership_duration_value ?? 1} />
-                        </label>
-                        <label className="block">
-                          <span className="text-sm font-semibold text-slate-700">Unita</span>
-                          <select className="mt-2 h-11 w-full rounded-[0.75rem] border border-slate-200 bg-white px-4 text-sm" name="temporary_membership_duration_unit" defaultValue={membershipSettings?.temporary_membership_duration_unit ?? "days"}>
-                            <option value="days">Giorni</option>
-                            <option value="hours">Ore</option>
-                          </select>
-                        </label>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  <label
-                    className={`flex items-start gap-3 rounded-[0.85rem] border px-4 py-4 ${
-                      membershipSettings?.online_payment_required
-                        ? "cursor-not-allowed border-slate-200 bg-slate-100 opacity-70"
-                        : "cursor-pointer border-slate-200 bg-slate-50"
-                    }`}
-                  >
-                    <input
-                      key={`cash-only-${membershipSettings?.cash_only_signup_payment ?? false}`}
-                      className="mt-1 rounded border-slate-300 text-brand focus:ring-brand"
-                      type="checkbox"
-                      name="cash_only_signup_payment"
-                      defaultChecked={membershipSettings?.cash_only_signup_payment ?? false}
-                      disabled={membershipSettings?.online_payment_required}
-                    />
-                    <span>
-                      <span className="block text-sm font-semibold text-slate-800">
-                        Solo contanti nel modulo di iscrizione
-                      </span>
-                      <span className="mt-1 block text-xs leading-5 text-slate-500">
-                        {membershipSettings?.online_payment_required
-                          ? "Disattiva prima il pagamento online obbligatorio dalla configurazione dell'associazione."
-                          : "Il socio vedrà Contanti come unica modalità, senza menu a tendina."}
-                      </span>
-                    </span>
-                  </label>
-
-                  {membershipSettingsError ? <p className="text-sm text-rose-600">{membershipSettingsError}</p> : null}
-
-                  <button type="submit" className="btn-primary w-full justify-center" disabled={savingMembershipSettings}>
-                    {savingMembershipSettings ? "Salvataggio..." : "Salva regole"}
-                  </button>
-                </form>
               </SectionPanel>
 
               <SectionPanel title="Totale quote" eyebrow="Contabilità">

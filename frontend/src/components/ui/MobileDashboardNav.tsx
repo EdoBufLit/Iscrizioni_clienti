@@ -33,6 +33,7 @@ type MobileDashboardNavProps = {
   moreLabel?: string;
   moreTitle?: string;
   moreContent?: ReactNode;
+  desktopBreakpoint?: "md" | "lg";
 };
 
 const iconClassName = "h-[1.15rem] w-[1.15rem]";
@@ -139,12 +140,15 @@ const MobileDashboardNav = ({
   moreLabel = "Altro",
   moreTitle = "Altre azioni",
   moreContent,
+  desktopBreakpoint = "md",
 }: MobileDashboardNavProps) => {
   const location = useLocation();
   const [sheetOpen, setSheetOpen] = useState(false);
   const sheetTitleId = useId();
+  const sheetId = `${sheetTitleId}-sheet`;
   const sheetPanelRef = useRef<HTMLDivElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const responsiveVisibilityClass = desktopBreakpoint === "lg" ? "lg:hidden" : "md:hidden";
 
   const hasMore = moreItems.length > 0;
   const moreActive = useMemo(
@@ -222,7 +226,13 @@ const MobileDashboardNav = ({
 
     if (item.to) {
       return (
-        <Link key={item.key} to={item.to} className={baseClass} aria-current={isActive ? "page" : undefined}>
+        <Link
+          key={item.key}
+          to={item.to}
+          className={baseClass}
+          aria-current={isActive ? "page" : undefined}
+          onClick={mode === "sheet" ? () => setSheetOpen(false) : undefined}
+        >
           {content}
         </Link>
       );
@@ -245,7 +255,10 @@ const MobileDashboardNav = ({
 
   return (
     <>
-      <div className="mobile-dashboard-nav md:hidden" aria-label="Navigazione dashboard mobile">
+      <nav
+        className={`mobile-dashboard-nav ${responsiveVisibilityClass}`}
+        aria-label="Navigazione dashboard mobile"
+      >
         <div className="mobile-dashboard-nav__shell">
           {items.map((item) => renderAction(item, "bar"))}
           {hasMore && (
@@ -254,7 +267,7 @@ const MobileDashboardNav = ({
               onClick={() => setSheetOpen(true)}
               className={`mobile-dashboard-nav__item ${sheetOpen || moreActive ? "mobile-dashboard-nav__item--active" : ""}`}
               aria-expanded={sheetOpen}
-              aria-controls="mobile-dashboard-more-sheet"
+              aria-controls={sheetId}
             >
               <span className="mobile-dashboard-nav__icon">
                 <NavIcon icon="more" />
@@ -263,12 +276,12 @@ const MobileDashboardNav = ({
             </button>
           )}
         </div>
-      </div>
+      </nav>
 
       {hasMore && sheetOpen && (
         <div
-          className="mobile-dashboard-sheet md:hidden"
-          id="mobile-dashboard-more-sheet"
+          className={`mobile-dashboard-sheet ${responsiveVisibilityClass}`}
+          id={sheetId}
           role="dialog"
           aria-modal="true"
           aria-labelledby={sheetTitleId}
@@ -298,10 +311,12 @@ const MobileDashboardNav = ({
                 </svg>
               </button>
             </div>
-            <div className="mobile-dashboard-sheet__grid">
-              {moreItems.map((item) => renderAction(item, "sheet"))}
+            <div className="mobile-dashboard-sheet__scroll">
+              <div className="mobile-dashboard-sheet__grid">
+                {moreItems.map((item) => renderAction(item, "sheet"))}
+              </div>
+              {moreContent ? <div className="mobile-dashboard-sheet__extra">{moreContent}</div> : null}
             </div>
-            {moreContent ? <div className="mt-3">{moreContent}</div> : null}
           </div>
         </div>
       )}

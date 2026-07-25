@@ -47,6 +47,20 @@ if (isPerfEnabled() && !(window as Window & { __perfInit?: boolean }).__perfInit
 }
 
 if (import.meta.env.PROD && !isPublicFormRoute && "serviceWorker" in navigator) {
+  const reloadForUpdatedServiceWorker = Boolean(navigator.serviceWorker.controller);
+  let updateReloadStarted = false;
+  if (reloadForUpdatedServiceWorker) {
+    navigator.serviceWorker.addEventListener(
+      "controllerchange",
+      () => {
+        if (updateReloadStarted) return;
+        if (document.documentElement.dataset.unsavedChanges === "true") return;
+        updateReloadStarted = true;
+        window.location.reload();
+      },
+      { once: true },
+    );
+  }
   registerSW({
     immediate: true,
     onRegisteredSW(

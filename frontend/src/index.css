@@ -2457,7 +2457,7 @@ body::before {
     right: 0;
     bottom: 0;
     z-index: 45;
-    padding: 0 0.95rem calc(0.9rem + env(safe-area-inset-bottom, 0px));
+    padding: 0 clamp(0.4rem, 2vw, 0.95rem) calc(0.9rem + env(safe-area-inset-bottom, 0px));
     pointer-events: none;
   }
 
@@ -2476,6 +2476,7 @@ body::before {
 
   .mobile-dashboard-nav__item {
     @apply flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-[1.4rem] px-2 py-2.5 text-center text-[11px] font-bold tracking-tight text-neutral-500 transition-all duration-200;
+    min-height: 3.75rem;
   }
 
   .mobile-dashboard-nav__item--active {
@@ -2521,11 +2522,11 @@ body::before {
   }
 
   .mobile-dashboard-sheet__panel {
-    @apply absolute bottom-0 left-0 right-0 rounded-t-[2rem] border border-white/60 px-5 pb-6 pt-3 shadow-2xl;
+    @apply absolute bottom-0 left-0 right-0 flex flex-col overflow-hidden rounded-t-[2rem] border border-white/60 px-5 pt-3 shadow-2xl;
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(251, 248, 241, 0.97)),
       radial-gradient(circle at top, rgba(198, 160, 79, 0.16), transparent 46%);
-    padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+    max-height: calc(100dvh - max(0.75rem, env(safe-area-inset-top, 0px)));
     animation: mobile-dashboard-sheet-in 280ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
@@ -2534,7 +2535,7 @@ body::before {
   }
 
   .mobile-dashboard-sheet__header {
-    @apply mt-4 flex items-start justify-between gap-4;
+    @apply mt-4 flex shrink-0 items-start justify-between gap-4;
   }
 
   .mobile-dashboard-sheet__eyebrow {
@@ -2547,7 +2548,15 @@ body::before {
   }
 
   .mobile-dashboard-sheet__close {
-    @apply flex h-10 w-10 items-center justify-center rounded-full border border-neutral-200 bg-white/80 text-neutral-500;
+    @apply flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-neutral-200 bg-white/80 text-neutral-500;
+  }
+
+  .mobile-dashboard-sheet__scroll {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
   }
 
   .mobile-dashboard-sheet__grid {
@@ -2556,6 +2565,7 @@ body::before {
 
   .mobile-dashboard-sheet__action {
     @apply flex items-center gap-3 rounded-[1.4rem] border border-neutral-200/70 bg-white/85 px-4 py-3.5 text-left text-sm font-semibold text-neutral-700 shadow-sm transition-all duration-200;
+    min-height: 3.5rem;
   }
 
   .mobile-dashboard-sheet__action--danger {
@@ -2577,6 +2587,10 @@ body::before {
     @apply min-w-0 flex-1 truncate;
   }
 
+  .mobile-dashboard-sheet__extra {
+    @apply mt-3;
+  }
+
   @keyframes mobile-dashboard-sheet-in {
     from {
       transform: translateY(1.5rem);
@@ -2585,6 +2599,12 @@ body::before {
     to {
       transform: translateY(0);
       opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .mobile-dashboard-sheet__panel {
+      animation-duration: 1ms;
     }
   }
 
@@ -8307,7 +8327,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   .org-admin-v2 .org-admin-mobile-page {
     max-width: 100%;
     overflow-x: hidden;
-    padding: 1rem 0.75rem calc(7.5rem + env(safe-area-inset-bottom, 0px)) !important;
+    padding: 1rem 0.75rem !important;
   }
 
   .org-admin-v2 .org-admin-desktop-kpi-grid,

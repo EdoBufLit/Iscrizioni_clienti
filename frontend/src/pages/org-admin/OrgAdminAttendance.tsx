@@ -356,34 +356,67 @@ const OrgAdminAttendancePage = () => {
             description="Le presenze registrate tramite QR compariranno qui in ordine di ingresso."
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[700px] text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase tracking-[0.12em] text-slate-500">
-                <tr>
-                  <th className="px-5 py-3 font-semibold">Ora ingresso</th>
-                  <th className="px-5 py-3 font-semibold">Socio</th>
-                  <th className="px-5 py-3 font-semibold">Tessera</th>
-                  <th className="px-5 py-3 font-semibold">Tipo</th>
-                  <th className="px-5 py-3 font-semibold">Stato</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {items.map((item) => (
-                  <tr key={item.id} className="transition-colors hover:bg-slate-50/70">
-                    <td className="px-5 py-4 font-semibold tabular-nums text-slate-950">
-                      {formatTime(item.checked_in_at)}
-                    </td>
-                    <td className="px-5 py-4 font-medium text-slate-900">{item.member_name}</td>
-                    <td className="px-5 py-4 tabular-nums text-slate-600">
-                      {item.card_no} / {item.card_year}
-                    </td>
-                    <td className="px-5 py-4 text-slate-600">{membershipLabel(item.membership_type)}</td>
-                    <td className="px-5 py-4"><StatusChip tone="success">Presente</StatusChip></td>
+          <>
+            <div className="divide-y divide-slate-100 md:hidden">
+              {items.map((item) => (
+                <article key={item.id} className="p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="break-words font-semibold text-slate-950 [overflow-wrap:anywhere]">
+                        {item.member_name}
+                      </p>
+                      <p className="mt-1 text-sm tabular-nums text-slate-500">
+                        Tessera {item.card_no} / {item.card_year}
+                      </p>
+                    </div>
+                    <StatusChip tone="success">Presente</StatusChip>
+                  </div>
+                  <dl className="mt-4 grid grid-cols-2 gap-3 rounded-[1rem] bg-slate-50 px-4 py-3 text-sm">
+                    <div>
+                      <dt className="text-slate-500">Ora ingresso</dt>
+                      <dd className="mt-1 font-semibold tabular-nums text-slate-950">
+                        {formatTime(item.checked_in_at)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-slate-500">Tipo tessera</dt>
+                      <dd className="mt-1 font-semibold text-slate-950">
+                        {membershipLabel(item.membership_type)}
+                      </dd>
+                    </div>
+                  </dl>
+                </article>
+              ))}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[700px] text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase tracking-[0.12em] text-slate-500">
+                  <tr>
+                    <th className="px-5 py-3 font-semibold">Ora ingresso</th>
+                    <th className="px-5 py-3 font-semibold">Socio</th>
+                    <th className="px-5 py-3 font-semibold">Tessera</th>
+                    <th className="px-5 py-3 font-semibold">Tipo</th>
+                    <th className="px-5 py-3 font-semibold">Stato</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {items.map((item) => (
+                    <tr key={item.id} className="transition-colors hover:bg-slate-50/70">
+                      <td className="px-5 py-4 font-semibold tabular-nums text-slate-950">
+                        {formatTime(item.checked_in_at)}
+                      </td>
+                      <td className="px-5 py-4 font-medium text-slate-900">{item.member_name}</td>
+                      <td className="px-5 py-4 tabular-nums text-slate-600">
+                        {item.card_no} / {item.card_year}
+                      </td>
+                      <td className="px-5 py-4 text-slate-600">{membershipLabel(item.membership_type)}</td>
+                      <td className="px-5 py-4"><StatusChip tone="success">Presente</StatusChip></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </SectionPanel>
     </div>

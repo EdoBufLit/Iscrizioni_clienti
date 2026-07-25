@@ -58,6 +58,17 @@ export const UnsavedChangesProvider = ({ children }: { children: ReactNode }) =>
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [activeGuards.length]);
 
+  useEffect(() => {
+    if (activeGuards.length) {
+      document.documentElement.dataset.unsavedChanges = "true";
+    } else {
+      delete document.documentElement.dataset.unsavedChanges;
+    }
+    return () => {
+      delete document.documentElement.dataset.unsavedChanges;
+    };
+  }, [activeGuards.length]);
+
   const blocker = useBlocker(
     useCallback(
       ({

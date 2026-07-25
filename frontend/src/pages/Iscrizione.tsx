@@ -238,11 +238,11 @@ const StepIndicator = ({ current, progress, shouldReduceMotion }: StepIndicatorP
     </p>
     <div className="relative px-2 pt-2">
       <div
-        className="absolute left-[16.66%] right-[16.66%] top-8 h-[3px] rounded-full bg-slate-200"
+        className="absolute left-[16.66%] right-[16.66%] top-7 h-[3px] rounded-full bg-slate-200 sm:top-8"
         aria-hidden="true"
       />
       <motion.div
-        className="absolute left-[16.66%] top-8 h-[3px] rounded-full bg-gradient-to-r from-indigo-500 to-violet-500"
+        className="absolute left-[16.66%] top-7 h-[3px] rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 sm:top-8"
         initial={false}
         animate={{ width: `calc((66.68%) * ${progress / 100})` }}
         transition={shouldReduceMotion ? { duration: 0.01 } : { duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
@@ -270,7 +270,7 @@ const StepIndicator = ({ current, progress, shouldReduceMotion }: StepIndicatorP
                       : "0 6px 14px rgba(148, 163, 184, 0.12)",
                 }}
                 transition={shouldReduceMotion ? { duration: 0.01 } : { duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-                className={`relative z-10 flex h-14 w-14 items-center justify-center rounded-full border text-lg font-semibold ${
+                className={`relative z-10 flex h-12 w-12 items-center justify-center rounded-full border text-base font-semibold sm:h-14 sm:w-14 sm:text-lg ${
                   completed || active
                     ? "border-indigo-500 bg-gradient-to-br from-indigo-500 to-violet-500 text-white"
                     : "border-slate-200 bg-white text-slate-400"
@@ -299,7 +299,7 @@ const StepIndicator = ({ current, progress, shouldReduceMotion }: StepIndicatorP
                 </AnimatePresence>
               </motion.div>
               <p
-                className={`mt-4 text-sm font-semibold md:text-base ${
+                className={`mt-3 text-xs font-semibold sm:mt-4 sm:text-sm md:text-base ${
                   active || completed ? "text-slate-900" : "text-slate-400"
                 }`}
               >
@@ -327,7 +327,7 @@ const CardHeader = ({ iconPath, title, description, rightSlot }: CardHeaderProps
         {iconFor(iconPath, "h-7 w-7")}
       </div>
       <div>
-        <h2 className="text-2xl font-semibold tracking-tight text-slate-950">{title}</h2>
+        <h2 className="text-xl font-semibold tracking-tight text-slate-950 sm:text-2xl">{title}</h2>
         <p className="mt-1 text-base leading-7 text-slate-500">{description}</p>
       </div>
     </div>
@@ -453,7 +453,7 @@ type CheckboxCardProps = {
 };
 
 const CheckboxCard = ({ id, checked, error, label, description, onChange }: CheckboxCardProps) => (
-  <label
+  <div
     className={`block rounded-[1.8rem] border px-5 py-5 transition md:px-7 ${
       error
         ? "border-rose-200 bg-rose-50/40"
@@ -463,22 +463,29 @@ const CheckboxCard = ({ id, checked, error, label, description, onChange }: Chec
     }`}
   >
     <div className="flex items-start gap-4">
-      <input
-        id={id}
-        className="mt-1 h-6 w-6 rounded-full border-2 border-slate-300 text-indigo-600 focus:ring-indigo-200"
-        type="checkbox"
-        checked={checked}
-        onChange={onChange}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={error ? `${id}-message` : undefined}
-      />
+      <label
+        htmlFor={id}
+        className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full"
+      >
+        <input
+          id={id}
+          className="h-6 w-6 rounded-full border-2 border-slate-300 text-indigo-600 focus:ring-indigo-200"
+          type="checkbox"
+          checked={checked}
+          onChange={onChange}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${id}-message` : undefined}
+        />
+      </label>
       <div className="min-w-0">
-        <div className="text-lg font-semibold text-slate-950">{label}</div>
+        <label htmlFor={id} className="cursor-pointer text-lg font-semibold text-slate-950">
+          {label}
+        </label>
         <div className="mt-2 text-base leading-7 text-slate-600">{description}</div>
       </div>
     </div>
     {error ? <FieldMessage id={`${id}-message`} message={error} tone="error" /> : null}
-  </label>
+  </div>
 );
 
 type SummaryItemProps = {
@@ -488,9 +495,9 @@ type SummaryItemProps = {
 };
 
 const SummaryItem = ({ label, value, muted = false }: SummaryItemProps) => (
-  <div className="border-b border-slate-100 pb-5 last:border-b-0 last:pb-0">
+  <div className="min-w-0 border-b border-slate-100 pb-5 last:border-b-0 last:pb-0">
     <dt className="text-sm font-medium text-slate-500">{label}</dt>
-    <dd className={`mt-2 text-2xl font-semibold tracking-tight ${muted ? "text-slate-400" : "text-slate-950"}`}>
+    <dd className={`mt-2 break-words text-lg font-semibold tracking-tight [overflow-wrap:anywhere] sm:text-2xl ${muted ? "text-slate-400" : "text-slate-950"}`}>
       {value}
     </dd>
   </div>
@@ -1045,11 +1052,11 @@ const Iscrizione = () => {
 
   if (orgLoading) {
     return (
-      <section className="signup-wizard-shell py-16 md:py-20" data-reveal="fade-up">
+      <section className="signup-wizard-shell py-10 sm:py-16 md:py-20" data-reveal="fade-up">
         <div className="container-shell max-w-4xl">
           <div className="mx-auto max-w-3xl">
             <Skeleton className="mx-auto h-8 w-60" />
-            <Skeleton className="mx-auto mt-4 h-5 w-96" />
+            <Skeleton className="mx-auto mt-4 h-5 w-full max-w-96" />
             <Skeleton className="mt-12 h-80 rounded-[2rem]" />
           </div>
         </div>
@@ -1059,7 +1066,7 @@ const Iscrizione = () => {
 
   if (orgError || !org) {
     return (
-      <section className="signup-wizard-shell py-16 md:py-20" data-reveal="fade-up">
+      <section className="signup-wizard-shell py-10 sm:py-16 md:py-20" data-reveal="fade-up">
         <div className="container-shell">
           <div className="surface mx-auto max-w-2xl p-8">
             <h1 className="text-lg font-semibold text-neutral-900">Associazione non trovata</h1>
@@ -1079,7 +1086,7 @@ const Iscrizione = () => {
 
   if (submitted) {
     return (
-      <section className="signup-wizard-shell py-16 md:py-20" data-reveal="fade-up">
+      <section className="signup-wizard-shell py-10 sm:py-16 md:py-20" data-reveal="fade-up">
         <div className="container-shell">
           <div className="signup-wizard-card mx-auto max-w-2xl px-8 py-10 text-center md:px-12 md:py-14">
             <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 ring-8 ring-white shadow-[0_20px_45px_-30px_rgba(79,70,229,0.45)]">
@@ -1111,7 +1118,7 @@ const Iscrizione = () => {
   }
 
   return (
-    <section className="signup-wizard-shell py-16 md:py-20" data-reveal="fade-up">
+    <section className="signup-wizard-shell py-10 sm:py-16 md:py-20" data-reveal="fade-up">
       <div className="container-shell max-w-[1180px]">
         <div className="mx-auto max-w-5xl">
           <div className="mb-8 flex items-center justify-center gap-2 text-sm font-medium text-slate-400">
@@ -1123,10 +1130,10 @@ const Iscrizione = () => {
           </div>
 
           <header className="text-center">
-            <h1 className="text-5xl font-semibold tracking-tight text-slate-950 md:text-6xl">
+            <h1 className="text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl md:text-6xl">
               Diventa socio
             </h1>
-            <p className="mx-auto mt-5 max-w-3xl text-xl leading-9 text-slate-500 md:text-[1.75rem]">
+            <p className="mx-auto mt-4 max-w-3xl text-lg leading-8 text-slate-500 sm:mt-5 sm:text-xl sm:leading-9 md:text-[1.75rem]">
               Siamo felici di averti a bordo. Iniziamo con i tuoi dati fondamentali.
             </p>
           </header>
@@ -1147,11 +1154,11 @@ const Iscrizione = () => {
             </div>
           ) : null}
 
-          <div className="mt-12 md:mt-14">
+          <div className="mt-9 sm:mt-12 md:mt-14">
             <StepIndicator current={step} progress={progress} shouldReduceMotion={shouldReduceMotion} />
           </div>
 
-          <form className="mt-10 md:mt-14" onSubmit={handleSubmit}>
+          <form className="mt-8 sm:mt-10 md:mt-14" onSubmit={handleSubmit}>
             <div className="space-y-4">
               {hasErrors ? (
                 <div
@@ -1215,7 +1222,11 @@ const Iscrizione = () => {
                           description="Seleziona il tipo di tessera prima di completare l'iscrizione. La durata della temporanea segue la regola generale impostata dall'associazione."
                         />
 
-                        <div className="mt-8 grid gap-4 md:grid-cols-2">
+                        <div
+                          className="mt-8 grid gap-4 md:grid-cols-2"
+                          role="radiogroup"
+                          aria-label="Tipo di tessera"
+                        >
                           {[
                             {
                               value: "annual" as const,
@@ -1240,6 +1251,8 @@ const Iscrizione = () => {
                               <button
                                 key={option.value}
                                 type="button"
+                                role="radio"
+                                aria-checked={active}
                                 onClick={() => updateField("membershipType", option.value)}
                                 className={`rounded-[1.8rem] border px-6 py-6 text-left transition ${
                                   active
@@ -1346,7 +1359,7 @@ const Iscrizione = () => {
                             <label htmlFor="comuneNascita" className={labelClass}>
                               {form.statoEsteroNascita ? "Stato estero di nascita" : "Comune di nascita"}
                             </label>
-                            <label className="inline-flex items-center gap-3 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50/30">
+                            <label className="inline-flex min-h-11 items-center gap-3 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50/30">
                               <input
                                 className="h-5 w-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-200"
                                 type="checkbox"
@@ -1642,8 +1655,9 @@ const Iscrizione = () => {
                                 <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-white text-slate-400 shadow-[0_18px_35px_-26px_rgba(15,23,42,0.16)] transition group-hover:text-indigo-600">
                                   {iconFor("M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5", "h-9 w-9")}
                                 </div>
-                                <h3 className="mt-6 text-2xl font-semibold tracking-tight text-slate-950">
-                                  Trascina qui o clicca per esplorare
+                                <h3 className="mt-6 text-xl font-semibold tracking-tight text-slate-950 sm:text-2xl">
+                                  <span className="md:hidden">Tocca per scegliere o scattare una foto</span>
+                                  <span className="hidden md:inline">Trascina qui o clicca per esplorare</span>
                                 </h3>
                                 <p className="mt-3 text-base text-slate-500">
                                   {publicUploadHint}
@@ -1702,7 +1716,7 @@ const Iscrizione = () => {
                                 Dichiaro di aver letto l'informativa sul trattamento dei dati personali prima di proseguire.
                               </span>{" "}
                               <Link
-                                className="inline-flex items-center rounded-full bg-indigo-50 px-3 py-1 text-sm font-semibold text-indigo-600 transition hover:bg-indigo-100"
+                                className="inline-flex min-h-11 items-center rounded-full bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-600 transition hover:bg-indigo-100"
                                 to="/privacy"
                                 target="_blank"
                                 rel="noreferrer"
@@ -1736,7 +1750,7 @@ const Iscrizione = () => {
                                 </span>{" "}
                                 {org.statute_url ? (
                                   <a
-                                    className="inline-flex items-center rounded-full bg-indigo-50 px-3 py-1 text-sm font-semibold text-indigo-600 transition hover:bg-indigo-100"
+                                    className="inline-flex min-h-11 items-center rounded-full bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-600 transition hover:bg-indigo-100"
                                     href={org.statute_url}
                                     target="_blank"
                                     rel="noopener noreferrer"
@@ -1763,10 +1777,10 @@ const Iscrizione = () => {
                       <p className="mt-8 text-sm font-semibold uppercase tracking-[0.24em] text-indigo-500">
                         {STEPS[step - 1].title}
                       </p>
-                      <h2 className="mt-4 text-4xl font-semibold tracking-tight text-slate-950 md:text-5xl">
+                      <h2 className="mt-4 break-words text-3xl font-semibold tracking-tight text-slate-950 [overflow-wrap:anywhere] sm:text-4xl md:text-5xl">
                         Tutto pronto, {fullName}!
                       </h2>
-                      <p className="mx-auto mt-5 max-w-3xl text-xl leading-9 text-slate-500">
+                      <p className="mx-auto mt-5 max-w-3xl text-lg leading-8 text-slate-500 sm:text-xl sm:leading-9">
                         Controlla un'ultima volta il riepilogo dei tuoi dati prima di confermare ufficialmente la tua richiesta di iscrizione.
                       </p>
                     </div>
@@ -1909,7 +1923,7 @@ const Iscrizione = () => {
                 </button>
               ) : (
                 <button
-                  className={`${primaryActionClass} min-w-[240px] disabled:cursor-not-allowed disabled:opacity-70`}
+                  className={`${primaryActionClass} w-full disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto sm:min-w-[240px]`}
                   type="button"
                   disabled={submitting || !confirmReady}
                   onClick={() => {

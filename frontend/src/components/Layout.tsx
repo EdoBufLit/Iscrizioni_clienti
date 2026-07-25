@@ -58,6 +58,8 @@ const Layout = () => {
     location.pathname === "/org-admin/login" ||
     location.pathname === "/super-admin/login";
   const isPublicFormRoute = location.pathname.startsWith("/forms/");
+  const isMembershipSignupRoute =
+    location.pathname.includes("/iscrizione");
   const showPublicChrome = !isDashboardRoute && !isStandaloneAuthRoute && !isPublicFormRoute;
 
   usePublicMotion({ enabled: !isDashboardRoute, key: location.pathname });
@@ -334,7 +336,7 @@ const Layout = () => {
             isDashboardRoute ? "" : isStandaloneAuthRoute ? "auth-route-main" : "public-main"
           }
         >
-          {showPublicChrome ? <InstallAppPrompt hidden={menuOpen} /> : null}
+          {showPublicChrome && !isMembershipSignupRoute ? <InstallAppPrompt hidden={menuOpen} /> : null}
           {isDashboardRoute ? (
             <Outlet />
           ) : (

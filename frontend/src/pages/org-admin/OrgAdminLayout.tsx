@@ -466,7 +466,7 @@ const OrgAdminLayout = () => {
               </div>
             </header>
 
-            <main className="dashboard-mobile-safe org-admin-content animate-in fade-in duration-500 md:pb-0">
+            <main className="dashboard-mobile-safe org-admin-content animate-in fade-in duration-500 lg:pb-0">
               <Outlet />
             </main>
           </div>
@@ -477,6 +477,7 @@ const OrgAdminLayout = () => {
             items={mobilePrimaryNav}
             moreItems={mobileMoreNav}
             moreTitle="Altro"
+            desktopBreakpoint="lg"
             moreContent={
               <ReviewGuideButton className="mobile-dashboard-sheet__action w-full justify-start rounded-[1.25rem] border border-neutral-200/70 bg-white/85 px-4 py-3.5 text-sm font-semibold text-neutral-700 shadow-sm" />
             }
