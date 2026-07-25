@@ -232,7 +232,12 @@ const OrgAdminAttendancePage = () => {
                   </p>
                 </div>
               ) : (
-                <div className="pointer-events-none absolute inset-[14%] rounded-[1.4rem] border-2 border-emerald-300 shadow-[0_0_0_999px_rgba(2,6,23,0.35)]" />
+                <div
+                  className="attendance-scanner-frame pointer-events-none absolute inset-[14%] border-2"
+                  data-testid="attendance-scanner-frame"
+                  style={{ backgroundColor: "transparent" }}
+                  aria-hidden="true"
+                />
               )}
             </div>
 

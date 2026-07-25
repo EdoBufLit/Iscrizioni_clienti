@@ -75,6 +75,12 @@ describe("OrgAdminAttendance camera startup", () => {
     expect(
       screen.getByRole("button", { name: "Ferma fotocamera" }),
     ).toBeInTheDocument();
+    const scannerFrame = screen.getByTestId("attendance-scanner-frame");
+    expect(scannerFrame).toHaveClass("attendance-scanner-frame");
+    expect(scannerFrame.getAttribute("style")).toContain(
+      "background-color: transparent",
+    );
+    expect(scannerFrame).not.toHaveClass("rounded-[1.4rem]");
   });
 
   it("explains a server policy block without pretending a prompt was rejected", async () => {
