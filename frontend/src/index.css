@@ -2619,6 +2619,7 @@ body::before {
     perspective: 1000px;
     position: relative;
     display: block;
+    max-width: 100%;
     border-radius: 28px;
     outline: none;
     transition: transform 220ms ease;
@@ -2659,6 +2660,72 @@ body::before {
 
   .member-card-face-back {
     transform: rotateY(180deg) translateZ(1px);
+  }
+
+  /*
+   * The membership card is landscape. Keep the back content in a landscape
+   * composition as well, so the QR quiet zone always stays inside the artwork.
+   * The previous fixed 144/160 px QR plus a vertical details panel required
+   * more height than the card could provide at every phone width.
+   */
+  .member-card-face-back > span.relative.flex {
+    box-sizing: border-box;
+    display: grid;
+    min-height: 0;
+    min-width: 0;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    justify-content: center;
+    gap: clamp(0.75rem, 2.5vw, 1.25rem);
+    padding: clamp(0.75rem, 3vw, 1.5rem);
+  }
+
+  .member-card-face-back > span.relative.flex > span.grid {
+    flex: none;
+    padding: clamp(0.5rem, 1.5vw, 0.75rem);
+  }
+
+  .member-card-face-back
+    > span.relative.flex
+    > span.grid
+    > :is(img, span) {
+    width: clamp(7rem, 30vw, 10rem);
+    height: clamp(7rem, 30vw, 10rem);
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+
+  .member-card-face-back > span.relative.flex > span.mt-4.w-full {
+    min-width: 0;
+    margin-top: 0;
+    padding: clamp(0.55rem, 1.5vw, 0.75rem)
+      clamp(0.7rem, 2vw, 1rem);
+  }
+
+  @media (max-width: 47.999rem) {
+    .member-card-face-back > span.relative.flex {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.55rem 0.75rem;
+    }
+
+    .member-card-face-back
+      > span.relative.flex
+      > span.grid
+      > :is(img, span) {
+      width: clamp(6rem, 31vw, 7rem);
+      height: clamp(6rem, 31vw, 7rem);
+    }
+
+    .member-card-face-back > span.relative.flex > span.grid {
+      padding: 0.375rem;
+    }
+
+    .member-card-face-back > span.relative.flex > span.mt-4.w-full {
+      display: none;
+    }
   }
 
   .referral-wheel-wrap {

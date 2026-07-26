@@ -345,11 +345,17 @@ select:focus {
 
 .theme-toggle {
   display: inline-flex;
+  box-sizing: border-box;
+  flex: 0 0 3.75rem;
   align-items: center;
   justify-content: center;
+  height: 2.75rem;
   min-height: 2.75rem;
-  width: 3.25rem;
+  min-width: 3.75rem;
+  width: 3.75rem;
   padding: 0.15rem;
+  overflow: hidden;
+  appearance: none;
   border-radius: 999px;
   border: 1px solid var(--theme-border);
   background: color-mix(in srgb, var(--theme-surface-solid) 90%, transparent);
@@ -378,20 +384,22 @@ select:focus {
 .theme-toggle__track {
   position: relative;
   display: block;
-  height: 100%;
+  height: 2.25rem;
   width: 100%;
+  overflow: hidden;
   border-radius: inherit;
   background: linear-gradient(135deg, color-mix(in srgb, var(--theme-brand) 10%, transparent), color-mix(in srgb, var(--theme-accent) 12%, transparent));
 }
 
 .theme-toggle__thumb {
   position: absolute;
-  top: 0.125rem;
-  left: 0.125rem;
+  top: 50%;
+  left: 0.25rem;
   z-index: 0;
-  height: 1.4rem;
-  width: 1.4rem;
+  height: 1.5rem;
+  width: 1.5rem;
   border-radius: 999px;
+  transform: translateY(-50%);
   background: color-mix(in srgb, var(--theme-surface-solid) 96%, transparent);
   box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.45);
   transition:
@@ -400,7 +408,7 @@ select:focus {
 }
 
 .theme-toggle.is-dark .theme-toggle__thumb {
-  transform: translateX(1.25rem);
+  transform: translate(1.375rem, -50%);
 }
 
 .theme-toggle__glyph {
@@ -421,12 +429,12 @@ select:focus {
 }
 
 .theme-toggle__glyph--sun {
-  left: 0.4rem;
+  left: 0.55rem;
   color: #d38b18;
 }
 
 .theme-toggle__glyph--moon {
-  right: 0.4rem;
+  right: 0.55rem;
   color: #486a8c;
 }
 
