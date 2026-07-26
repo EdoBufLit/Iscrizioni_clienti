@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import String, cast, func, or_
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import audit
@@ -13,18 +12,15 @@ from app.db import get_db
 from app.middleware import get_client_ip, get_request_id
 from app.models import (
     AdminRole,
-    AnnualMembershipTerm,
     Member,
     MemberAttendance,
-    MembershipType,
 )
 from app.services.annual_memberships import as_rome_datetime
-from app.services.card_verification import (
-    extract_card_verification_token,
-    parse_card_verification_token,
-    resolve_card_verification_membership,
+from app.services.attendance import (
+    check_in_member_from_qr,
+    serialize_attendance,
+    serialize_utc,
 )
-from app.services.member_membership import resolve_member_membership_type
 from app.services.org_admin_sessions import get_current_org_admin_from_request
 
 
@@ -44,50 +40,6 @@ def _current_admin(request: Request, db: Session):
     return admin
 
 
-def _serialize_utc(value: datetime) -> str:
-    rendered = value.isoformat()
-    if value.tzinfo is None:
-        return f"{rendered}Z"
-    return rendered
-
-
-def _serialize_attendance(item: MemberAttendance) -> dict[str, object]:
-    member = item.member
-    return {
-        "id": item.id,
-        "member_id": item.member_id,
-        "member_name": (
-            f"{member.first_name or ''} {member.last_name or ''}".strip()
-            if member
-            else "Socio"
-        ),
-        "card_no": item.card_no,
-        "card_year": item.card_year,
-        "membership_type": item.membership_type,
-        "attendance_date": item.attendance_date.isoformat(),
-        "checked_in_at": _serialize_utc(item.checked_in_at),
-        "source": item.source,
-    }
-
-
-def _existing_attendance(
-    db: Session,
-    *,
-    org_id: int,
-    member_id: int,
-    attendance_date: date,
-) -> MemberAttendance | None:
-    return (
-        db.query(MemberAttendance)
-        .filter(
-            MemberAttendance.org_id == org_id,
-            MemberAttendance.member_id == member_id,
-            MemberAttendance.attendance_date == attendance_date,
-        )
-        .first()
-    )
-
-
 @router.post("/check-in")
 def check_in_member(
     body: AttendanceCheckInBody,
@@ -95,72 +47,22 @@ def check_in_member(
     db: Session = Depends(get_db),
 ):
     admin = _current_admin(request, db)
-    token = extract_card_verification_token(body.qr_value)
-    payload = parse_card_verification_token(token) if token else None
-    if not payload or payload["org_id"] != admin.org_id:
-        raise HTTPException(status_code=404, detail="QR tessera non riconosciuto")
-
-    checked_at = datetime.utcnow()
-    member, annual_term, inactive_reason = resolve_card_verification_membership(
-        db,
-        payload=payload,
-        checked_at=checked_at,
-    )
-    if member is None:
-        raise HTTPException(status_code=404, detail="QR tessera non riconosciuto")
-    if inactive_reason:
-        raise HTTPException(status_code=409, detail="Tessera non attiva")
-
-    attendance_date = as_rome_datetime(checked_at).date()
-    existing = _existing_attendance(
+    result = check_in_member_from_qr(
         db,
         org_id=admin.org_id,
-        member_id=member.id,
-        attendance_date=attendance_date,
-    )
-    if existing is not None:
-        return {"created": False, "item": _serialize_attendance(existing)}
-
-    resolved_term: AnnualMembershipTerm | None = annual_term
-    card_no = resolved_term.card_no if resolved_term else payload["card_number"]
-    card_year = resolved_term.card_year if resolved_term else payload["card_year"]
-    membership_type = (
-        MembershipType.ANNUAL.value
-        if resolved_term is not None
-        else resolve_member_membership_type(member)
-    )
-    attendance = MemberAttendance(
-        org_id=admin.org_id,
-        member_id=member.id,
-        checked_in_by_admin_id=admin.id,
-        card_no=card_no,
-        card_year=card_year,
-        membership_type=membership_type,
-        attendance_date=attendance_date,
+        qr_value=body.qr_value,
         source="qr",
-        checked_in_at=checked_at,
+        checked_in_by_admin_id=admin.id,
     )
-    db.add(attendance)
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        existing = _existing_attendance(
-            db,
-            org_id=admin.org_id,
-            member_id=member.id,
-            attendance_date=attendance_date,
-        )
-        if existing is None:
-            raise
-        return {"created": False, "item": _serialize_attendance(existing)}
+    attendance = result.item
+    if not result.created:
+        return {"created": False, "item": serialize_attendance(attendance)}
 
-    db.refresh(attendance)
     audit.log_operation(
         db,
         action="member.attendance_check_in",
         entity_type="member",
-        entity_id=member.id,
+        entity_id=attendance.member_id,
         org_id=admin.org_id,
         actor_admin_id=admin.id,
         actor_role=AdminRole.ORG_ADMIN.value,
@@ -169,7 +71,7 @@ def check_in_member(
         metadata={
             "attendance_id": attendance.id,
             "attendance_date": attendance.attendance_date.isoformat(),
-            "checked_in_at": _serialize_utc(attendance.checked_in_at),
+            "checked_in_at": serialize_utc(attendance.checked_in_at),
             "card_no": attendance.card_no,
             "card_year": attendance.card_year,
             "membership_type": attendance.membership_type,
@@ -178,7 +80,7 @@ def check_in_member(
         user_agent=request.headers.get("user-agent"),
     )
     db.commit()
-    return {"created": True, "item": _serialize_attendance(attendance)}
+    return {"created": True, "item": serialize_attendance(attendance)}
 
 
 @router.get("")
@@ -225,5 +127,5 @@ def list_attendances(
     return {
         "day": selected_day.isoformat(),
         "total": int(total),
-        "items": [_serialize_attendance(item) for item in items],
+        "items": [serialize_attendance(item) for item in items],
     }

@@ -114,7 +114,12 @@ _CSRF_ALLOWED_ORIGINS = {
     if origin
 }
 _CSRF_UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
-_SESSION_AUTH_COOKIE_NAMES = {"session", "org_admin_session", "super_admin_session"}
+_SESSION_AUTH_COOKIE_NAMES = {
+    "session",
+    "org_admin_session",
+    "super_admin_session",
+    "attendance_station_session",
+}
 
 
 class SessionCsrfMiddleware(BaseHTTPMiddleware):

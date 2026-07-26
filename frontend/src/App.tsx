@@ -27,6 +27,7 @@ const ReservedAreaRedirect = lazy(() => import("./pages/ReservedAreaRedirect"));
 const InvitoAffiliazioneRedirect = lazy(() => import("./pages/InvitoAffiliazioneRedirect"));
 const PienissimoThankYouPage = lazy(() => import("./pages/PienissimoThankYouPage"));
 const PublicFormPage = lazy(() => import("./pages/PublicFormPage"));
+const AttendanceStationScanner = lazy(() => import("./pages/AttendanceStationScanner"));
 const StripeDemoStorefrontPage = lazy(() => import("./pages/StripeDemoStorefrontPage"));
 const StripeDemoStorefrontResultPage = lazy(() => import("./pages/StripeDemoStorefrontResultPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -91,6 +92,10 @@ const App = () => {
         <UnsavedChangesProvider>
           <Suspense fallback={<Loading />}>
             <Routes>
+              <Route
+                path="scanner-presenze"
+                element={<AttendanceStationScanner />}
+              />
             <Route element={<Layout />}>
               <Route index element={<Home />} />
               <Route path="servizi" element={<Servizi />} />

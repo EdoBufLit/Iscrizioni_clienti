@@ -1486,6 +1486,48 @@ select:focus {
   box-shadow: 0 0 0 999px rgba(2, 6, 23, 0.35) !important;
 }
 
+.org-admin-v2 .org-admin-content .attendance-station-pairing {
+  border-color: #a7f3d0 !important;
+  border-radius: 1.25rem !important;
+  background-color: #ecfdf5 !important;
+  background-image: none !important;
+  color: #064e3b !important;
+  box-shadow: none !important;
+}
+
+.attendance-station-page {
+  color-scheme: light;
+  background-color: #eef5f2 !important;
+  color: #0f172a !important;
+}
+
+:root[data-theme="dark"] .attendance-station-page .attendance-station-card {
+  border-color: #d9e4e0 !important;
+  background-color: #fbfdfc !important;
+  color: #0f172a !important;
+}
+
+:root[data-theme="dark"] .attendance-station-page .text-slate-950,
+:root[data-theme="dark"] .attendance-station-page .text-slate-900,
+:root[data-theme="dark"] .attendance-station-page .text-slate-800 {
+  color: #0f172a !important;
+}
+
+:root[data-theme="dark"] .attendance-station-page .text-slate-600,
+:root[data-theme="dark"] .attendance-station-page .text-slate-500,
+.attendance-station-page .attendance-station-helper {
+  color: #475569 !important;
+}
+
+:root[data-theme="dark"] .attendance-station-page .border-slate-200,
+:root[data-theme="dark"] .attendance-station-page .border-slate-300 {
+  border-color: #cbd5e1 !important;
+}
+
+:root[data-theme="dark"] .attendance-station-page .bg-white {
+  background-color: #fbfdfc !important;
+}
+
 .org-admin-v2 .org-admin-content [class*="bg-neutral-950"],
 .org-admin-v2 .org-admin-content [class*="bg-neutral-900"],
 .org-admin-v2 .org-admin-content [class*="bg-slate-950"],

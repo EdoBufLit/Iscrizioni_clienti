@@ -2564,6 +2564,50 @@ class MemberDocument(Base):
     member = relationship("Member", back_populates="documents")
 
 
+class AttendanceStation(Base):
+    __tablename__ = "attendance_stations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    org_id = Column(
+        Integer,
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name = Column(String(120), nullable=False)
+    credential_hash = Column(String(64), nullable=True, unique=True, index=True)
+    pairing_token_hash = Column(String(64), nullable=True, unique=True, index=True)
+    pairing_expires_at = Column(DateTime, nullable=True, index=True)
+    created_by_admin_id = Column(
+        Integer,
+        ForeignKey("admin_users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    created_at = Column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        server_default=sa.func.now(),
+    )
+    paired_at = Column(DateTime, nullable=True)
+    last_used_at = Column(DateTime, nullable=True, index=True)
+    revoked_at = Column(DateTime, nullable=True, index=True)
+    paired_user_agent = Column(String(512), nullable=True)
+    paired_ip_hash = Column(String(64), nullable=True)
+
+    organization = relationship("Organization")
+    created_by_admin = relationship("AdminUser")
+
+    __table_args__ = (
+        Index(
+            "ix_attendance_stations_org_revoked",
+            "org_id",
+            "revoked_at",
+        ),
+    )
+
+
 class MemberAttendance(Base):
     __tablename__ = "member_attendances"
 
@@ -2583,6 +2627,12 @@ class MemberAttendance(Base):
     checked_in_by_admin_id = Column(
         Integer,
         ForeignKey("admin_users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    scanner_station_id = Column(
+        Integer,
+        ForeignKey("attendance_stations.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
@@ -2607,6 +2657,7 @@ class MemberAttendance(Base):
     member = relationship("Member")
     organization = relationship("Organization")
     checked_in_by_admin = relationship("AdminUser")
+    scanner_station = relationship("AttendanceStation")
 
     __table_args__ = (
         UniqueConstraint(

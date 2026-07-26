@@ -5,6 +5,7 @@ import OrgAdminAttendancePage from "./OrgAdminAttendance";
 const mocks = vi.hoisted(() => ({
   decodeFromStream: vi.fn(),
   fetchAttendances: vi.fn(),
+  fetchStations: vi.fn(),
   getUserMedia: vi.fn(),
   scannerStop: vi.fn(),
   trackStop: vi.fn(),
@@ -13,6 +14,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../../lib/api", () => ({
   checkInOrgAdminAttendance: vi.fn(),
   fetchOrgAdminAttendances: mocks.fetchAttendances,
+  fetchOrgAdminAttendanceStations: mocks.fetchStations,
+  createOrgAdminAttendanceStation: vi.fn(),
+  renewOrgAdminAttendanceStationPairing: vi.fn(),
+  revokeOrgAdminAttendanceStation: vi.fn(),
 }));
 
 vi.mock("@zxing/browser", () => ({
@@ -35,11 +40,13 @@ describe("OrgAdminAttendance camera startup", () => {
   beforeEach(() => {
     mocks.decodeFromStream.mockReset();
     mocks.fetchAttendances.mockReset();
+    mocks.fetchStations.mockReset();
     mocks.getUserMedia.mockReset();
     mocks.scannerStop.mockReset();
     mocks.trackStop.mockReset();
 
     mocks.fetchAttendances.mockResolvedValue({ items: [], total: 0 });
+    mocks.fetchStations.mockResolvedValue({ items: [] });
     mocks.getUserMedia.mockResolvedValue({
       getTracks: () => [{ stop: mocks.trackStop }],
     });

@@ -18,6 +18,7 @@ import {
   SectionPanel,
   StatusChip,
 } from "./components/OrgAdminPrimitives";
+import AttendanceStationsPanel from "./components/AttendanceStationsPanel";
 
 function localDateValue() {
   const now = new Date();
@@ -35,6 +36,10 @@ function formatTime(value: string) {
 
 function membershipLabel(value: string) {
   return value === "temporary" ? "Temporanea" : "Annuale";
+}
+
+function attendanceSourceLabel(item: OrgAdminAttendance) {
+  return item.scanner_station_name || "Area Riservata";
 }
 
 function stopMediaStream(stream: MediaStream | null | undefined) {
@@ -349,6 +354,8 @@ const OrgAdminAttendancePage = () => {
         </SectionPanel>
       </div>
 
+      <AttendanceStationsPanel />
+
       <SectionPanel
         title="Registro presenze"
         eyebrow="Giornata selezionata"
@@ -413,18 +420,25 @@ const OrgAdminAttendancePage = () => {
                         {membershipLabel(item.membership_type)}
                       </dd>
                     </div>
+                    <div className="col-span-2">
+                      <dt className="text-slate-500">Origine ingresso</dt>
+                      <dd className="mt-1 font-semibold text-slate-950">
+                        {attendanceSourceLabel(item)}
+                      </dd>
+                    </div>
                   </dl>
                 </article>
               ))}
             </div>
             <div className="hidden overflow-x-auto md:block">
-              <table className="w-full min-w-[700px] text-left text-sm">
+              <table className="w-full min-w-[820px] text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase tracking-[0.12em] text-slate-500">
                   <tr>
                     <th className="px-5 py-3 font-semibold">Ora ingresso</th>
                     <th className="px-5 py-3 font-semibold">Socio</th>
                     <th className="px-5 py-3 font-semibold">Tessera</th>
                     <th className="px-5 py-3 font-semibold">Tipo</th>
+                    <th className="px-5 py-3 font-semibold">Origine</th>
                     <th className="px-5 py-3 font-semibold">Stato</th>
                   </tr>
                 </thead>
@@ -439,6 +453,7 @@ const OrgAdminAttendancePage = () => {
                         {item.card_no} / {item.card_year}
                       </td>
                       <td className="px-5 py-4 text-slate-600">{membershipLabel(item.membership_type)}</td>
+                      <td className="px-5 py-4 text-slate-600">{attendanceSourceLabel(item)}</td>
                       <td className="px-5 py-4"><StatusChip tone="success">Presente</StatusChip></td>
                     </tr>
                   ))}

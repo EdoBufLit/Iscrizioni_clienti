@@ -3892,7 +3892,9 @@ export type OrgAdminAttendance = {
   membership_type: "annual" | "temporary";
   attendance_date: string;
   checked_in_at: string;
-  source: "qr";
+  source: "qr" | "qr_station";
+  scanner_station_id: number | null;
+  scanner_station_name: string | null;
 };
 
 export type OrgAdminAttendancesResponse = {
@@ -3932,6 +3934,131 @@ export async function checkInOrgAdminAttendance(
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) {
     throw new Error(await parseApiErrorDetail(res, "Impossibile registrare la presenza"));
+  }
+  return res.json();
+}
+
+export type AttendanceStationStatus =
+  | "pending_pairing"
+  | "active"
+  | "revoked";
+
+export type AttendanceStation = {
+  id: number;
+  name: string;
+  status: AttendanceStationStatus;
+  created_at: string;
+  paired_at: string | null;
+  last_used_at: string | null;
+  revoked_at: string | null;
+};
+
+export type AttendanceStationPairing = {
+  station: AttendanceStation;
+  pairing_url: string;
+  pairing_qr_data_url: string;
+  pairing_expires_at: string;
+};
+
+export type AttendanceStationSession = {
+  station: AttendanceStation;
+  organization: {
+    name: string;
+  };
+};
+
+export async function fetchOrgAdminAttendanceStations(): Promise<{
+  items: AttendanceStation[];
+}> {
+  const res = await fetch("/api/org-admin/attendance-stations");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) {
+    throw new Error(
+      await parseApiErrorDetail(res, "Errore caricamento postazioni"),
+    );
+  }
+  return res.json();
+}
+
+export async function createOrgAdminAttendanceStation(
+  name: string,
+): Promise<AttendanceStationPairing> {
+  const res = await fetch("/api/org-admin/attendance-stations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) {
+    throw new Error(
+      await parseApiErrorDetail(res, "Impossibile creare la postazione"),
+    );
+  }
+  return res.json();
+}
+
+export async function renewOrgAdminAttendanceStationPairing(
+  stationId: number,
+): Promise<AttendanceStationPairing> {
+  const res = await fetch(
+    `/api/org-admin/attendance-stations/${stationId}/pairing`,
+    { method: "POST" },
+  );
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) {
+    throw new Error(
+      await parseApiErrorDetail(res, "Impossibile collegare la postazione"),
+    );
+  }
+  return res.json();
+}
+
+export async function revokeOrgAdminAttendanceStation(
+  stationId: number,
+): Promise<{ station: AttendanceStation }> {
+  const res = await fetch(
+    `/api/org-admin/attendance-stations/${stationId}/revoke`,
+    { method: "POST" },
+  );
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) {
+    throw new Error(
+      await parseApiErrorDetail(res, "Impossibile revocare la postazione"),
+    );
+  }
+  return res.json();
+}
+
+export class AttendanceStationAuthError extends Error {}
+
+export async function fetchAttendanceStationSession(): Promise<AttendanceStationSession> {
+  const res = await fetch("/api/attendance-stations/session");
+  if (res.status === 401) {
+    throw new AttendanceStationAuthError("Dispositivo non autorizzato");
+  }
+  if (!res.ok) {
+    throw new Error(
+      await parseApiErrorDetail(res, "Impossibile verificare la postazione"),
+    );
+  }
+  return res.json();
+}
+
+export async function checkInAttendanceStation(
+  qrValue: string,
+): Promise<{ created: boolean; item: OrgAdminAttendance }> {
+  const res = await fetch("/api/attendance-stations/check-in", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ qr_value: qrValue }),
+  });
+  if (res.status === 401) {
+    throw new AttendanceStationAuthError("Dispositivo non autorizzato");
+  }
+  if (!res.ok) {
+    throw new Error(
+      await parseApiErrorDetail(res, "Impossibile registrare la presenza"),
+    );
   }
   return res.json();
 }

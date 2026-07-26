@@ -26,6 +26,7 @@ from app.middleware import (
 from app.public_uploads import PublicUploadsStaticFiles
 from app.routes import (
     admin,
+    attendance_stations,
     ingest_pienissimo,
     integrations,
     join,
@@ -271,6 +272,8 @@ app.include_router(renewals.router)
 # mounted so privileged access has exactly one MFA-protected entry point.
 app.include_router(org_admin.router)
 app.include_router(org_admin_attendance.router)
+app.include_router(attendance_stations.admin_router)
+app.include_router(attendance_stations.station_router)
 app.include_router(super_admin.router)
 app.include_router(super_admin.associations_router)
 _include_affiliation_routers()

@@ -1678,6 +1678,13 @@
   padding-right: clamp(1rem, 2vw, 2rem);
 }
 
+.attendance-station-scanner-frame {
+  border-color: #6ee7b7;
+  border-radius: 1.25rem;
+  background: transparent;
+  box-shadow: 0 0 0 999px rgba(2, 6, 23, 0.38);
+}
+
 .org-admin-shell-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
