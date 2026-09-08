@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 
 import Skeleton from "../../components/ui/Skeleton";
+import CreateCardLotModal from "./components/CreateCardLotModal";
 import {
   AuthError,
   downloadCardLotRegistryExcel,
@@ -44,11 +45,9 @@ const statusTone = (statusLabel: string): SuperAdminTone => {
 };
 
 const lotUsage = (item: CardLotRegistryItem) => {
-  const assigned = item.next_no == null ? 0 : Math.max(0, item.next_no - item.range_start);
-  const clampedAssigned = Math.min(item.quantity, assigned);
-  const remaining = Math.max(0, item.quantity - clampedAssigned);
-  const percent = item.quantity > 0 ? Math.round((clampedAssigned / item.quantity) * 100) : 0;
-  return { assigned: clampedAssigned, remaining, percent };
+  const remaining = item.status_label === "Attivo" ? Math.max(0, item.remaining) : 0;
+  const percent = item.quantity > 0 ? Math.min(100, Math.round(((item.assigned + item.reserved) / item.quantity) * 100)) : 0;
+  return { assigned: item.assigned, reserved: item.reserved, remaining, percent };
 };
 
 const SuperAdminCardLots = () => {
@@ -63,6 +62,19 @@ const SuperAdminCardLots = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [scopeFilter, setScopeFilter] = useState("all");
   const [yearFilter, setYearFilter] = useState("all");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createdMessage, setCreatedMessage] = useState("");
+  const closeCreate = useCallback(() => setCreateOpen(false), []);
+  const handleAuthError = useCallback(() => navigate("/super-admin/login", { replace: true }), [navigate]);
+  const handleCreated = useCallback((item: CardLotRegistryItem) => {
+    setItems((current) => [item, ...current.filter((row) => row.id !== item.id)]);
+    setCreateOpen(false);
+    setQuery("");
+    setStatusFilter("all");
+    setScopeFilter("all");
+    setYearFilter("all");
+    setCreatedMessage(`Lotto #${item.batch_id} creato per ${item.organization_name}: ${item.quantity.toLocaleString("it-IT")} tessere, da ${item.range_start_label} a ${item.range_end_label} · ${item.year}.`);
+  }, []);
 
   const loadRegistry = async () => {
     if (!profile) return;
@@ -159,20 +171,24 @@ const SuperAdminCardLots = () => {
         icon="cards"
         eyebrow="Governance"
         title="Registro lotti"
-        subtitle="Registro centrale dei lotti tessere ASSONAM generato direttamente dal database."
+        subtitle="Gestisci i lotti e assegna nuove tessere alle associazioni con numerazione automatica."
         actions={
           <>
             <SuperAdminActionButton icon="refresh" onClick={() => void loadRegistry()} disabled={loading}>
               Aggiorna
             </SuperAdminActionButton>
-            <SuperAdminActionButton icon="download" tone="primary" onClick={handleDownload} disabled={exporting || loading}>
+            <SuperAdminActionButton icon="download" onClick={handleDownload} disabled={exporting || loading}>
               {exporting ? "Download..." : "Scarica Excel"}
+            </SuperAdminActionButton>
+            <SuperAdminActionButton icon="plus" tone="primary" onClick={() => { setCreatedMessage(""); setCreateOpen(true); }}>
+              Nuovo lotto
             </SuperAdminActionButton>
           </>
         }
       />
 
       {error ? <div className="rounded-xl border border-red-200/60 bg-red-50 px-5 py-4 text-sm text-red-700">{error}</div> : null}
+      {createdMessage ? <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-900">{createdMessage}</div> : null}
 
       <section className="sa-kpi-grid sa-kpi-grid--six">
         <SuperAdminKpiCard label="Lotti totali" value={totals.totalLots.toLocaleString("it-IT")} hint="Tutti i lotti registrati" icon="cards" tone="success" />
@@ -268,7 +284,7 @@ const SuperAdminCardLots = () => {
                   <td colSpan={10} className="px-5 py-10">
                     <SuperAdminEmptyState
                       title="Nessun lotto trovato"
-                      description="Modifica i filtri o apri la gestione lotti dalla riga associazione."
+                      description="Modifica i filtri oppure aggiungi un nuovo lotto da questo registro."
                     />
                   </td>
                 </tr>
@@ -299,6 +315,7 @@ const SuperAdminCardLots = () => {
                           tone={usage.remaining === 0 ? "warning" : "success"}
                           label={`${usage.remaining.toLocaleString("it-IT")} disponibili`}
                         />
+                        {usage.reserved > 0 ? <p className="mt-1 text-xs text-neutral-500">{usage.reserved.toLocaleString("it-IT")} prenotate</p> : null}
                       </td>
                       <td className="px-5 py-4 text-sm text-neutral-700">{item.numbering_scope_name || "Legacy"}</td>
                       <td className="px-5 py-4 text-sm text-neutral-700">
@@ -314,6 +331,7 @@ const SuperAdminCardLots = () => {
           </table>
         </div>
       </SuperAdminTableShell>
+      <CreateCardLotModal open={createOpen} onClose={closeCreate} onCreated={handleCreated} onAuthError={handleAuthError} />
     </div>
   );
 };

@@ -5,11 +5,16 @@ from io import BytesIO
 import logging
 import re
 
-from sqlalchemy import func, text
+from fastapi import HTTPException
+from sqlalchemy import func, or_, text
 from sqlalchemy.orm import Session, joinedload
 
 from app import audit
-from app.models import CardBatch, NumberingScope, Organization, RechargeRequest
+from app.models import (
+    AnnualMembershipTerm, CardBatch, CardMovement, Member, MembershipPayment,
+    NumberingScope, OperationLog, Organization, RechargeRequest,
+)
+from app.services.card_allocation import lock_card_allocation
 from app.services.card_availability import CardBatchAvailability, card_batch_availability, card_lot_status
 from app.services.numbering_scopes import (
     ASSONAM_CENTRAL_SCOPE_NAME,
@@ -25,6 +30,10 @@ RECHARGE_REQUEST_STATUS_NEW = "new"
 RECHARGE_REQUEST_STATUS_LOT_CREATED = "lot_created"
 RECHARGE_REQUEST_STATUS_BLOCKED_NON_SHARED = "blocked_non_shared"
 LOT_LOCK_NAMESPACE = 2
+MAX_AUTOMATIC_LOT_QUANTITY = 100000
+# next_no may be end_no + 1, so leave room for that sentinel in PostgreSQL INTEGER.
+MAX_AUTOMATIC_CARD_NUMBER = (1 << 31) - 2
+AUTOMATIC_LOT_ACTION = "org.cards.batch_created_from_registry"
 _CARD_NUMBER_SANITIZE_RE = re.compile(r"[.\s]")
 
 
@@ -90,6 +99,136 @@ def acquire_shared_lot_lock(db: Session, scope_id: int) -> None:
             db.execute(text("BEGIN IMMEDIATE"))
 
 
+def acquire_card_lot_table_lock(db: Session) -> None:
+    """Serialize range checks with all manual and automatic batch writers.
+
+    When combined with other locks, acquire organization/allocation scope first,
+    recharge scope second, and this table lock last. Never commit in between.
+    """
+    dialect = db.get_bind().dialect.name
+    if dialect == "postgresql":
+        db.execute(text("LOCK TABLE card_batches IN SHARE ROW EXCLUSIVE MODE"))
+    elif dialect == "sqlite":
+        connection = db.connection()
+        connection.exec_driver_sql("PRAGMA busy_timeout = 5000")
+        if not connection.connection.driver_connection.in_transaction:
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
+
+
+def _automatic_lot_bounds(db: Session, org: Organization, quantity: int) -> tuple[int, int]:
+    if org.deleted_at is not None:
+        raise HTTPException(status_code=409, detail="L'associazione è archiviata")
+    if type(quantity) is not int or not 1 <= quantity <= MAX_AUTOMATIC_LOT_QUANTITY:
+        raise HTTPException(status_code=422, detail="Quantità tessere non valida")
+    db.flush()
+    # Includes all years, disabled and released lots. Null scope retains the
+    # historical global legacy-domain overlap rule used by manual creation.
+    max_end = (
+        db.query(func.max(CardBatch.end_no))
+        .filter(CardBatch.numbering_scope_id == org.numbering_scope_id)
+        .scalar()
+    )
+    base = EMPTY_SHARED_POOL_BASE if get_numbering_mode(org) == NUMBERING_MODE_SHARED_ASSONAM else 0
+    last_number = int(max_end) if max_end is not None else base
+    # Legacy and unlinked assignments can sit beyond the lot history. Protect
+    # owned numbers and numbers in the same scope, including linked-batch scope.
+    for model, number, scope, batch_id, filters in (
+        (Member, Member.card_no, Member.numbering_scope_id, Member.batch_id, []),
+        (AnnualMembershipTerm, AnnualMembershipTerm.card_no,
+         AnnualMembershipTerm.numbering_scope_id, AnnualMembershipTerm.batch_id,
+         [AnnualMembershipTerm.status.notin_(("expired", "cancelled"))]),
+        (MembershipPayment, MembershipPayment.reserved_card_no,
+         MembershipPayment.reserved_numbering_scope_id, MembershipPayment.reserved_batch_id,
+         [MembershipPayment.reservation_state == "held"]),
+    ):
+        domain = [model.org_id == org.id]
+        if org.numbering_scope_id is not None:
+            domain.extend((scope == org.numbering_scope_id,
+                           CardBatch.numbering_scope_id == org.numbering_scope_id))
+        else:
+            domain.append(scope.is_(None))
+        occupied_max = (
+            db.query(func.max(number)).select_from(model)
+            .outerjoin(CardBatch, batch_id == CardBatch.id)
+            .filter(or_(*domain), *filters).scalar()
+        )
+        if occupied_max is not None:
+            last_number = max(last_number, int(occupied_max))
+    start_no, end_no = compute_next_lot(last_number, quantity, default_base=base)
+    if end_no > MAX_AUTOMATIC_CARD_NUMBER:
+        raise HTTPException(status_code=409, detail="Limite della numerazione tessere raggiunto")
+    return start_no, end_no
+
+
+def preview_automatic_card_lot(
+    db: Session, *, org: Organization, quantity: int, year: int
+) -> dict[str, object]:
+    start_no, end_no = _automatic_lot_bounds(db, org, quantity)
+    return {
+        "organization_id": org.id,
+        "organization_name": org.name,
+        "quantity": quantity,
+        "year": year,
+        "numbering_scope_id": org.numbering_scope_id,
+        "numbering_scope_name": getattr(org.numbering_scope, "name", None),
+        "range_start": start_no,
+        "range_end": end_no,
+        "range_start_label": format_card_number(start_no),
+        "range_end_label": format_card_number(end_no),
+    }
+
+
+def create_automatic_card_lot(
+    db: Session, *, organization_id: int, quantity: int, year: int,
+    idempotency_key: str, actor_admin_id: int, ip: str | None = None,
+) -> tuple[CardBatch, bool]:
+    """Create lot, stock movement and retry receipt in the caller's transaction."""
+    org = lock_card_allocation(db, organization_id, year)
+    if org.numbering_scope_id is not None:
+        acquire_shared_lot_lock(db, org.numbering_scope_id)
+    acquire_card_lot_table_lock(db)
+    prior = (
+        db.query(OperationLog)
+        .filter(OperationLog.action == AUTOMATIC_LOT_ACTION,
+                OperationLog.actor_admin_id == actor_admin_id,
+                OperationLog.request_id == idempotency_key)
+        .order_by(OperationLog.id).first()
+    )
+    if prior is not None:
+        metadata = prior.metadata_json or {}
+        if any(metadata.get(key) != value for key, value in (
+            ("org_id", org.id), ("quantity", quantity), ("year", year)
+        )):
+            raise HTTPException(status_code=409, detail="Richiesta già utilizzata con dati diversi")
+        batch = db.query(CardBatch).filter(CardBatch.id == prior.entity_id).first()
+        if batch is None or batch.released_at is not None:
+            raise HTTPException(status_code=409, detail="Il lotto di questa richiesta è stato eliminato")
+        return batch, True
+
+    start_no, end_no = _automatic_lot_bounds(db, org, quantity)
+    batch = CardBatch(
+        org_id=org.id, numbering_scope_id=org.numbering_scope_id, year=year,
+        start_no=start_no, end_no=end_no, next_no=start_no, is_enabled=True,
+        notes="Creato dal Registro lotti",
+    )
+    db.add(batch)
+    db.flush()
+    db.add(CardMovement(
+        org_id=org.id, admin_id=actor_admin_id, delta=quantity,
+        reason="batch_added",
+    ))
+    audit.log_operation(
+        db, action=AUTOMATIC_LOT_ACTION, entity_type="card_batch", entity_id=batch.id,
+        actor_admin_id=actor_admin_id, actor_role="super_admin", org_id=org.id,
+        request_id=idempotency_key, ip=ip,
+        metadata={"org_id": org.id, "quantity": quantity, "year": year,
+                  "numbering_scope_id": org.numbering_scope_id,
+                  "start_no": start_no, "end_no": end_no},
+    )
+    db.flush()
+    return batch, False
+
+
 def find_batch_overlap(
     db: Session,
     start_no: int,
@@ -139,6 +278,9 @@ def serialize_card_lot_registry_row(row: CardLotRegistryRow) -> dict[str, object
         "range_start_label": format_card_number(batch.start_no),
         "range_end_label": format_card_number(batch.end_no),
         "quantity": quantity,
+        "assigned": row.availability.assigned,
+        "reserved": row.availability.reserved,
+        "remaining": row.availability.remaining,
         "status_label": card_lot_status(batch, row.availability),
         "next_no": row.availability.next_no,
         "recharge_request_id": row.recharge_request_id,
@@ -146,6 +288,16 @@ def serialize_card_lot_registry_row(row: CardLotRegistryRow) -> dict[str, object
         "released_at": batch.released_at.isoformat() if batch.released_at else None,
         "notes": batch.notes,
     }
+
+
+def serialize_card_lot_registry_batch(db: Session, batch: CardBatch) -> dict[str, object]:
+    return serialize_card_lot_registry_row(CardLotRegistryRow(
+        batch=batch,
+        organization_name=getattr(batch.organization, "name", None),
+        numbering_scope_name=getattr(batch.numbering_scope, "name", None),
+        recharge_request_id=getattr(batch.recharge_request, "id", None),
+        availability=card_batch_availability(db, [batch])[batch.id],
+    ))
 
 
 def list_card_lot_registry_rows(db: Session) -> list[CardLotRegistryRow]:
@@ -348,6 +500,7 @@ def ensure_recharge_request_batch(db: Session, recharge_request_id: int) -> Card
         )
 
     acquire_shared_lot_lock(db, central_scope.id)
+    acquire_card_lot_table_lock(db)
 
     recharge_request = _load_recharge_request_for_update(db, recharge_request_id)
     if recharge_request is None:

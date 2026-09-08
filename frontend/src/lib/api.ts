@@ -6471,6 +6471,9 @@ export type CardLotRegistryItem = {
   quantity: number;
   status_label: string;
   next_no: number | null;
+  assigned: number;
+  reserved: number;
+  remaining: number;
   recharge_request_id: number | null;
   created_at: string | null;
   released_at: string | null;
@@ -6486,6 +6489,53 @@ export async function fetchCardLotRegistry(): Promise<CardLotRegistryResponse> {
   const res = await fetch("/api/super-admin/card-lots");
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore nel caricamento del registro lotti"));
+  return res.json();
+}
+
+export type CardLotPreview = {
+  organization_id: number;
+  organization_name: string;
+  quantity: number;
+  year: number;
+  numbering_scope_id: number | null;
+  numbering_scope_name: string | null;
+  range_start: number;
+  range_end: number;
+  range_start_label: string;
+  range_end_label: string;
+};
+
+export class CardLotStepUpRequiredError extends Error {}
+
+export async function previewAutomaticCardLot(
+  organizationId: number, quantity: number, signal?: AbortSignal,
+): Promise<CardLotPreview> {
+  const params = new URLSearchParams({ organization_id: String(organizationId), quantity: String(quantity) });
+  const res = await fetch(`/api/super-admin/card-lots/preview?${params}`, { signal });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Impossibile calcolare il nuovo lotto"));
+  return res.json();
+}
+
+export async function createAutomaticCardLot(payload: {
+  organization_id: number;
+  quantity: number;
+  year: number;
+  idempotency_key: string;
+}): Promise<{ ok: boolean; item: CardLotRegistryItem; reused: boolean }> {
+  const res = await fetch("/api/super-admin/card-lots", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) {
+    const message = await parseApiErrorDetail(res, "Impossibile creare il lotto");
+    if (res.status === 403 && message === "Recent MFA verification required") {
+      throw new CardLotStepUpRequiredError("Conferma il codice di autenticazione per creare il lotto.");
+    }
+    throw new Error(message);
+  }
   return res.json();
 }
 

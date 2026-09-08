@@ -1,3 +1,17 @@
+## Plan (Automatic lot creation from the super-admin registry - Sep 8, 2026)
+- [x] Add a super-admin-only preview and creation endpoint accepting association and quantity, with current membership year as default.
+- [x] Allocate the next contiguous interval after historical numbers in the correct numbering domain; preserve dedicated/legacy rules, released lots, reservations and concurrent manual/recharge creation.
+- [x] Add a New lot modal to Registro lotti with association selection, quantity, calculated interval preview and a clear success result; retain inputs on errors and prevent duplicate submission.
+- [x] Display registry availability from the canonical backend counts rather than deriving it from next_no.
+- [x] Verify authorization, validation, idempotency, numbering domains and concurrent creation; run frontend tests/typecheck/build and inspect desktop/mobile UI.
+- [ ] Push, deploy through the existing workflow and verify production without creating a real lot unless the user specifies association and quantity.
+
+## Review (Automatic lot creation from the super-admin registry - Sep 8, 2026)
+- Requested flow: select only association and number of cards; interval is calculated and checked by the server. Manual range entry remains available in the existing association detail.
+- Current baseline: 1a27dd8; previous payment reservation release is already live at e6cf339. SSH passphrase remains deferred by the user.
+- Verification: 40 backend tests passed for automatic creation, registry, lot mutations, numbering domains and stock movements. PostgreSQL suite passed all 8 parametrized checks in disposable UUID schemas (automatic contention, concurrent retries, manual range overlap and shared recharge coordination). Five frontend interaction tests, TypeScript and production build passed.
+- Real browser smoke at 1440x1000 and 390x844: selected an association with no lots, previewed/created 300 cards, checked definitive success message and persistence after reload; no JavaScript errors or horizontal overflow. Screenshots saved locally as lot-registry-desktop.png, lot-registry-mobile.png and lot-registry-created-mobile.png in the task's temporary directory. Test data stayed in an isolated local SQLite database.
+
 ## Plan (SSH recovery and stock-safe membership payments - Sep 7, 2026)
 - [x] Restore SSH alias/agent access and compare live Git source with this workspace (same 479bff9 baseline).
 - [ ] Set a user-entered passphrase on the dedicated SSH key (access works; user explicitly deferred this on Sep 8).

@@ -118,12 +118,16 @@ from app.services.org_branding import sanitize_card_email_subject_template
 from app.services.card_allocation import lock_card_allocation
 from app.services.card_availability import CardBatchAvailability, batch_has_linked_terms_or_reservations, batches_with_linked_terms_or_reservations, card_batch_availability, card_lot_status, eligible_card_batches
 from app.services.card_lot_registry import (
+    MAX_AUTOMATIC_LOT_QUANTITY,
     build_card_lots_workbook,
+    create_automatic_card_lot,
     ensure_recharge_request_batch,
     find_batch_overlap,
     format_card_number,
     list_card_lot_registry_rows,
+    preview_automatic_card_lot,
     serialize_card_lot_registry_row,
+    serialize_card_lot_registry_batch,
 )
 from app.services.card_replenishments import (
     BILLING_STATUS_PAID,
@@ -4147,6 +4151,14 @@ class AddCardBatch(BaseModel):
     year: Optional[int] = None
 
 
+class CreateAutomaticCardLot(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    organization_id: int = Field(gt=0, strict=True)
+    quantity: int = Field(gt=0, le=MAX_AUTOMATIC_LOT_QUANTITY, strict=True)
+    year: Optional[int] = Field(default=None, strict=True)
+    idempotency_key: uuid.UUID
+
+
 class PatchCardLot(BaseModel):
     status: Optional[Literal["active", "inactive"]] = None
     year: Optional[int] = None
@@ -4614,6 +4626,38 @@ def get_card_lot_registry(
         "items": [serialize_card_lot_registry_row(row) for row in rows],
         "total": len(rows),
     }
+
+
+@router.get("/card-lots/preview")
+def preview_card_lot_from_registry(
+    request: Request,
+    organization_id: int = Query(gt=0),
+    quantity: int = Query(gt=0, le=MAX_AUTOMATIC_LOT_QUANTITY),
+    year: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    org = db.query(Organization).filter(Organization.id == organization_id).first()
+    if org is None:
+        raise HTTPException(status_code=404, detail="Associazione non trovata")
+    return preview_automatic_card_lot(db, org=org, quantity=quantity, year=_resolve_batch_year(year))
+
+
+@router.post("/card-lots", dependencies=[Depends(_require_recent_super_admin_step_up)])
+def create_card_lot_from_registry(
+    request: Request,
+    body: CreateAutomaticCardLot,
+    db: Session = Depends(get_db),
+):
+    admin = _require_super_admin(request, db)
+    batch, reused = create_automatic_card_lot(
+        db, organization_id=body.organization_id, quantity=body.quantity,
+        year=_resolve_batch_year(body.year), idempotency_key=str(body.idempotency_key),
+        actor_admin_id=admin.id, ip=get_client_ip(request),
+    )
+    item = serialize_card_lot_registry_batch(db, batch)
+    db.commit()
+    return {"ok": True, "item": item, "reused": reused}
 
 
 @router.get("/card-lots/export.xlsx")

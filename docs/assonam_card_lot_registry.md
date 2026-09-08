@@ -1,5 +1,38 @@
 # Registro lotti ASSONAM
 
+## Creazione dal Registro lotti (super admin)
+
+Il pulsante **Nuovo lotto** richiede associazione e quantità (da 1 a 100.000).
+L'anteprima mostra l'anno corrente e l'intervallo previsto; il server ricalcola
+l'intervallo nella transazione di creazione, quindi conferma quello definitivo.
+Sono selezionabili anche le associazioni senza lotti, escluse quelle archiviate.
+
+- `GET /api/super-admin/card-lots/preview?organization_id=…&quantity=…`
+- `POST /api/super-admin/card-lots` con `organization_id`, `quantity`, `year`
+  (opzionale per i client API) e `idempotency_key` UUID. Richiede super admin
+  e verifica MFA recente quando prevista dalla configurazione esistente.
+- Risposta: `{ok, item, reused}`; `item` usa lo stesso formato del Registro,
+  inclusi `assigned`, `reserved` e `remaining` calcolati dalle occupazioni reali.
+
+Il nuovo intervallo parte dopo il massimo storico nel gruppo di numerazione
+dell'associazione, includendo tutti gli anni e i lotti disabilitati/rilasciati.
+Un gruppo condiviso vuoto parte da 30.001; uno dedicato da 1. I lotti legacy
+senza gruppo mantengono il dominio globale legacy delle API manuali. Eventuali
+numeri già assegnati o prenotati oltre i lotti storici vengono protetti. I buchi
+all'interno dei lotti esistenti restano disponibili per l'emissione delle tessere.
+
+Creazione, movimento di carico e ricevuta di idempotenza nel registro attività
+sono atomici. Ripetere la stessa richiesta restituisce lo stesso lotto; usare
+la stessa chiave con dati diversi restituisce 409. Il form conserva dati e chiave
+dopo una risposta incerta, evitando doppi lotti al nuovo tentativo.
+
+Ordine dei lock PostgreSQL: associazione/gruppo di assegnazione, gruppo ricariche,
+poi `card_batches IN SHARE ROW EXCLUSIVE MODE`, senza commit intermedi. La
+creazione da ricarica acquisisce anche il lock della tabella già usato dalle API
+manuali, così la verifica degli intervalli e la scrittura restano serializzate.
+Non sono necessarie migration. Il flusso WhatsApp descritto sotto conserva la
+propria regola di numerazione esclusivamente nel pool condiviso ASSONAM.
+
 ## Punto esatto di aggancio
 
 La creazione automatica del lotto e` stata agganciata nel flusso WhatsApp che genera la `RechargeRequest`:
