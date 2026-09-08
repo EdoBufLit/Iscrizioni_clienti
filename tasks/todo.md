@@ -1,3 +1,25 @@
+## Plan (SSH recovery and stock-safe membership payments - Sep 7, 2026)
+- [x] Restore SSH alias/agent access and compare live Git source with this workspace (same 479bff9 baseline).
+- [ ] Set a user-entered passphrase on the dedicated SSH key (access works; encryption metadata still reports none).
+- [x] Centralize actual card occupancy, reuse earlier holes and align batch stock/status with pending renewals and reservations.
+- [x] Persist a 15-minute reservation before initial/renewal SumUp checkout and consume it idempotently after verified payment.
+- [x] Reconcile provider outcomes every minute; release only definitively unusable unpaid checkouts, preserve uncertain/in-flight payments.
+- [x] Protect reserved lots against mutations and cover concurrent checkout/manual/import allocation.
+- [x] Run backend/PostgreSQL concurrency/frontend tests and verify database backup.
+- [ ] Push/deploy through the existing flow and reconcile legacy checkout stock.
+- [ ] Verify Mondo Nuovo's actual 40 holes and paid membership/card state on production; record evidence and limitations.
+
+## Review (SSH recovery and stock-safe membership payments - Sep 7, 2026)
+- User approved implementation and 15-minute reservations; root login through Hetzner console is available.
+- Initial environment: OpenSSH installed, Windows ssh-agent disabled, no .ssh directory, local source copy has no .git metadata.
+- Restored dedicated Ed25519 identity and strict known-host verification. Git metadata recovered from the remote without replacing the workspace.
+- Live audit: Mondo Nuovo org 18 has 15 holes in lot 52 and 25 in lot 68 despite both cursors being beyond the end; first recoverable number is 27227. Lot 71 has 268 free numbers (308 total before legacy checkout holds). The old allocator treated the cursor as exhaustion while counters measured unused numbers.
+- Live audit: 492 completed payments, 491 linked to existing active members with cards, one historical orphan payment (53); zero existing paid members without cards. 35 legacy SumUp checkouts (21 pending, 14 failed) have no explicit expiry; provider GET found no in-flight/successful transaction on those links.
+- Verification: 112 focused backend tests across allocation, reservation, payment, renewal, schema, worker, reconciliation, lot guards and deploy transport. Additional stock callsite suites passed for imports, integrations, expiry and low-card alerts. Ten real PostgreSQL concurrency tests passed in an isolated stock_tests database, including last-card contention, manual issuance, hole allocation, slow provider I/O and simultaneous expired-checkout retries.
+- Frontend clean dependency install, typecheck and production build passed. The signup handler retains form state and displays the backend 409 detail. No frontend changes required. Unique Alembic head: 79a6d82bc401.
+- Backup before-card-reservations-20260907.dump validated with pg_restore --list; SHA256 f88cb4995e0b2106a4b7b7acdb9810dad8b3888e1a1aca4b3f5aa2915c239e3a. A fresh pre-push backup is also being taken.
+- Rollout reconciliation command: python scripts/reconcile_membership_card_stock.py (audit), then --apply. It reserves legitimate old links with a 15-minute expiry and deactivates obsolete/unstocked links only after verifying provider outcome. No automatic refunds or recreated orphan members.
+
 ## Plan (Debug email tessera Golden Filippini - Jul 7, 2026)
 - [x] Verificare salute server Hetzner: disco, inode, servizi e worker email.
 - [x] Cercare nel DB live il socio/tessera e le righe `email_outbox` per subject "La tua tessera Golden filippini qualificati srls".

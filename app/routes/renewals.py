@@ -120,7 +120,10 @@ def create_member_renewal(
     }
 
 
-@router.post("/api/member/renewals/{term_id}/checkout")
+@router.post(
+    "/api/member/renewals/{term_id}/checkout",
+    dependencies=[Depends(sqlite_card_allocation_request_guard)],
+)
 def create_member_renewal_checkout(
     term_id: int,
     request: Request,

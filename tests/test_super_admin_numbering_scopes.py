@@ -12,6 +12,17 @@ from app.services.card_allocation import allocate_next_card, release_card_number
 from app.services.numbering_scopes import ensure_assonam_central_scope, ensure_dedicated_scope
 
 
+def _issue_card(db, org_id: int, year: int):
+    allocation = allocate_next_card(db, org_id, year)
+    db.add(Member(
+        org_id=org_id, card_no=allocation.card_no, card_year=allocation.year,
+        batch_id=allocation.batch_id, numbering_scope_id=allocation.numbering_scope_id,
+        email=f"allocated-{uuid.uuid4().hex}@example.com", status="active",
+    ))
+    db.flush()
+    return allocation
+
+
 @pytest.fixture
 def db():
     session = SessionLocal()
@@ -125,9 +136,9 @@ def test_allocate_uses_legacy_branch_when_scope_is_missing(db):
     org = _create_org(db, "numbering-legacy")
     _create_batch(db, org_id=org.id, year=year, start_no=500, end_no=505)
 
-    first = allocate_next_card(db, org.id, year)
+    first = _issue_card(db, org.id, year)
     db.commit()
-    second = allocate_next_card(db, org.id, year)
+    second = _issue_card(db, org.id, year)
     db.commit()
 
     assert first.card_no == 500
@@ -161,9 +172,9 @@ def test_allocate_shared_scope_uses_only_batches_of_the_emitting_org(db):
         end_no=base + 110,
     )
 
-    first = allocate_next_card(db, golden_age.id, year)
+    first = _issue_card(db, golden_age.id, year)
     db.commit()
-    second = allocate_next_card(db, tag.id, year)
+    second = _issue_card(db, tag.id, year)
     db.commit()
 
     assert first.card_no == base
@@ -189,7 +200,7 @@ def test_allocate_dedicated_scope_starts_from_own_sequence(db):
         end_no=20,
     )
 
-    allocation = allocate_next_card(db, org.id, year)
+    allocation = _issue_card(db, org.id, year)
     db.commit()
 
     assert allocation.card_no == 1
@@ -219,7 +230,7 @@ def test_scoped_allocator_skips_numbers_already_used_in_same_org(db):
         batch_id=batch.id,
     )
 
-    allocation = allocate_next_card(db, org.id, year)
+    allocation = _issue_card(db, org.id, year)
     db.commit()
 
     assert allocation.card_no == 2
@@ -258,11 +269,11 @@ def test_scoped_allocator_progresses_only_to_next_batch_of_same_org(db):
         end_no=base + 201,
     )
 
-    first = allocate_next_card(db, tag.id, year)
+    first = _issue_card(db, tag.id, year)
     db.commit()
-    second = allocate_next_card(db, tag.id, year)
+    second = _issue_card(db, tag.id, year)
     db.commit()
-    third = allocate_next_card(db, tag.id, year)
+    third = _issue_card(db, tag.id, year)
     db.commit()
 
     assert [first.card_no, second.card_no, third.card_no] == [

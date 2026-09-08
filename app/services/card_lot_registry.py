@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app import audit
 from app.models import CardBatch, NumberingScope, Organization, RechargeRequest
+from app.services.card_availability import CardBatchAvailability, card_batch_availability, card_lot_status
 from app.services.numbering_scopes import (
     ASSONAM_CENTRAL_SCOPE_NAME,
     NUMBERING_MODE_SHARED_ASSONAM,
@@ -33,6 +34,7 @@ class CardLotRegistryRow:
     organization_name: str | None
     numbering_scope_name: str | None
     recharge_request_id: int | None
+    availability: CardBatchAvailability
 
 
 def parse_card_number(value) -> int:
@@ -121,22 +123,6 @@ def get_shared_scope_max_end(db: Session, scope_id: int) -> int | None:
     return int(value) if value is not None else None
 
 
-def lot_status_label(batch: CardBatch) -> str:
-    next_no = batch.next_no if batch.next_no is not None else batch.start_no
-    if batch.released_at is not None:
-        return "Rilasciato"
-    enabled = batch.is_enabled
-    if enabled is None:
-        enabled = True
-    if isinstance(enabled, int):
-        enabled = enabled != 0
-    if not bool(enabled):
-        return "Disattivo"
-    if next_no > batch.end_no:
-        return "Esaurito"
-    return "Attivo"
-
-
 def serialize_card_lot_registry_row(row: CardLotRegistryRow) -> dict[str, object]:
     batch = row.batch
     quantity = int(batch.end_no - batch.start_no + 1)
@@ -153,8 +139,8 @@ def serialize_card_lot_registry_row(row: CardLotRegistryRow) -> dict[str, object
         "range_start_label": format_card_number(batch.start_no),
         "range_end_label": format_card_number(batch.end_no),
         "quantity": quantity,
-        "status_label": lot_status_label(batch),
-        "next_no": batch.next_no,
+        "status_label": card_lot_status(batch, row.availability),
+        "next_no": row.availability.next_no,
         "recharge_request_id": row.recharge_request_id,
         "created_at": batch.created_at.isoformat() if batch.created_at else None,
         "released_at": batch.released_at.isoformat() if batch.released_at else None,
@@ -173,9 +159,11 @@ def list_card_lot_registry_rows(db: Session) -> list[CardLotRegistryRow]:
         .order_by(CardBatch.created_at.desc(), CardBatch.id.desc())
         .all()
     )
+    availability = card_batch_availability(db, batches)
     return [
         CardLotRegistryRow(
             batch=batch,
+            availability=availability[batch.id],
             organization_name=getattr(batch.organization, "name", None),
             numbering_scope_name=getattr(batch.numbering_scope, "name", None),
             recharge_request_id=getattr(getattr(batch, "recharge_request", None), "id", None),

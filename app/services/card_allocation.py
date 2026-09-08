@@ -4,10 +4,11 @@ from dataclasses import dataclass
 import logging
 
 from fastapi import HTTPException
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.models import CardBatch, Member, Organization
+from app.models import CardBatch, Organization
+from app.services.card_availability import eligible_card_batches, occupied_card_numbers
 
 logger = logging.getLogger(__name__)
 
@@ -85,102 +86,36 @@ def _acquire_sqlite_allocation_lock_before_read(db: Session) -> None:
     """
 
     bind = db.get_bind()
-    if bind is None or bind.dialect.name != "sqlite" or db.in_transaction():
+    if bind is None or bind.dialect.name != "sqlite":
         return
     connection = db.connection()
     connection.exec_driver_sql("PRAGMA busy_timeout = 5000")
-    connection.exec_driver_sql("BEGIN IMMEDIATE")
+    # An ORM SELECT can autobegin the Session without starting a SQLite
+    # transaction. Acquire the writer lock in that case too; never nest BEGIN
+    # after a write or an already acquired request lock.
+    if not connection.connection.driver_connection.in_transaction:
+        connection.exec_driver_sql("BEGIN IMMEDIATE")
 
 
-def _ordered_legacy_batches_query(org_id: int, year: int):
-    return (
-        select(CardBatch)
-        .where(
-            CardBatch.org_id == org_id,
-            CardBatch.numbering_scope_id.is_(None),
-            CardBatch.year == year,
-            CardBatch.is_enabled.is_(True),
-            CardBatch.released_at.is_(None),
-        )
-        .order_by(
-            func.coalesce(CardBatch.next_no, CardBatch.start_no).asc(),
-            CardBatch.start_no.asc(),
-            CardBatch.created_at.asc(),
-            CardBatch.id.asc(),
-        )
-    )
-
-
-def _ordered_org_scoped_batches_query(org_id: int, scope_id: int, year: int):
-    return (
-        select(CardBatch)
-        .where(
-            CardBatch.org_id == org_id,
-            CardBatch.numbering_scope_id == scope_id,
-            CardBatch.year == year,
-            CardBatch.is_enabled.is_(True),
-            CardBatch.released_at.is_(None),
-        )
-        .order_by(
-            func.coalesce(CardBatch.next_no, CardBatch.start_no).asc(),
-            CardBatch.start_no.asc(),
-            CardBatch.created_at.asc(),
-            CardBatch.id.asc(),
-        )
-    )
+def lock_card_allocation(db: Session, org_id: int, year: int) -> Organization:
+    """Lock the complete uniqueness domain until the caller commits/rolls back."""
+    if year <= 0:
+        raise HTTPException(status_code=400, detail="card_year non valido")
+    _acquire_sqlite_allocation_lock_before_read(db)
+    # Member uniqueness is per organization across all years. Always acquire
+    # the organization before its shared scope, including legacy fallback lots.
+    _acquire_allocation_lock(db, domain_id=org_id, year=0)
+    db.flush()
+    org = db.query(Organization).filter(Organization.id == org_id).populate_existing().first()
+    if org is None:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    if org.numbering_scope_id is not None:
+        _acquire_allocation_lock(db, domain_id=org.numbering_scope_id, year=0, namespace=SCOPE_LOCK_NAMESPACE)
+    return org
 
 
 def _batch_next_candidate(batch: CardBatch) -> int:
-    baseline = batch.next_no if batch.next_no is not None else batch.start_no
-    if baseline < batch.start_no:
-        return batch.start_no
-    return baseline
-
-
-def _occupied_numbers_for_org(
-    db: Session,
-    *,
-    org_id: int,
-    start_no: int,
-    end_no: int,
-) -> set[int]:
-    if start_no > end_no:
-        return set()
-    occupied_rows = db.execute(
-        select(Member.card_no).where(
-            Member.org_id == org_id,
-            Member.card_no.isnot(None),
-            Member.card_no >= start_no,
-            Member.card_no <= end_no,
-        )
-    ).all()
-    return {int(row[0]) for row in occupied_rows if row[0] is not None}
-
-
-def _occupied_numbers_for_scope(
-    db: Session,
-    *,
-    scope_id: int,
-    start_no: int,
-    end_no: int,
-) -> set[int]:
-    if start_no > end_no:
-        return set()
-    occupied_rows = db.execute(
-        select(Member.card_no)
-        .select_from(Member)
-        .outerjoin(CardBatch, Member.batch_id == CardBatch.id)
-        .where(
-            Member.card_no.isnot(None),
-            Member.card_no >= start_no,
-            Member.card_no <= end_no,
-            or_(
-                Member.numbering_scope_id == scope_id,
-                CardBatch.numbering_scope_id == scope_id,
-            ),
-        )
-    ).all()
-    return {int(row[0]) for row in occupied_rows if row[0] is not None}
+    return max(batch.next_no if batch.next_no is not None else batch.start_no, batch.start_no)
 
 
 def _assign_from_batches(
@@ -192,28 +127,15 @@ def _assign_from_batches(
     use_scope_occupancy: bool,
 ) -> CardAllocationResult:
     exhausted_batch_ids: list[int] = []
-    scope_id = org.numbering_scope_id
+    occupied_numbers = occupied_card_numbers(
+        db, org_id=org.id,
+        scope_id=org.numbering_scope_id if use_scope_occupancy else None,
+        start_no=min(batch.start_no for batch in candidate_batches),
+        end_no=max(batch.end_no for batch in candidate_batches), year=year,
+    )
 
     for batch in candidate_batches:
-        next_candidate = _batch_next_candidate(batch)
-        if next_candidate > batch.end_no:
-            exhausted_batch_ids.append(batch.id)
-            continue
-
-        occupied_numbers = _occupied_numbers_for_org(
-            db,
-            org_id=org.id,
-            start_no=next_candidate,
-            end_no=batch.end_no,
-        )
-        if use_scope_occupancy and scope_id is not None and batch.numbering_scope_id is not None:
-            occupied_numbers |= _occupied_numbers_for_scope(
-                db,
-                scope_id=scope_id,
-                start_no=next_candidate,
-                end_no=batch.end_no,
-            )
-
+        next_candidate = batch.start_no
         while next_candidate <= batch.end_no and next_candidate in occupied_numbers:
             next_candidate += 1
 
@@ -224,6 +146,8 @@ def _assign_from_batches(
             continue
 
         batch.next_no = next_candidate + 1
+        while batch.next_no <= batch.end_no and batch.next_no in occupied_numbers:
+            batch.next_no += 1
         db.add(batch)
         db.flush()
 
@@ -256,65 +180,6 @@ def _assign_from_batches(
     raise _card_range_exhausted(org.id, year)
 
 
-def _allocate_next_card_legacy(db: Session, org: Organization, year: int) -> CardAllocationResult:
-    _acquire_allocation_lock(db, domain_id=org.id, year=year)
-    candidate_batches = db.execute(_ordered_legacy_batches_query(org.id, year)).scalars().all()
-    if not candidate_batches:
-        raise _card_range_exhausted(org.id, year)
-    return _assign_from_batches(
-        db,
-        org=org,
-        year=year,
-        candidate_batches=candidate_batches,
-        use_scope_occupancy=False,
-    )
-
-
-def _allocate_next_card_scoped(db: Session, org: Organization, year: int) -> CardAllocationResult:
-    if org.numbering_scope_id is None:
-        return _allocate_next_card_legacy(db, org, year)
-
-    _acquire_allocation_lock(
-        db,
-        domain_id=org.numbering_scope_id,
-        year=year,
-        namespace=SCOPE_LOCK_NAMESPACE,
-    )
-
-    scoped_batches = db.execute(
-        _ordered_org_scoped_batches_query(org.id, org.numbering_scope_id, year)
-    ).scalars().all()
-    if scoped_batches:
-        return _assign_from_batches(
-            db,
-            org=org,
-            year=year,
-            candidate_batches=scoped_batches,
-            use_scope_occupancy=True,
-        )
-
-    legacy_fallback_batches = db.execute(
-        _ordered_legacy_batches_query(org.id, year)
-    ).scalars().all()
-    if legacy_fallback_batches:
-        logger.info(
-            "scoped_allocation_legacy_batch_fallback org_id=%s year=%s scope_id=%s batch_count=%s",
-            org.id,
-            year,
-            org.numbering_scope_id,
-            len(legacy_fallback_batches),
-        )
-        return _assign_from_batches(
-            db,
-            org=org,
-            year=year,
-            candidate_batches=legacy_fallback_batches,
-            use_scope_occupancy=False,
-        )
-
-    raise _card_range_exhausted(org.id, year)
-
-
 def release_card_number(
     db: Session,
     *,
@@ -326,8 +191,7 @@ def release_card_number(
     if card_no is None or card_no <= 0:
         return
 
-    org = db.query(Organization).filter(Organization.id == org_id).first()
-    org_scope_id = getattr(org, "numbering_scope_id", None)
+    lock_card_allocation(db, org_id, year or 1)
 
     batch: CardBatch | None = None
     if batch_id is not None:
@@ -363,23 +227,6 @@ def release_card_number(
     if batch is None:
         return
 
-    lock_year = year if year is not None and year > 0 else batch.year
-    if batch.numbering_scope_id is not None:
-        _acquire_allocation_lock(
-            db,
-            domain_id=batch.numbering_scope_id,
-            year=lock_year,
-            namespace=SCOPE_LOCK_NAMESPACE,
-            immediate_sqlite=False,
-        )
-    else:
-        _acquire_allocation_lock(
-            db,
-            domain_id=org_id,
-            year=lock_year,
-            immediate_sqlite=False,
-        )
-
     current_next = _batch_next_candidate(batch)
     if card_no < current_next:
         batch.next_no = card_no
@@ -396,14 +243,12 @@ def release_card_number(
 
 
 def allocate_next_card(db: Session, org_id: int, year: int) -> CardAllocationResult:
-    if year <= 0:
-        raise HTTPException(status_code=400, detail="card_year non valido")
-
-    _acquire_sqlite_allocation_lock_before_read(db)
-    org = db.query(Organization).filter(Organization.id == org_id).first()
-    if org is None:
-        raise HTTPException(status_code=404, detail="Organization not found")
-
-    if org.numbering_scope_id is None:
-        return _allocate_next_card_legacy(db, org, year)
-    return _allocate_next_card_scoped(db, org, year)
+    """Select a free number; persist its owner in this transaction before commit."""
+    org = lock_card_allocation(db, org_id, year)
+    batches = eligible_card_batches(db, org_ids=[org_id], year=year)
+    if not batches:
+        raise _card_range_exhausted(org_id, year)
+    return _assign_from_batches(
+        db, org=org, year=year, candidate_batches=batches,
+        use_scope_occupancy=batches[0].numbering_scope_id is not None,
+    )

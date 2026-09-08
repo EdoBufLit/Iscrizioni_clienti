@@ -71,6 +71,7 @@ APP_ENV_KEYS = (
     "GREEN_API_WEBHOOK_ALLOWED_IPS",
     "EVOLUTION_API_KEY",
     "SUMUP_CREDENTIALS_ENCRYPTION_KEY",
+    "MEMBERSHIP_PAYMENT_RECONCILE_INTERVAL_SECONDS",
     "AFFILIAZIONE_ENABLED",
 )
 
@@ -104,6 +105,9 @@ def _normalise_provider(value: str) -> str:
 
 def build_app_env(source: Mapping[str, str]) -> str:
     values = {key: source.get(key, "") for key in APP_ENV_KEYS}
+    values["MEMBERSHIP_PAYMENT_RECONCILE_INTERVAL_SECONDS"] = (
+        values["MEMBERSHIP_PAYMENT_RECONCILE_INTERVAL_SECONDS"].strip() or "60"
+    )
     values["AFFILIAZIONE_ENABLED"] = _normalise_bool(
         values["AFFILIAZIONE_ENABLED"], default="false"
     )

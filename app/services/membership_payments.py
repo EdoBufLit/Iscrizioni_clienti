@@ -4,7 +4,7 @@ import json
 import logging
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
@@ -24,7 +24,7 @@ from app.models import (
     Organization,
     OrganizationPaymentProvider,
 )
-from app.services.card_allocation import allocate_next_card
+from app.services.card_allocation import allocate_next_card, lock_card_allocation
 from app.services.annual_memberships import sync_annual_membership_term
 from app.services.member_membership import (
     MEMBERSHIP_TYPE_ANNUAL,
@@ -294,6 +294,11 @@ def create_sumup_hosted_checkout(
         "return_url": return_url,
         "hosted_checkout": {"enabled": True},
     }
+    expires_at = getattr(payment, "reservation_expires_at", None)
+    if expires_at is not None:
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        payload["valid_until"] = expires_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
     create_payload = _sumup_request(
         method="POST",
         path="checkouts",
@@ -312,6 +317,148 @@ def verify_sumup_checkout(org: Organization, payment: MembershipPayment) -> dict
         path=f"checkouts/{payment.sumup_checkout_id}",
         api_key=api_key,
     )
+
+
+def persist_sumup_checkout_creation(
+    db: Session,
+    payment: MembershipPayment,
+    *,
+    payload: dict[str, Any] | None = None,
+    error: Exception | None = None,
+) -> None:
+    """Retain provider results after the durable reservation transaction.
+
+    A webhook can complete while the create request is in flight. Reload the
+    payment under the same lock order without overwriting its payment status.
+    """
+    lock_card_allocation(db, org_id=payment.org_id, year=int(payment.membership_year))
+    db.query(MembershipPayment).filter(MembershipPayment.id == payment.id).with_for_update().populate_existing().one()
+    if payload is not None:
+        payment.raw_create_response = payload
+        hosted = payload.get("hosted_checkout") or {}
+        hosted_url = (
+            payload.get("hosted_checkout_url")
+            or hosted.get("checkout_url")
+            or hosted.get("hosted_checkout_url")
+            or payload.get("checkout_url")
+        )
+        checkout_id = payload.get("id") or payload.get("checkout_id")
+        if checkout_id:
+            payment.sumup_checkout_id = str(checkout_id)
+        if hosted_url:
+            payment.hosted_checkout_url = str(hosted_url)
+    elif error is not None:
+        payment.raw_create_response = {
+            "creation_error": {
+                "type": type(error).__name__,
+                "status_code": getattr(error, "status_code", None),
+            }
+        }
+    db.commit()
+
+
+def reuse_existing_sumup_checkout(
+    db: Session,
+    payment: MembershipPayment,
+    org: Organization,
+    *,
+    request: Request | None = None,
+    verify_checkout=None,
+) -> bool:
+    """Return whether the existing checkout can be presented again safely.
+
+    Uncertain creation or expiry keeps its reservation and blocks another
+    provider POST until reconciliation proves the old checkout cannot charge.
+    """
+    from app.services.card_reservations import (
+        _lock_payment,
+        _definitively_unpaid_expired,
+        ensure_checkout_reference_recovered,
+        reconcile_payment_reservation,
+        reserve_payment_card,
+    )
+
+    if payment_status_is_paid(payment.status):
+        raise HTTPException(status_code=409, detail="La quota associativa risulta già pagata.")
+    if payment.reservation_state == "held" and not payment.sumup_checkout_id:
+        ensure_checkout_reference_recovered(db, payment, org)
+
+    if payment.sumup_checkout_id and payment.reservation_state != "released":
+        checkout_id = payment.sumup_checkout_id
+        db.commit()
+        verified = (verify_checkout or verify_sumup_checkout)(org, payment)
+        payment = _lock_payment(db, payment)
+        if payment.sumup_checkout_id != checkout_id:
+            raise HTTPException(status_code=409, detail="Il pagamento è cambiato. Riprova tra poco.")
+        update_payment_state_from_sumup(
+            db=db, payment=payment, org=org, verified_payload=verified, request=request
+        )
+        if payment.reservation_state is None and _definitively_unpaid_expired(verified):
+            payment.reservation_state = "released"
+
+    expires_at = payment.reservation_expires_at
+    if expires_at is not None and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    reservation_expired = expires_at is not None and expires_at <= datetime.now(timezone.utc)
+    if payment.reservation_state == "held" and (
+        reservation_expired or payment.status in RETRYABLE_MEMBERSHIP_STATUSES
+    ):
+        reconcile_payment_reservation(db, payment, org, request=request)
+
+    if payment_status_is_paid(payment.status):
+        db.commit()
+        raise HTTPException(status_code=409, detail="La quota associativa risulta già pagata.")
+    if payment.reservation_state == "released":
+        _require_latest_checkout_attempt(db, payment)
+        return False
+    if payment.reservation_state == "held":
+        if (
+            payment.status in {MembershipPaymentStatus.PENDING.value, MembershipPaymentStatus.FAILED.value}
+            and payment.sumup_checkout_id
+            and payment.hosted_checkout_url
+            and not reservation_expired
+        ):
+            return True
+        db.commit()
+        raise HTTPException(
+            status_code=409,
+            detail="Verifica del pagamento in corso. Riprova tra poco senza effettuare un altro pagamento.",
+        )
+    if payment.sumup_checkout_id and payment.hosted_checkout_url:
+        # Legacy pending checkouts get a reservation before being presented
+        # again; they retain their provider identity and cannot double-charge.
+        reserve_payment_card(db, payment)
+        db.commit()
+        expires_at = payment.reservation_expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        _sumup_request(
+            method="PATCH", path=f"checkouts/{payment.sumup_checkout_id}",
+            api_key=decrypt_sumup_api_key(org.sumup_api_key_encrypted),
+            json_payload={"valid_until": expires_at.astimezone(timezone.utc).isoformat()},
+        )
+        if payment.status not in {MembershipPaymentStatus.PENDING.value, MembershipPaymentStatus.FAILED.value}:
+            raise HTTPException(status_code=409, detail="Verifica del pagamento in corso. Riprova tra poco.")
+        return True
+    _require_latest_checkout_attempt(db, payment)
+    return False
+
+
+def _require_latest_checkout_attempt(db: Session, payment: MembershipPayment) -> None:
+    """Hold the domain through creation and reject a concurrently replaced attempt."""
+    from app.services.card_reservations import _lock_payment
+
+    payment = _lock_payment(db, payment)
+    query = db.query(MembershipPayment).filter(
+        MembershipPayment.org_id == payment.org_id,
+        MembershipPayment.socio_id == payment.socio_id,
+        MembershipPayment.payment_kind == payment.payment_kind,
+    )
+    if payment.payment_kind == "renewal":
+        query = query.filter(MembershipPayment.annual_term_id == payment.annual_term_id)
+    latest = query.order_by(MembershipPayment.created_at.desc(), MembershipPayment.id.desc()).first()
+    if latest.id != payment.id or payment_status_is_paid(payment.status):
+        raise HTTPException(status_code=409, detail="Il pagamento è stato aggiornato. Riprova tra poco.")
 
 
 def map_sumup_checkout_status(raw_status: str | None) -> str:
@@ -376,7 +523,23 @@ def maybe_fulfill_member_card(
     member: Member,
     org: Organization,
     request: Request | None = None,
+    payment: MembershipPayment | None = None,
 ) -> FulfillmentResult:
+    from app.services.card_reservations import (
+        find_member_paid_reservation,
+        reserved_payment_allocation,
+        settle_paid_reservation_for_existing_card,
+    )
+
+    payment = payment or find_member_paid_reservation(db, member.id)
+    allocation_year = (
+        getattr(payment, "reserved_card_year", None)
+        or getattr(payment, "membership_year", None)
+        or datetime.utcnow().year
+    )
+    lock_card_allocation(db, org_id=org.id, year=int(allocation_year))
+    if payment is not None and payment.id is not None:
+        db.query(MembershipPayment).filter(MembershipPayment.id == payment.id).with_for_update().first()
     member = _lock_member_for_fulfillment(db, member)
 
     if organization_requires_membership_payment(org) and not payment_status_is_paid(
@@ -392,11 +555,9 @@ def maybe_fulfill_member_card(
     issued_new_card = False
     if member.card_no is None:
         try:
-            allocation = allocate_next_card(
-                db,
-                org_id=member.org_id,
-                year=datetime.utcnow().year,
-            )
+            allocation = reserved_payment_allocation(db, payment) if payment is not None else None
+            if allocation is None:
+                allocation = allocate_next_card(db, org_id=member.org_id, year=int(allocation_year))
             member.card_no = allocation.card_no
             member.batch_id = allocation.batch_id
             member.card_year = allocation.year
@@ -407,6 +568,9 @@ def maybe_fulfill_member_card(
                 member.status = MemberStatus.PENDING_CARDS
                 return FulfillmentResult(issued_card=False, reason="card_stock_exhausted")
             raise
+
+    elif payment is not None:
+        settle_paid_reservation_for_existing_card(db, payment, member)
 
     if member.card_year is None:
         member.card_year = datetime.utcnow().year
@@ -477,6 +641,13 @@ def apply_membership_payment_completion(
     verified_payload: dict[str, Any],
     request: Request | None = None,
 ) -> FulfillmentResult:
+    lock_card_allocation(
+        db,
+        org_id=org.id,
+        year=int(getattr(payment, "reserved_card_year", None) or payment.membership_year or datetime.utcnow().year),
+    )
+    if payment.id is not None:
+        db.query(MembershipPayment).filter(MembershipPayment.id == payment.id).with_for_update().first()
     payment.status = MembershipPaymentStatus.COMPLETED.value
     payment.raw_last_status_response = verified_payload
     if payment.confirmed_at is None:
@@ -509,7 +680,7 @@ def apply_membership_payment_completion(
     if member.payment_completed_at is None:
         member.payment_completed_at = datetime.utcnow()
     sync_member_card_payment_flags(member, org)
-    fulfillment = maybe_fulfill_member_card(db=db, member=member, org=org, request=request)
+    fulfillment = maybe_fulfill_member_card(db=db, member=member, org=org, request=request, payment=payment)
     if member.card_year is not None:
         payment.membership_year = int(member.card_year)
         db.flush()
@@ -527,9 +698,17 @@ def update_payment_state_from_sumup(
     verified_payload: dict[str, Any],
     request: Request | None = None,
 ) -> FulfillmentResult:
+    from app.services.card_reservations import _lock_payment
+
+    payment = _lock_payment(db, payment)
     mapped_status = map_sumup_checkout_status(verified_payload.get("status"))
     payment.raw_last_status_response = verified_payload
     member = payment.member
+
+    # Delayed provider events must never turn an acknowledged payment back
+    # into a retryable checkout or release its reserved card.
+    if payment_status_is_paid(payment.status) and mapped_status != MembershipPaymentStatus.COMPLETED.value:
+        return FulfillmentResult(issued_card=False, reason="already_completed")
 
     if mapped_status == MembershipPaymentStatus.COMPLETED.value:
         return apply_membership_payment_completion(
@@ -542,9 +721,14 @@ def update_payment_state_from_sumup(
         )
 
     payment.status = mapped_status
+    if mapped_status == MembershipPaymentStatus.EXPIRED.value:
+        from app.services.card_reservations import release_payment_reservation
+
+        release_payment_reservation(db, payment, verified_payload=verified_payload)
     if (
         member is not None
         and getattr(payment, "payment_kind", None) != "renewal"
+        and not payment_status_is_paid(member.payment_status)
         and mapped_status in {
             MembershipPaymentStatus.FAILED.value,
             MembershipPaymentStatus.CANCELLED.value,

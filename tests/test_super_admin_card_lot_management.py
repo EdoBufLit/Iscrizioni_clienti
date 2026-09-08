@@ -1,11 +1,12 @@
-from datetime import datetime
+from datetime import date, datetime, timedelta
 import uuid
 
 import pytest
-from sqlalchemy import func
+from sqlalchemy import event, func
+from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
-from app.models import CardBatch, Member, MemberStatus, OperationLog, Organization
+from app.models import AnnualMembershipTerm, CardBatch, Member, MemberStatus, MembershipPayment, OperationLog, Organization
 
 
 @pytest.fixture
@@ -214,3 +215,82 @@ def test_super_admin_blocks_delete_when_lot_has_assigned_cards(client, db):
 
     db.expire_all()
     assert db.query(CardBatch).filter(CardBatch.id == batch.id).first() is not None
+
+
+def test_live_checkout_hold_blocks_lot_release_resize_year_change_and_disable(client, db):
+    _login_super_admin(client)
+    org = _create_org(db, "lot-hold")
+    start_no, end_no = _next_free_range(db)
+    _set_card_range(client, org.id, start_no, end_no)
+    batch = _latest_batch(db, org.id)
+    payment = MembershipPayment(
+        org_id=org.id, amount=10, currency="EUR", status="pending", source="sumup",
+        reserved_card_no=start_no, reserved_batch_id=batch.id,
+        reserved_card_year=batch.year, reservation_state="held",
+        reservation_expires_at=datetime.utcnow() - timedelta(days=1),
+    )
+    db.add(payment)
+    db.commit()
+    url = f"/api/admin/organizations/{org.id}/card-lots/{batch.id}"
+    for payload in ({"range_start": start_no + 1}, {"year": batch.year + 1}, {"status": "inactive"}):
+        response = client.patch(url, json=payload)
+        assert response.status_code == 409, response.text
+    assert client.delete(url).status_code == 409
+    notes = client.patch(url, json={"notes": "Checkout in corso"})
+    assert notes.status_code == 200, notes.text
+    assert notes.json()["item"]["reserved"] == 1
+    assert notes.json()["item"]["remaining"] == end_no - start_no
+    assert notes.json()["item"]["deletable"] is False
+
+
+def test_scheduled_annual_card_protects_lot_without_current_member_card(client, db):
+    _login_super_admin(client)
+    org = _create_org(db, "lot-scheduled")
+    start_no, end_no = _next_free_range(db)
+    _set_card_range(client, org.id, start_no, end_no)
+    batch = _latest_batch(db, org.id)
+    member = Member(org_id=org.id, email=f"term-{uuid.uuid4().hex}@example.com")
+    db.add(member)
+    db.flush()
+    db.add(AnnualMembershipTerm(
+        member_id=member.id, org_id=org.id, membership_year=batch.year,
+        starts_on=date(batch.year, 1, 1), valid_through=date(batch.year + 1, 1, 1),
+        status="scheduled", card_no=start_no, card_year=batch.year, batch_id=batch.id,
+    ))
+    db.commit()
+    url = f"/api/admin/organizations/{org.id}/card-lots/{batch.id}"
+    assert client.patch(url, json={"range_start": start_no + 1}).status_code == 409
+    assert client.delete(url).status_code == 409
+
+
+def test_range_update_does_not_release_reservation_lock_before_saving_new_range(client, db):
+    _login_super_admin(client)
+    org = _create_org(db, "lot-atomic-resize")
+    start_no, end_no = _next_free_range(db)
+    _set_card_range(client, org.id, start_no, end_no)
+    batch = _latest_batch(db, org.id)
+    batch_id = batch.id
+    new_range = (start_no + 1, end_no)
+    committed_ranges = []
+
+    def record_lot_at_commit(session):
+        # A commit ends the allocation lock. Once the guarded lot has been
+        # read, the first such boundary must already contain the new range;
+        # otherwise a checkout can reserve its old first number in between.
+        for entity in session.identity_map.values():
+            if isinstance(entity, CardBatch) and entity.id == batch_id:
+                committed_ranges.append((entity.start_no, entity.end_no))
+
+    event.listen(Session, "before_commit", record_lot_at_commit)
+    try:
+        response = client.patch(
+            f"/api/admin/organizations/{org.id}/card-lots/{batch_id}",
+            json={"range_start": new_range[0]},
+        )
+    finally:
+        event.remove(Session, "before_commit", record_lot_at_commit)
+
+    assert response.status_code == 200, response.text
+    assert committed_ranges == [new_range]
+    db.refresh(batch)
+    assert (batch.start_no, batch.end_no) == new_range

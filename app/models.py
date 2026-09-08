@@ -2741,6 +2741,18 @@ class MembershipPayment(Base):
     # browser cookie.
     status_token_hash = Column(String, nullable=True, index=True)
     status_token_expires_at = Column(DateTime(timezone=True), nullable=True)
+    # A held number is unavailable to every issuer, including after the
+    # local expiry until the provider has been reconciled authoritatively.
+    reserved_card_no = Column(Integer, nullable=True)
+    reserved_batch_id = Column(
+        Integer, ForeignKey("card_batches.id", ondelete="SET NULL"), nullable=True
+    )
+    reserved_card_year = Column(Integer, nullable=True)
+    reserved_numbering_scope_id = Column(
+        Integer, ForeignKey("numbering_scopes.id", ondelete="SET NULL"), nullable=True
+    )
+    reservation_expires_at = Column(DateTime(timezone=True), nullable=True)
+    reservation_state = Column(String(length=16), nullable=True)
     confirmed_at = Column(DateTime(timezone=True), nullable=True)
     manual_marked_paid_by_user_id = Column(
         Integer, ForeignKey("admin_users.id"), nullable=True
@@ -2771,6 +2783,37 @@ class MembershipPayment(Base):
 
     __table_args__ = (
         Index("ix_membership_payments_org_member_status", "org_id", "socio_id", "status"),
+        Index(
+            "uq_membership_payments_held_org_card",
+            "org_id", "reserved_card_no",
+            unique=True,
+            postgresql_where=sa.text("reservation_state = 'held'"),
+            sqlite_where=sa.text("reservation_state = 'held'"),
+        ),
+        Index(
+            "uq_membership_payments_held_scope_card",
+            "reserved_numbering_scope_id", "reserved_card_no",
+            unique=True,
+            postgresql_where=sa.text(
+                "reservation_state = 'held' AND reserved_numbering_scope_id IS NOT NULL"
+            ),
+            sqlite_where=sa.text(
+                "reservation_state = 'held' AND reserved_numbering_scope_id IS NOT NULL"
+            ),
+        ),
+        Index(
+            "ix_membership_payments_reservation_reconcile",
+            "reservation_state", "reservation_expires_at", "id",
+        ),
+        sa.CheckConstraint(
+            "reservation_state IS NULL OR reservation_state IN ('held', 'consumed', 'released')",
+            name="ck_membership_payments_reservation_state",
+        ),
+        sa.CheckConstraint(
+            "reservation_state != 'held' OR "
+            "(reserved_card_no IS NOT NULL AND reserved_card_year IS NOT NULL)",
+            name="ck_membership_payments_held_card",
+        ),
         Index(
             "ix_membership_payments_term_status",
             "annual_term_id",

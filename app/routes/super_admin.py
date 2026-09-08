@@ -115,6 +115,8 @@ from app.services.whatsapp_provider import (
 )
 from app.services.whatsapp_sync import apply_connection_snapshot, serialize_connection
 from app.services.org_branding import sanitize_card_email_subject_template
+from app.services.card_allocation import lock_card_allocation
+from app.services.card_availability import CardBatchAvailability, batch_has_linked_terms_or_reservations, batches_with_linked_terms_or_reservations, card_batch_availability, card_lot_status, eligible_card_batches
 from app.services.card_lot_registry import (
     build_card_lots_workbook,
     ensure_recharge_request_batch,
@@ -4200,29 +4202,7 @@ def _resolve_batch_year(raw_year: Optional[int]) -> int:
 
 
 def _count_assigned_cards_for_batch(db: Session, batch: CardBatch) -> int:
-    range_filter = and_(
-        Member.deleted_at.is_(None),
-        Member.card_year == batch.year,
-        Member.card_no.isnot(None),
-        Member.card_no >= batch.start_no,
-        Member.card_no <= batch.end_no,
-    )
-    if batch.numbering_scope_id is not None:
-        range_filter = and_(
-            range_filter,
-            or_(
-                Member.numbering_scope_id == batch.numbering_scope_id,
-                Member.batch_id == batch.id,
-            ),
-        )
-    else:
-        range_filter = and_(range_filter, Member.org_id == batch.org_id)
-    return int(
-        db.query(func.count(func.distinct(Member.card_no)))
-        .filter(range_filter)
-        .scalar()
-        or 0
-    )
+    return card_batch_availability(db, [batch])[batch.id].assigned
 
 
 def _count_linked_members_for_batch(db: Session, batch: CardBatch) -> int:
@@ -4272,30 +4252,14 @@ def _batch_manual_enabled(batch: CardBatch) -> bool:
     return bool(value)
 
 
-def _batch_is_assignable(batch: CardBatch) -> bool:
-    batch_next_no = batch.next_no if batch.next_no is not None else batch.start_no
-    return bool(
-        _batch_manual_enabled(batch)
-        and batch.released_at is None
-        and batch_next_no <= batch.end_no
-    )
-
-
-def _batch_status_label(batch: CardBatch) -> str:
-    if batch.released_at is not None:
-        return "Rilasciato"
-    if not _batch_manual_enabled(batch):
-        return "Disattivo"
-    if not _batch_is_assignable(batch):
-        return "Esaurito"
-    return "Attivo"
-
-
-def _serialize_batch_usage(db: Session, batch: CardBatch) -> dict[str, object]:
-    total = int(batch.end_no - batch.start_no + 1)
-    assigned = _count_assigned_cards_for_batch(db, batch)
+def _serialize_batch_usage(db: Session, batch: CardBatch, availability: CardBatchAvailability | None = None, protected_references: bool | None = None) -> dict[str, object]:
+    usage = availability or card_batch_availability(db, [batch])[batch.id]
+    total = usage.total
+    assigned = usage.assigned
     linked_members = _count_linked_members_for_batch(db, batch)
-    remaining = max(total - assigned, 0)
+    if protected_references is None:
+        protected_references = batch_has_linked_terms_or_reservations(db, batch)
+    remaining = usage.remaining
     numbering_scope = getattr(batch, "numbering_scope", None)
     owner_org = getattr(batch, "organization", None)
     return {
@@ -4304,18 +4268,19 @@ def _serialize_batch_usage(db: Session, batch: CardBatch) -> dict[str, object]:
         "end_no": batch.end_no,
         "start_label": format_card_number(batch.start_no),
         "end_label": format_card_number(batch.end_no),
-        "next_no": batch.next_no,
+        "next_no": usage.next_no,
         "year": batch.year,
         "is_enabled": _batch_manual_enabled(batch),
-        "is_active": _batch_is_assignable(batch),
-        "status_label": _batch_status_label(batch),
+        "is_active": card_lot_status(batch, usage) == "Attivo",
+        "status_label": card_lot_status(batch, usage),
         "notes": batch.notes,
         "total": total,
         "assigned": assigned,
         "remaining": remaining,
+        "reserved": usage.reserved,
         "linked_members": linked_members,
-        "range_editable": linked_members == 0,
-        "deletable": assigned == 0 and linked_members == 0,
+        "range_editable": linked_members == 0 and not protected_references and not usage.assigned and not usage.reserved,
+        "deletable": assigned == 0 and linked_members == 0 and not protected_references and not usage.reserved,
         "numbering_scope_id": batch.numbering_scope_id,
         "numbering_scope_name": getattr(numbering_scope, "name", None),
         "numbering_scope_type": getattr(numbering_scope, "scope_type", None),
@@ -4362,9 +4327,12 @@ def _get_organization_and_batch_or_404(
     return org, batch
 
 
-def _begin_card_allocation_transaction(db: Session) -> None:
+def _begin_card_allocation_transaction(
+    db: Session, *, restart_transaction: bool = True
+) -> None:
     """Serialize card-range allocation for both SQLite and Postgres."""
-    db.commit()
+    if restart_transaction:
+        db.commit()
 
     bind = db.get_bind()
     dialect_name = ""
@@ -4372,7 +4340,8 @@ def _begin_card_allocation_transaction(db: Session) -> None:
         dialect_name = (bind.dialect.name or "").lower()
 
     if dialect_name == "sqlite":
-        db.execute(text("BEGIN IMMEDIATE"))
+        if not db.connection().connection.driver_connection.in_transaction:
+            db.execute(text("BEGIN IMMEDIATE"))
         return
 
     if dialect_name == "postgresql":
@@ -4559,9 +4528,12 @@ def add_card_batch(
         .order_by(CardBatch.start_no)
         .all()
     )
-    serialized_batches = [_serialize_batch_usage(db, b) for b in batches]
-    total = int(sum(int(item["total"]) for item in serialized_batches))
-    remaining = int(sum(int(item["remaining"]) for item in serialized_batches))
+    availability = card_batch_availability(db, batches)
+    protected_ids = batches_with_linked_terms_or_reservations(db, batches)
+    serialized_batches = [_serialize_batch_usage(db, b, availability[b.id], b.id in protected_ids) for b in batches]
+    eligible_ids = {b.id for b in eligible_card_batches(db, org_ids=[org_id], year=batch_year)}
+    total = int(sum(int(item["total"]) for item in serialized_batches if item["id"] in eligible_ids))
+    remaining = int(sum(int(item["remaining"]) for item in serialized_batches if item["id"] in eligible_ids))
 
     return {
         "ok": True,
@@ -4608,10 +4580,14 @@ def get_org_batches(
         .order_by(CardBatch.start_no, CardBatch.id.asc())
         .all()
     )
-    serialized_batches = [_serialize_batch_usage(db, b) for b in batches]
-    summary_total = int(sum(int(item["total"]) for item in serialized_batches))
-    summary_assigned = int(sum(int(item["assigned"]) for item in serialized_batches))
-    summary_remaining = int(sum(int(item["remaining"]) for item in serialized_batches))
+    availability = card_batch_availability(db, batches)
+    protected_ids = batches_with_linked_terms_or_reservations(db, batches)
+    serialized_batches = [_serialize_batch_usage(db, b, availability[b.id], b.id in protected_ids) for b in batches]
+    eligible_ids = {b.id for b in eligible_card_batches(db, org_ids=[org_id], year=target_year)}
+    summary_total = int(sum(int(item["total"]) for item in serialized_batches if item["id"] in eligible_ids))
+    summary_assigned = int(sum(int(item["assigned"]) for item in serialized_batches if item["id"] in eligible_ids))
+    summary_remaining = int(sum(int(item["remaining"]) for item in serialized_batches if item["id"] in eligible_ids))
+    summary_reserved = int(sum(int(item["reserved"]) for item in serialized_batches if item["id"] in eligible_ids))
 
     return {
         "batches": serialized_batches,
@@ -4622,6 +4598,7 @@ def get_org_batches(
             "total": summary_total,
             "assigned": summary_assigned,
             "remaining": summary_remaining,
+            "reserved": summary_reserved,
         },
     }
 
@@ -4842,6 +4819,7 @@ def patch_org_card_lot(
     db: Session = Depends(get_db),
 ):
     admin = _require_super_admin(request, db)
+    lock_card_allocation(db, org_id, datetime.utcnow().year)
     org, batch = _get_organization_and_batch_or_404(db, org_id, lot_id)
     payload = body.model_dump(exclude_unset=True)
     if not payload:
@@ -4874,14 +4852,21 @@ def patch_org_card_lot(
             )
 
     linked_members = _count_linked_members_for_batch(db, batch)
-    if linked_members > 0 and (range_changed or year_changed):
+    usage = card_batch_availability(db, [batch])[batch.id]
+    protected_references = batch_has_linked_terms_or_reservations(db, batch)
+    if (linked_members > 0 or protected_references or usage.assigned or usage.reserved) and (range_changed or year_changed):
         raise HTTPException(
             status_code=409,
             detail="Impossibile modificare il range o l'anno: esistono tessere già assegnate",
         )
 
+    if payload.get("status") == "inactive" and usage.reserved:
+        raise HTTPException(status_code=409, detail="Impossibile disattivare: esistono tessere prenotate per pagamenti online")
+
     if range_changed:
-        _begin_card_allocation_transaction(db)
+        # Keep the allocation-domain lock acquired before the ownership checks.
+        # A commit here would let a checkout claim the old range before resize.
+        _begin_card_allocation_transaction(db, restart_transaction=False)
         conflict = check_card_overlap(
             db,
             requested_start,
@@ -4969,11 +4954,13 @@ def delete_org_card_lot(
     db: Session = Depends(get_db),
 ):
     admin = _require_super_admin(request, db)
+    lock_card_allocation(db, org_id, datetime.utcnow().year)
     org, batch = _get_organization_and_batch_or_404(db, org_id, lot_id)
 
     assigned = _count_assigned_cards_for_batch(db, batch)
     linked_members = _count_linked_members_for_batch(db, batch)
-    if assigned > 0 or linked_members > 0:
+    usage = card_batch_availability(db, [batch])[batch.id]
+    if assigned > 0 or linked_members > 0 or usage.reserved or batch_has_linked_terms_or_reservations(db, batch):
         raise HTTPException(
             status_code=409,
             detail="Impossibile eliminare: esistono tessere già assegnate",

@@ -10,7 +10,7 @@ from typing import Iterator
 
 import pytest
 
-from scripts.prepare_deploy_bundle import prepare_bundle
+from scripts.prepare_deploy_bundle import build_app_env, prepare_bundle
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -181,3 +181,25 @@ def test_remote_deploy_has_no_credential_bearing_cli_arguments() -> None:
     assert "flock -w 1200" in source
     assert "Final canary passed" in source
     assert "alembic current" in source
+
+
+def test_reservation_worker_is_in_every_rollout_and_canary_stage() -> None:
+    source = REMOTE_SCRIPT_PATH.read_text(encoding="utf-8")
+    for line in source.splitlines():
+        if ("--profile ops pull web" in line
+                or "${APP_RUNTIME_UP_FLAGS} email-worker" in line
+                or "for required_service in db web" in line):
+            assert "membership-payments-worker" in line
+    assert 'wait_for_service_ready "" membership-payments-worker 180' in source
+    assert source.index("--no-deps migrate") < source.index("${APP_RUNTIME_UP_FLAGS} email-worker")
+    compose = (REPO_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    assert "command: python -m app.workers.membership_payments" in compose
+    assert '"app.workers.membership_payments", "--healthcheck"' in compose
+    assert "MEMBERSHIP_PAYMENT_RECONCILE_INTERVAL_SECONDS:-60" in compose
+
+
+def test_reservation_worker_interval_is_carried_in_private_deploy_configuration() -> None:
+    assert "MEMBERSHIP_PAYMENT_RECONCILE_INTERVAL_SECONDS=60\n" in build_app_env({})
+    assert "MEMBERSHIP_PAYMENT_RECONCILE_INTERVAL_SECONDS=30\n" in build_app_env({
+        "MEMBERSHIP_PAYMENT_RECONCILE_INTERVAL_SECONDS": "30",
+    })

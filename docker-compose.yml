@@ -78,6 +78,7 @@ x-app-env: &app-env
   AFFILIATION_VIDEO_RENDER_CONCURRENCY: ${AFFILIATION_VIDEO_RENDER_CONCURRENCY:-}
   AFFILIATION_VIDEO_POLL_SECONDS: ${AFFILIATION_VIDEO_POLL_SECONDS:-}
   SUMUP_CREDENTIALS_ENCRYPTION_KEY: ${SUMUP_CREDENTIALS_ENCRYPTION_KEY:-}
+  MEMBERSHIP_PAYMENT_RECONCILE_INTERVAL_SECONDS: ${MEMBERSHIP_PAYMENT_RECONCILE_INTERVAL_SECONDS:-60}
 
 x-video-worker-env: &video-worker-env
   PYTHONUNBUFFERED: "1"
@@ -156,6 +157,23 @@ services:
     mem_limit: ${EMAIL_WORKER_MEM_LIMIT:-512m}
     restart: always
 
+  membership-payments-worker:
+    image: ${APP_RUNTIME_IMAGE:-assonam/app-runtime:local}
+    depends_on:
+      - db
+    command: python -m app.workers.membership_payments
+    volumes:
+      - ./data:/app/data
+    environment: *app-env
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.workers.membership_payments", "--healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 120s
+      retries: 3
+    mem_limit: ${MEMBERSHIP_PAYMENTS_WORKER_MEM_LIMIT:-512m}
+    restart: always
+
   low-cards-worker:
     image: ${APP_RUNTIME_IMAGE:-assonam/app-runtime:local}
     depends_on:
@@ -225,4 +243,3 @@ services:
 
 volumes:
   pgdata:
-

@@ -14,6 +14,17 @@ from app.services.shared_scope_migration import run_shared_scope_migration
 TEST_SLUG_PREFIX = "migscope"
 
 
+def _issue_card(db, org_id: int, year: int):
+    allocation = allocate_next_card(db, org_id, year)
+    db.add(Member(
+        org_id=org_id, card_no=allocation.card_no, card_year=allocation.year,
+        batch_id=allocation.batch_id, numbering_scope_id=allocation.numbering_scope_id,
+        email=f"allocated-{uuid.uuid4().hex}@example.com", status="active",
+    ))
+    db.flush()
+    return allocation
+
+
 @pytest.fixture
 def db():
     session = SessionLocal()
@@ -340,11 +351,11 @@ def test_apply_preserves_batch_progression_behavior_for_single_org_shared_migrat
     assert report["summary"]["migrated_org_count"] == 1
     assert report["summary"]["migrated_batch_count"] == 2
 
-    first = allocate_next_card(db, org.id, year)
+    first = _issue_card(db, org.id, year)
     db.commit()
-    second = allocate_next_card(db, org.id, year)
+    second = _issue_card(db, org.id, year)
     db.commit()
-    third = allocate_next_card(db, org.id, year)
+    third = _issue_card(db, org.id, year)
     db.commit()
 
     assert [first.card_no, second.card_no, third.card_no] == [10, 11, 20]

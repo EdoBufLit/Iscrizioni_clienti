@@ -467,6 +467,25 @@ def _run_legacy_column_migrations() -> None:
 
     with engine.begin() as conn:
         table_names = set(inspect(conn).get_table_names())
+        # Local/test databases may predate checkout reservations. Production
+        # uses only Alembic and never enters this compatibility function.
+        if "membership_payments" in table_names:
+            for column, sql_type in (
+                ("reserved_card_no", "INTEGER"),
+                ("reserved_batch_id", "INTEGER REFERENCES card_batches(id) ON DELETE SET NULL"),
+                ("reserved_card_year", "INTEGER"),
+                ("reserved_numbering_scope_id", "INTEGER REFERENCES numbering_scopes(id) ON DELETE SET NULL"),
+                ("reservation_expires_at", "TIMESTAMP WITH TIME ZONE"),
+                ("reservation_state", "VARCHAR(16)"),
+            ):
+                _add_column_if_missing(conn, "membership_payments", column, sql_type)
+            for index in MembershipPayment.__table__.indexes:
+                if index.name in {
+                    "uq_membership_payments_held_org_card",
+                    "uq_membership_payments_held_scope_card",
+                    "ix_membership_payments_reservation_reconcile",
+                }:
+                    index.create(bind=conn, checkfirst=True)
         _add_column_if_missing(
             conn,
             "org_admin_sessions",

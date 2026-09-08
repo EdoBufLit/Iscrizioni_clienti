@@ -398,6 +398,9 @@ class Settings:
     SUMUP_CREDENTIALS_ENCRYPTION_KEY: str | None = _env_optional(
         "SUMUP_CREDENTIALS_ENCRYPTION_KEY"
     )
+    MEMBERSHIP_PAYMENT_RECONCILE_INTERVAL_SECONDS: int = int(
+        os.getenv("MEMBERSHIP_PAYMENT_RECONCILE_INTERVAL_SECONDS", "60")
+    )
 
     # OpenAI
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")

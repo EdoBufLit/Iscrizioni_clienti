@@ -38,6 +38,8 @@ from app.services.security_rate_limits import (
     enforce_join_rate_limit,
     enforce_payment_status_rate_limit,
 )
+from app.services.card_allocation import lock_card_allocation
+from app.services.card_reservations import reserve_payment_card
 from app.services.membership_payments import (
     MembershipPaymentSource,
     build_membership_payment_status_payload,
@@ -50,6 +52,8 @@ from app.services.membership_payments import (
     organization_has_sumup_config,
     organization_requires_membership_payment,
     payment_status_is_paid,
+    persist_sumup_checkout_creation,
+    reuse_existing_sumup_checkout,
     serialize_public_membership_payment,
     update_payment_state_from_sumup,
     verify_sumup_checkout,
@@ -497,6 +501,10 @@ async def create_membership_payment_checkout(
     if not organization_requires_membership_payment(org) or not organization_has_sumup_config(org):
         raise HTTPException(status_code=400, detail="Pagamento online non disponibile per questa associazione.")
 
+    # Serialize signup, payment lookup and reservation in one numbering domain
+    # before touching the member, including simultaneous same-email submits.
+    lock_card_allocation(db, org_id=org.id, year=datetime.utcnow().year)
+
     normalized_email = email.strip().lower()
     preexisting_member = (
         db.query(Member)
@@ -576,39 +584,22 @@ async def create_membership_payment_checkout(
         .first()
     )
     if latest_payment:
-        if payment_status_is_paid(latest_payment.status):
-            raise HTTPException(status_code=409, detail="La quota associativa risulta già pagata.")
-        if latest_payment.status == MembershipPaymentStatus.PENDING.value and latest_payment.sumup_checkout_id:
-            verified_payload = verify_sumup_checkout(org, latest_payment)
-            update_payment_state_from_sumup(
-                db=db,
-                payment=latest_payment,
-                org=org,
-                verified_payload=verified_payload,
-            )
-            if payment_status_is_paid(latest_payment.status):
-                db.commit()
-                raise HTTPException(status_code=409, detail="La quota associativa risulta già pagata.")
-            if latest_payment.status == MembershipPaymentStatus.PENDING.value and latest_payment.hosted_checkout_url:
-                if existing_owner_verified:
-                    _ensure_payment_status_capability(
-                        latest_payment,
-                        request=request,
-                        response=response,
-                    )
-                db.commit()
-                logger.info(
-                    "membership_payment_checkout_reused request_id=%s org_slug=%s org_id=%s member_id=%s payment_id=%s",
-                    request_id,
-                    org_slug,
-                    org.id,
-                    member.id,
-                    latest_payment.id,
+        if reuse_existing_sumup_checkout(
+            db, latest_payment, org, request=request, verify_checkout=verify_sumup_checkout
+        ):
+            if existing_owner_verified:
+                _ensure_payment_status_capability(
+                    latest_payment, request=request, response=response
                 )
-                return {
-                    "payment_id": latest_payment.id,
-                    "hosted_checkout_url": latest_payment.hosted_checkout_url,
-                }
+            db.commit()
+            logger.info(
+                "membership_payment_checkout_reused request_id=%s org_slug=%s org_id=%s member_id=%s payment_id=%s",
+                request_id, org_slug, org.id, member.id, latest_payment.id,
+            )
+            return {
+                "payment_id": latest_payment.id,
+                "hosted_checkout_url": latest_payment.hosted_checkout_url,
+            }
 
     selected_membership_type = normalize_membership_type(membership_type)
     payment = MembershipPayment(
@@ -629,6 +620,14 @@ async def create_membership_payment_checkout(
     )
     db.add(payment)
     db.flush()
+    reserve_payment_card(db, payment)
+    if not reused_existing_member or existing_owner_verified:
+        member.payment_required = True
+        member.payment_status = MembershipPaymentStatus.PENDING.value
+        _ensure_payment_status_capability(payment, request=request, response=response)
+    # A provider timeout must leave a durable payment/reference/reservation.
+    # Retrying can then look up that reference instead of charging twice.
+    db.commit()
 
     redirect_url, return_url = build_redirect_and_return_urls(
         request=request,
@@ -643,6 +642,9 @@ async def create_membership_payment_checkout(
             return_url=return_url,
         )
     except HTTPException as exc:
+        persist_sumup_checkout_creation(db, payment, error=exc)
+        if response.headers.get("set-cookie"):
+            exc.headers = {**(exc.headers or {}), "Set-Cookie": response.headers["set-cookie"]}
         logger.warning(
             "membership_payment_checkout_sumup_http_error request_id=%s org_slug=%s org_id=%s member_id=%s payment_id=%s status_code=%s detail=%s",
             request_id,
@@ -654,7 +656,8 @@ async def create_membership_payment_checkout(
             redact_for_log(exc.detail),
         )
         raise
-    except Exception:
+    except Exception as exc:
+        persist_sumup_checkout_creation(db, payment, error=exc)
         logger.exception(
             "membership_payment_checkout_sumup_unexpected_error request_id=%s org_slug=%s org_id=%s member_id=%s payment_id=%s",
             request_id,
@@ -663,16 +666,13 @@ async def create_membership_payment_checkout(
             member.id,
             payment.id,
         )
-        raise
-    hosted_checkout = create_payload.get("hosted_checkout") or {}
-    hosted_checkout_url = (
-        create_payload.get("hosted_checkout_url")
-        or hosted_checkout.get("checkout_url")
-        or hosted_checkout.get("hosted_checkout_url")
-        or create_payload.get("checkout_url")
-    )
-    sumup_checkout_id = create_payload.get("id") or create_payload.get("checkout_id")
-    if not hosted_checkout_url or not sumup_checkout_id:
+        raise HTTPException(
+            status_code=502,
+            detail="Verifica del pagamento in corso. Riprova tra poco.",
+            headers={"Set-Cookie": response.headers["set-cookie"]} if response.headers.get("set-cookie") else None,
+        ) from exc
+    persist_sumup_checkout_creation(db, payment, payload=create_payload)
+    if not payment.hosted_checkout_url or not payment.sumup_checkout_id:
         logger.warning(
             "membership_payment_checkout_sumup_incomplete request_id=%s org_slug=%s org_id=%s member_id=%s payment_id=%s has_url=%s has_checkout_id=%s",
             request_id,
@@ -680,22 +680,13 @@ async def create_membership_payment_checkout(
             org.id,
             member.id,
             payment.id,
-            bool(hosted_checkout_url),
-            bool(sumup_checkout_id),
+            bool(payment.hosted_checkout_url),
+            bool(payment.sumup_checkout_id),
         )
-        raise HTTPException(status_code=502, detail="Risposta checkout SumUp incompleta.")
-
-    payment.sumup_checkout_id = str(sumup_checkout_id)
-    payment.hosted_checkout_url = str(hosted_checkout_url)
-    payment.raw_create_response = create_payload
-    if not reused_existing_member or existing_owner_verified:
-        member.payment_required = True
-        member.payment_status = MembershipPaymentStatus.PENDING.value
-    if not reused_existing_member or existing_owner_verified:
-        _ensure_payment_status_capability(
-            payment,
-            request=request,
-            response=response,
+        raise HTTPException(
+            status_code=502,
+            detail="Risposta checkout SumUp incompleta.",
+            headers={"Set-Cookie": response.headers["set-cookie"]} if response.headers.get("set-cookie") else None,
         )
 
     audit.log_operation(
@@ -781,14 +772,6 @@ def handle_sumup_webhook(
         )
         return {"ok": True, "ignored": True}
 
-    try:
-        query = query.with_for_update()
-    except Exception as exc:
-        logger.debug(
-            "SumUp webhook payment lock unavailable error_type=%s",
-            type(exc).__name__,
-        )
-
     payment = query.order_by(MembershipPayment.id.desc()).first()
     if not payment:
         logger.warning(
@@ -802,7 +785,8 @@ def handle_sumup_webhook(
     if not org:
         return {"ok": True, "ignored": True}
 
-    log_sumup_webhook_event(db=db, payment=payment, payload=payload, request=request)
+    # Provider I/O precedes domain/payment locks; the state updater reloads
+    # under those locks and cannot regress a concurrent paid confirmation.
     verified_payload = verify_sumup_checkout(org, payment)
     fulfillment = update_payment_state_from_sumup(
         db=db,
@@ -811,6 +795,7 @@ def handle_sumup_webhook(
         verified_payload=verified_payload,
         request=request,
     )
+    log_sumup_webhook_event(db=db, payment=payment, payload=payload, request=request)
     db.commit()
     return {
         "ok": True,

@@ -11,11 +11,22 @@ import pytest
 from fastapi import HTTPException
 
 from app.db import SessionLocal
-from app.models import CardBatch, Organization
+from app.models import CardBatch, Member, Organization
 from app.services.card_allocation import allocate_next_card, release_card_number
 from app.services.sqlite_card_allocation_guard import (
     serialize_sqlite_card_allocation_requests,
 )
+
+
+def _issue_card(db, org_id: int, year: int):
+    allocation = allocate_next_card(db, org_id, year)
+    db.add(Member(
+        org_id=org_id, card_no=allocation.card_no, card_year=allocation.year,
+        batch_id=allocation.batch_id, numbering_scope_id=allocation.numbering_scope_id,
+        email=f"allocated-{uuid.uuid4().hex}@example.com", status="active",
+    ))
+    db.flush()
+    return allocation
 
 
 @pytest.fixture
@@ -67,11 +78,11 @@ def test_allocate_falls_back_to_next_available_batch_in_same_year(db):
     _create_batch(db, org_id=org.id, year=current_year, start_no=100, end_no=101, next_no=100)
     _create_batch(db, org_id=org.id, year=current_year, start_no=200, end_no=205, next_no=200)
 
-    first = allocate_next_card(db, org.id, current_year)
+    first = _issue_card(db, org.id, current_year)
     db.commit()
-    second = allocate_next_card(db, org.id, current_year)
+    second = _issue_card(db, org.id, current_year)
     db.commit()
-    third = allocate_next_card(db, org.id, current_year)
+    third = _issue_card(db, org.id, current_year)
     db.commit()
 
     assert [first.card_no, second.card_no, third.card_no] == [100, 101, 200]
@@ -83,7 +94,9 @@ def test_exhausted_first_batch_uses_second_without_409(db):
     _create_batch(db, org_id=org.id, year=current_year, start_no=100, end_no=101, next_no=102)
     _create_batch(db, org_id=org.id, year=current_year, start_no=200, end_no=205, next_no=200)
 
-    allocation = allocate_next_card(db, org.id, current_year)
+    db.add_all([Member(org_id=org.id, card_no=n, card_year=current_year) for n in (100, 101)])
+    db.commit()
+    allocation = _issue_card(db, org.id, current_year)
     db.commit()
 
     assert allocation.card_no == 200
@@ -101,9 +114,9 @@ def test_released_cards_are_reused_before_advancing_progressive(db):
         next_no=3801,
     )
 
-    first = allocate_next_card(db, org.id, current_year)
+    first = _issue_card(db, org.id, current_year)
     db.commit()
-    second = allocate_next_card(db, org.id, current_year)
+    second = _issue_card(db, org.id, current_year)
     db.commit()
     assert [first.card_no, second.card_no] == [3801, 3802]
 
@@ -121,11 +134,14 @@ def test_released_cards_are_reused_before_advancing_progressive(db):
         card_no=3802,
         batch_id=batch.id,
     )
+    for member in db.query(Member).filter(Member.org_id == org.id).all():
+        member.card_no = None
+        member.batch_id = None
     db.commit()
 
-    reused_first = allocate_next_card(db, org.id, current_year)
+    reused_first = _issue_card(db, org.id, current_year)
     db.commit()
-    reused_second = allocate_next_card(db, org.id, current_year)
+    reused_second = _issue_card(db, org.id, current_year)
     db.commit()
 
     assert [reused_first.card_no, reused_second.card_no] == [3801, 3802]
@@ -137,6 +153,8 @@ def test_allocate_returns_409_when_all_batches_exhausted(db):
     _create_batch(db, org_id=org.id, year=current_year, start_no=100, end_no=101, next_no=102)
     _create_batch(db, org_id=org.id, year=current_year, start_no=200, end_no=205, next_no=206)
 
+    db.add_all([Member(org_id=org.id, card_no=n, card_year=current_year) for n in (100, 101, *range(200, 206))])
+    db.commit()
     with pytest.raises(HTTPException) as exc_info:
         allocate_next_card(db, org.id, current_year)
 
@@ -144,7 +162,8 @@ def test_allocate_returns_409_when_all_batches_exhausted(db):
     assert "card_range_exhausted" in str(exc_info.value.detail)
 
 
-def test_allocate_is_concurrency_safe_for_10_parallel_requests(db):
+@pytest.mark.parametrize("fill_holes", [False, True])
+def test_allocate_is_concurrency_safe_for_10_parallel_requests(db, fill_holes):
     current_year = datetime.utcnow().year
     org = _create_org(db, "card-alloc-concurrency")
     org_id = org.id
@@ -155,8 +174,14 @@ def test_allocate_is_concurrency_safe_for_10_parallel_requests(db):
         year=current_year,
         start_no=start_no,
         end_no=start_no + 20,
-        next_no=start_no,
+        next_no=start_no + 21 if fill_holes else start_no,
     )
+    if fill_holes:
+        db.add_all([
+            Member(org_id=org_id, card_no=number, card_year=current_year)
+            for number in range(start_no + 1, start_no + 20, 2)
+        ])
+        db.commit()
 
     barrier = threading.Barrier(10)
 
@@ -164,7 +189,7 @@ def test_allocate_is_concurrency_safe_for_10_parallel_requests(db):
         session = SessionLocal()
         try:
             barrier.wait(timeout=10)
-            allocation = allocate_next_card(session, org_id, current_year)
+            allocation = _issue_card(session, org_id, current_year)
             session.commit()
             return allocation.card_no
         finally:
@@ -175,7 +200,8 @@ def test_allocate_is_concurrency_safe_for_10_parallel_requests(db):
 
     assert len(assigned_numbers) == 10
     assert len(set(assigned_numbers)) == 10
-    assert sorted(assigned_numbers) == list(range(start_no, start_no + 10))
+    step = 2 if fill_holes else 1
+    assert sorted(assigned_numbers) == [start_no + step * index for index in range(10)]
 
 
 def test_request_guard_serializes_allocation_after_realistic_prequery(db):
@@ -203,7 +229,7 @@ def test_request_guard_serializes_allocation_after_realistic_prequery(db):
                 # reach allocate_next_card(). The request guard must therefore
                 # be held before that first ORM read, not only inside allocation.
                 assert session.query(Organization.id).filter_by(id=org_id).scalar()
-                allocation = allocate_next_card(session, org_id, current_year)
+                allocation = _issue_card(session, org_id, current_year)
                 session.commit()
                 return allocation.card_no
         finally:

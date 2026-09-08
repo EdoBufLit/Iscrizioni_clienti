@@ -180,6 +180,7 @@ from app.services.booking_rooms import (
     validate_booking_assignment,
 )
 from app.services.card_allocation import release_card_number
+from app.services.card_availability import CardBatchAvailability, card_batch_availability, card_lot_status
 from app.services.sqlite_card_allocation_guard import (
     sqlite_card_allocation_request_guard,
 )
@@ -1517,18 +1518,7 @@ def _batch_enabled_flag(value: object) -> bool:
     return bool(value)
 
 
-def _org_admin_batch_status_label(batch: CardBatch) -> str:
-    next_no = batch.next_no if batch.next_no is not None else batch.start_no
-    if batch.released_at is not None:
-        return "Rilasciato"
-    if not _batch_enabled_flag(batch.is_enabled):
-        return "Disattivo"
-    if next_no > batch.end_no:
-        return "Esaurito"
-    return "Attivo"
-
-
-def _serialize_org_admin_card_lot(batch: CardBatch) -> dict[str, object]:
+def _serialize_org_admin_card_lot(batch: CardBatch, availability: CardBatchAvailability) -> dict[str, object]:
     return {
         "id": batch.id,
         "created_at": batch.created_at.isoformat() if batch.created_at else None,
@@ -1538,7 +1528,7 @@ def _serialize_org_admin_card_lot(batch: CardBatch) -> dict[str, object]:
         "range_start_label": format_card_number(batch.start_no),
         "range_end_label": format_card_number(batch.end_no),
         "quantity": int(batch.end_no - batch.start_no + 1),
-        "status_label": _org_admin_batch_status_label(batch),
+        "status_label": card_lot_status(batch, availability),
     }
 
 
@@ -7523,8 +7513,9 @@ def card_movements(
         .all()
     )
 
+    availability = card_batch_availability(db, batches)
     return {
-        "items": [_serialize_org_admin_card_lot(batch) for batch in batches],
+        "items": [_serialize_org_admin_card_lot(batch, availability[batch.id]) for batch in batches],
         "total": total,
         "current_year": current_year,
     }

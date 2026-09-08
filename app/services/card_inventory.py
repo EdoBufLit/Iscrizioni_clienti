@@ -3,10 +3,11 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
-from sqlalchemy import and_, func, or_
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models import CardBatch, Member
+from app.models import Member
+from app.services.card_availability import card_batch_availability, eligible_card_batches
 from app.services.member_activity import member_active_filters
 
 logger = logging.getLogger(__name__)
@@ -19,37 +20,12 @@ def compute_org_card_stock(
     now: datetime | None = None,
 ) -> dict[str, int]:
     target_year = int((now or datetime.utcnow()).year)
-    batches = (
-        db.query(CardBatch.start_no, CardBatch.end_no)
-        .filter(
-            CardBatch.org_id == org_id,
-            CardBatch.year == target_year,
-            CardBatch.is_enabled.is_(True),
-            CardBatch.released_at.is_(None),
-        )
-        .all()
-    )
+    batches = eligible_card_batches(db, org_ids=[org_id], year=target_year)
     if not batches:
         return {"total": 0, "used": 0, "remaining": 0}
-
-    total = int(sum((end_no - start_no + 1) for start_no, end_no in batches))
-    range_filters = [
-        and_(Member.card_no >= start_no, Member.card_no <= end_no)
-        for start_no, end_no in batches
-    ]
-    allocated_non_deleted = int(
-        db.query(func.count(func.distinct(Member.card_no)))
-        .filter(
-            Member.org_id == org_id,
-            Member.deleted_at.is_(None),
-            Member.card_year == target_year,
-            Member.card_no.isnot(None),
-            or_(*range_filters),
-        )
-        .scalar()
-        or 0
-    )
-    remaining = max(total - allocated_non_deleted, 0)
+    availability = card_batch_availability(db, batches)
+    total = sum(item.total for item in availability.values())
+    remaining = sum(item.remaining for item in availability.values())
     active_used = int(
         db.query(func.count(Member.id))
         .filter(
@@ -94,56 +70,12 @@ def get_remaining_cards_by_org(
     if not org_ids:
         return {}
 
-    total_rows = (
-        db.query(
-            CardBatch.org_id,
-            func.sum(CardBatch.end_no - CardBatch.start_no + 1),
-        )
-        .filter(
-            CardBatch.org_id.in_(org_ids),
-            CardBatch.year == target_year,
-            CardBatch.is_enabled.is_(True),
-            CardBatch.released_at.is_(None),
-        )
-        .group_by(CardBatch.org_id)
-        .all()
-    )
-    totals = {int(org_id): int(total or 0) for org_id, total in total_rows}
-
-    allocated_rows = (
-        db.query(
-            Member.org_id,
-            func.count(func.distinct(Member.card_no)),
-        )
-        .join(
-            CardBatch,
-            and_(
-                CardBatch.org_id == Member.org_id,
-                CardBatch.year == target_year,
-                CardBatch.is_enabled.is_(True),
-                CardBatch.released_at.is_(None),
-                Member.card_no >= CardBatch.start_no,
-                Member.card_no <= CardBatch.end_no,
-            ),
-        )
-        .filter(
-            Member.org_id.in_(org_ids),
-            Member.deleted_at.is_(None),
-            Member.card_year == target_year,
-            Member.card_no.isnot(None),
-        )
-        .group_by(Member.org_id)
-        .all()
-    )
-    allocated = {
-        int(org_id): int(allocated_count or 0)
-        for org_id, allocated_count in allocated_rows
-    }
-
-    return {
-        org_id: max(totals.get(org_id, 0) - allocated.get(org_id, 0), 0)
-        for org_id in org_ids
-    }
+    batches = eligible_card_batches(db, org_ids=org_ids, year=target_year)
+    availability = card_batch_availability(db, batches)
+    remaining = {org_id: 0 for org_id in org_ids}
+    for batch in batches:
+        remaining[batch.org_id] += availability[batch.id].remaining
+    return remaining
 
 
 def get_total_cards_by_org(
@@ -157,19 +89,8 @@ def get_total_cards_by_org(
     if not org_ids:
         return {}
 
-    total_rows = (
-        db.query(
-            CardBatch.org_id,
-            func.sum(CardBatch.end_no - CardBatch.start_no + 1),
-        )
-        .filter(
-            CardBatch.org_id.in_(org_ids),
-            CardBatch.year == target_year,
-            CardBatch.is_enabled.is_(True),
-            CardBatch.released_at.is_(None),
-        )
-        .group_by(CardBatch.org_id)
-        .all()
-    )
-    totals = {int(org_id): int(total or 0) for org_id, total in total_rows}
-    return {org_id: totals.get(org_id, 0) for org_id in org_ids}
+    batches = eligible_card_batches(db, org_ids=org_ids, year=target_year)
+    totals = {org_id: 0 for org_id in org_ids}
+    for batch in batches:
+        totals[batch.org_id] += batch.end_no - batch.start_no + 1
+    return totals

@@ -36,7 +36,8 @@ from app.services.annual_memberships import (
     annual_membership_valid_through,
     as_rome_datetime,
 )
-from app.services.card_allocation import allocate_next_card
+from app.services.card_allocation import allocate_next_card, lock_card_allocation
+from app.services.card_reservations import reserve_payment_card, reserved_payment_allocation
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
 from app.services.membership_payments import (
@@ -45,6 +46,8 @@ from app.services.membership_payments import (
     create_sumup_hosted_checkout,
     organization_has_sumup_config,
     payment_status_is_paid,
+    persist_sumup_checkout_creation,
+    reuse_existing_sumup_checkout,
 )
 
 
@@ -328,17 +331,25 @@ def allocate_renewal_card(
     term: AnnualMembershipTerm,
     now: datetime | None = None,
     approved_without_payment: bool = False,
+    payment: MembershipPayment | None = None,
 ) -> bool:
+    lock_card_allocation(db, org_id=term.org_id, year=int(term.membership_year))
+    payment = payment or _paid_payment_for_term(db, term.id)
+    if payment is not None:
+        db.query(MembershipPayment).filter(MembershipPayment.id == payment.id).with_for_update().first()
+    db.query(Member).filter(Member.id == term.member_id).with_for_update().first()
+    db.query(AnnualMembershipTerm).filter(AnnualMembershipTerm.id == term.id).with_for_update().populate_existing().one()
     if term.card_no is not None:
+        if payment is not None:
+            from app.services.card_reservations import settle_paid_reservation_for_existing_card
+            settle_paid_reservation_for_existing_card(db, payment, term)
         promote_renewal_term(db, term=term, now=now)
         return False
 
     try:
-        allocation = allocate_next_card(
-            db,
-            org_id=term.org_id,
-            year=term.membership_year,
-        )
+        allocation = reserved_payment_allocation(db, payment) if payment is not None else None
+        if allocation is None:
+            allocation = allocate_next_card(db, org_id=term.org_id, year=term.membership_year)
     except HTTPException as exc:
         if exc.status_code != 409:
             raise
@@ -594,6 +605,8 @@ def create_renewal_checkout(
 ) -> MembershipPayment:
     if term.member_id != member.id or term.org_id != member.org_id:
         raise HTTPException(status_code=404, detail="Rinnovo non trovato.")
+    lock_card_allocation(db, org_id=term.org_id, year=int(term.membership_year))
+    db.refresh(term)
     if term.card_no is not None:
         raise HTTPException(status_code=409, detail="Rinnovo già completato.")
     org = member.organization
@@ -604,11 +617,7 @@ def create_renewal_checkout(
     if existing_paid is not None:
         raise HTTPException(status_code=409, detail="Quota di rinnovo già pagata.")
     latest = _latest_payment_for_term(db, term.id)
-    if (
-        latest is not None
-        and latest.status == MembershipPaymentStatus.PENDING.value
-        and latest.hosted_checkout_url
-    ):
+    if latest is not None and reuse_existing_sumup_checkout(db, latest, org, request=request):
         return latest
 
     backend_base = (settings.BASE_URL or str(request.base_url)).rstrip("/")
@@ -629,27 +638,23 @@ def create_renewal_checkout(
     )
     db.add(payment)
     db.flush()
-    payload = create_sumup_hosted_checkout(
-        org=org,
-        member=member,
-        payment=payment,
-        redirect_url=f"{frontend_base}/dashboard?renewal=payment-return",
-        return_url=f"{backend_base}/api/webhooks/sumup",
-    )
-    hosted = payload.get("hosted_checkout") or {}
-    hosted_url = (
-        payload.get("hosted_checkout_url")
-        or hosted.get("checkout_url")
-        or hosted.get("hosted_checkout_url")
-        or payload.get("checkout_url")
-    )
-    checkout_id = payload.get("id") or payload.get("checkout_id")
-    if not hosted_url or not checkout_id:
-        raise HTTPException(status_code=502, detail="Risposta checkout SumUp incompleta.")
-    payment.hosted_checkout_url = str(hosted_url)
-    payment.sumup_checkout_id = str(checkout_id)
-    payment.raw_create_response = payload
+    reserve_payment_card(db, payment)
     term.status = AnnualMembershipTermStatus.PAYMENT_PENDING.value
+    db.commit()
+    try:
+        payload = create_sumup_hosted_checkout(
+            org=org,
+            member=member,
+            payment=payment,
+            redirect_url=f"{frontend_base}/dashboard?renewal=payment-return",
+            return_url=f"{backend_base}/api/webhooks/sumup",
+        )
+    except Exception as exc:
+        persist_sumup_checkout_creation(db, payment, error=exc)
+        raise
+    persist_sumup_checkout_creation(db, payment, payload=payload)
+    if not payment.hosted_checkout_url or not payment.sumup_checkout_id:
+        raise HTTPException(status_code=502, detail="Risposta checkout SumUp incompleta.")
     return payment
 
 
@@ -662,10 +667,7 @@ def complete_renewal_payment(
     term = payment.annual_term
     if term is None:
         return False
-    if term.card_no is not None:
-        promote_renewal_term(db, term=term, now=now)
-        return False
-    issued = allocate_renewal_card(db, term=term, now=now)
+    issued = allocate_renewal_card(db, term=term, now=now, payment=payment)
     if not issued and term.card_no is None:
         term.status = AnnualMembershipTermStatus.PAID_WAITING_CARD.value
     _create_member_notification(

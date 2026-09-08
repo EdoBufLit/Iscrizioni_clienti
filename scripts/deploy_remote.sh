@@ -354,7 +354,7 @@ fi
 
 if [ "$APP_RUNTIME_CHANGED" = "true" ]; then
   echo "[deploy] Pulling refreshed app-runtime image"
-  docker compose $COMPOSE_FILES --profile ops pull web email-worker low-cards-worker file-deletion-worker whatsapp-webhook-worker migrate
+  docker compose $COMPOSE_FILES --profile ops pull web email-worker low-cards-worker file-deletion-worker whatsapp-webhook-worker membership-payments-worker migrate
   log_memory_snapshot "after_app_pull"
   echo "[deploy] Running Alembic migrations from pulled runtime image"
   docker compose $COMPOSE_FILES --profile ops run -T --rm --no-deps migrate </dev/null
@@ -365,11 +365,12 @@ if [ "$APP_RUNTIME_ROLLOUT_NEEDED" = "true" ]; then
   echo "[deploy] Rolling out app-runtime services"
   docker compose $COMPOSE_FILES up -d --no-deps ${APP_RUNTIME_UP_FLAGS} web
   wait_for_service_ready "" web 120
-  docker compose $COMPOSE_FILES up -d --no-deps ${APP_RUNTIME_UP_FLAGS} email-worker low-cards-worker file-deletion-worker whatsapp-webhook-worker
+  docker compose $COMPOSE_FILES up -d --no-deps ${APP_RUNTIME_UP_FLAGS} email-worker low-cards-worker file-deletion-worker whatsapp-webhook-worker membership-payments-worker
   wait_for_service_ready "" email-worker 120
   wait_for_service_ready "" low-cards-worker 120
   wait_for_service_ready "" file-deletion-worker 120
   wait_for_service_ready "" whatsapp-webhook-worker 120
+  wait_for_service_ready "" membership-payments-worker 180
   log_memory_snapshot "after_app_rollout"
 else
   echo "[deploy] Skipping app-runtime rollout; no app image or compose changes detected."
@@ -402,7 +403,7 @@ log_memory_snapshot "post_deploy_60s"
 sleep 120
 log_memory_snapshot "post_deploy_180s"
 
-for required_service in db web email-worker low-cards-worker file-deletion-worker whatsapp-webhook-worker; do
+for required_service in db web email-worker low-cards-worker file-deletion-worker whatsapp-webhook-worker membership-payments-worker; do
   wait_for_service_ready "" "$required_service" 60
   required_cid="$(docker compose $COMPOSE_FILES ps -q "$required_service")"
   restart_count="$(docker inspect --format '{{.RestartCount}}' "$required_cid")"

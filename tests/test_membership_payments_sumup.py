@@ -39,7 +39,7 @@ def _login_super_admin(client):
     assert response.status_code == 200, response.text
 
 
-def _build_sumup_org(db, slug: str) -> Organization:
+def _build_sumup_org(db, slug: str, *, cards: int = 20) -> Organization:
     org = db.query(Organization).filter_by(slug=slug).first()
     if not org:
         org = Organization(
@@ -63,6 +63,14 @@ def _build_sumup_org(db, slug: str) -> Organization:
     org.sumup_api_key_encrypted = encrypt_sumup_api_key("sumup-db-key-1234")
     org.sumup_api_key_last4 = "1234"
     org.sumup_api_key_configured_at = datetime.utcnow()
+    if cards:
+        db.add(CardBatch(
+            org_id=org.id,
+            year=datetime.utcnow().year,
+            start_no=90000,
+            end_no=90000 + cards - 1,
+            next_no=90000,
+        ))
     db.commit()
     db.refresh(org)
     return org
@@ -128,12 +136,14 @@ def test_create_sumup_hosted_checkout_uses_org_db_api_key(db, monkeypatch):
         status=MembershipPaymentStatus.PENDING.value,
         source="sumup",
         checkout_reference=f"svc-{uuid.uuid4().hex[:8]}",
+        reservation_expires_at=datetime(2026, 9, 7, 12, 15, tzinfo=timezone.utc),
     )
     db.add(payment)
     db.commit()
     db.refresh(payment)
 
     seen_headers = []
+    seen_payloads = []
 
     class DummyResponse:
         def __init__(self, status_code, payload):
@@ -146,6 +156,8 @@ def test_create_sumup_hosted_checkout_uses_org_db_api_key(db, monkeypatch):
 
     def fake_request(method, url, headers=None, json=None, timeout=None):
         seen_headers.append(headers or {})
+        if json is not None:
+            seen_payloads.append(json)
         if url.endswith("/me"):
             return DummyResponse(200, {"merchant_code": "merchant-xyz"})
         return DummyResponse(
@@ -169,6 +181,7 @@ def test_create_sumup_hosted_checkout_uses_org_db_api_key(db, monkeypatch):
     assert payload["id"] == "checkout-new"
     assert len(seen_headers) == 2
     assert all(headers["Authorization"] == "Bearer sumup-db-key-1234" for headers in seen_headers)
+    assert seen_payloads[0]["valid_until"] == "2026-09-07T12:15:00Z"
 
 
 def test_create_checkout_does_not_reuse_expired_checkout(client, db, monkeypatch):
@@ -192,7 +205,7 @@ def test_create_checkout_does_not_reuse_expired_checkout(client, db, monkeypatch
 
     monkeypatch.setattr(
         "app.routes.membership_payments.verify_sumup_checkout",
-        lambda org, payment: {"status": "EXPIRED", "id": payment.sumup_checkout_id},
+        lambda org, payment: {"status": "EXPIRED", "id": payment.sumup_checkout_id, "transactions": []},
     )
     monkeypatch.setattr(
         "app.routes.membership_payments.create_sumup_hosted_checkout",
