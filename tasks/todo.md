@@ -4,13 +4,17 @@
 - [x] Add a New lot modal to Registro lotti with association selection, quantity, calculated interval preview and a clear success result; retain inputs on errors and prevent duplicate submission.
 - [x] Display registry availability from the canonical backend counts rather than deriving it from next_no.
 - [x] Verify authorization, validation, idempotency, numbering domains and concurrent creation; run frontend tests/typecheck/build and inspect desktop/mobile UI.
-- [ ] Push, deploy through the existing workflow and verify production without creating a real lot unless the user specifies association and quantity.
+- [x] Push, deploy through the existing workflow and verify production without creating a real lot unless the user specifies association and quantity.
 
 ## Review (Automatic lot creation from the super-admin registry - Sep 8, 2026)
 - Requested flow: select only association and number of cards; interval is calculated and checked by the server. Manual range entry remains available in the existing association detail.
 - Current baseline: 1a27dd8; previous payment reservation release is already live at e6cf339. SSH passphrase remains deferred by the user.
 - Verification: 40 backend tests passed for automatic creation, registry, lot mutations, numbering domains and stock movements. PostgreSQL suite passed all 8 parametrized checks in disposable UUID schemas (automatic contention, concurrent retries, manual range overlap and shared recharge coordination). Five frontend interaction tests, TypeScript and production build passed.
 - Real browser smoke at 1440x1000 and 390x844: selected an association with no lots, previewed/created 300 cards, checked definitive success message and persistence after reload; no JavaScript errors or horizontal overflow. Screenshots saved locally as lot-registry-desktop.png, lot-registry-mobile.png and lot-registry-created-mobile.png in the task's temporary directory. Test data stayed in an isolated local SQLite database.
+- Additional regression coverage: 30 reservation/WhatsApp tests passed (70 backend tests total). Verified fresh database backup /opt/assonam/backups/before-auto-lots-20260908.dump, 187296626 bytes, mode 600, readable pg_restore catalog (991 lines), SHA256 f6fedfc6207d46df88f4c4a64d933c4cae78ff0559556126cfd6df3dcb1aeb5f. Disposable PostgreSQL container/network/source directory removed after testing.
+- Implementation pushed as 567160ac58656f84b92072cd782a3b3f0f78f7e2; production workflow 34257714842.
+- Production read-only smoke: Mondo Nuovo's 100-card preview is 29754-29853 in the shared pool, year 2026. Existing lots contain 493 assigned, zero reserved and 307 free numbers; no existing paid member lacks a card. No real lot was created by the smoke test. Public health returned 200 with database OK; unauthenticated preview returned 401; Alembic remains at 79a6d82bc401 (head).
+- Deploy workflow 34257714842 completed successfully, including the 180-second canary. All app workers healthy with zero restarts; web healthy through HTTP probe. Disk 43% used, inodes 12%; no test services remain. No new schema migration was required.
 
 ## Plan (SSH recovery and stock-safe membership payments - Sep 7, 2026)
 - [x] Restore SSH alias/agent access and compare live Git source with this workspace (same 479bff9 baseline).
