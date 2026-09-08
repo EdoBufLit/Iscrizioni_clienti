@@ -1,13 +1,13 @@
 ## Plan (SSH recovery and stock-safe membership payments - Sep 7, 2026)
 - [x] Restore SSH alias/agent access and compare live Git source with this workspace (same 479bff9 baseline).
-- [ ] Set a user-entered passphrase on the dedicated SSH key (access works; encryption metadata still reports none).
+- [ ] Set a user-entered passphrase on the dedicated SSH key (access works; user explicitly deferred this on Sep 8).
 - [x] Centralize actual card occupancy, reuse earlier holes and align batch stock/status with pending renewals and reservations.
 - [x] Persist a 15-minute reservation before initial/renewal SumUp checkout and consume it idempotently after verified payment.
 - [x] Reconcile provider outcomes every minute; release only definitively unusable unpaid checkouts, preserve uncertain/in-flight payments.
 - [x] Protect reserved lots against mutations and cover concurrent checkout/manual/import allocation.
 - [x] Run backend/PostgreSQL concurrency/frontend tests and verify database backup.
-- [ ] Push/deploy through the existing flow and reconcile legacy checkout stock.
-- [ ] Verify Mondo Nuovo's actual 40 holes and paid membership/card state on production; record evidence and limitations.
+- [x] Push/deploy through the existing flow and reconcile legacy checkout stock.
+- [x] Verify Mondo Nuovo's actual 40 holes and paid membership/card state on production; record evidence and limitations.
 
 ## Review (SSH recovery and stock-safe membership payments - Sep 7, 2026)
 - User approved implementation and 15-minute reservations; root login through Hetzner console is available.
@@ -17,8 +17,13 @@
 - Live audit: 492 completed payments, 491 linked to existing active members with cards, one historical orphan payment (53); zero existing paid members without cards. 35 legacy SumUp checkouts (21 pending, 14 failed) have no explicit expiry; provider GET found no in-flight/successful transaction on those links.
 - Verification: 112 focused backend tests across allocation, reservation, payment, renewal, schema, worker, reconciliation, lot guards and deploy transport. Additional stock callsite suites passed for imports, integrations, expiry and low-card alerts. Ten real PostgreSQL concurrency tests passed in an isolated stock_tests database, including last-card contention, manual issuance, hole allocation, slow provider I/O and simultaneous expired-checkout retries.
 - Frontend clean dependency install, typecheck and production build passed. The signup handler retains form state and displays the backend 409 detail. No frontend changes required. Unique Alembic head: 79a6d82bc401.
-- Backup before-card-reservations-20260907.dump validated with pg_restore --list; SHA256 f88cb4995e0b2106a4b7b7acdb9810dad8b3888e1a1aca4b3f5aa2915c239e3a. A fresh pre-push backup is also being taken.
+- Fresh pre-push backup: /opt/assonam/backups/before-card-reservations-20260908-083916.dump (179 MB, mode 600, pg_restore catalog 986 lines). SHA256 bdfb53378b682c0bf33a6cc9f2b6352a5f0123e3054c5a03b9b5204ceac68bba. Earlier verified backup also retained.
 - Rollout reconciliation command: python scripts/reconcile_membership_card_stock.py (audit), then --apply. It reserves legitimate old links with a 15-minute expiry and deactivates obsolete/unstocked links only after verifying provider outcome. No automatic refunds or recreated orphan members.
+- Deployment succeeded: commit e6cf3398bbc876f8ecdb6d9a4f185b1fa7e31099, GitHub Actions run 34205954013, live Git identical, Alembic 79a6d82bc401. Public /health returned 200 with database OK; membership/email/low-card workers healthy with zero restarts. Four additional manual-payment tests passed.
+- Mondo Nuovo rollout: all 35 old links reconciled with zero script errors, 7 obsolete checkouts deactivated and verified expired, 28 held against actual historical holes. Of these, 21 received provider valid_until; 7 already-FAILED checkouts rejected the expiry update, so their committed holds remain protected until the worker verifies deactivation at their deadline. Local deadlines: Sep 8, 09:02:49-09:03:06 UTC. No card became active merely through reservation.
+- Post-rollout Mondo stock snapshot: 800 total, 492 active members, 280 available plus 28 temporary holds. All 491 existing members linked to the 492 completed payments still active, with cards and paid flags; only historical orphan payment 53 remains. The worker completed repeated Mondo reconciliation cycles with zero errors.
+- Additional audit found old payments 1/2/4 for Golden Filippini (org 2) without any configured SumUp API key. Reserved own-lot cards 4/5/6 for those three unverifiable links; did not infer expiry from FAILED or cancel without verification. Restoring that association's API key is required to reconcile/release these holds. Globally, zero legacy unpaid checkout links remain without a hold or verified closure.
+- SSH passphrase explicitly deferred by the user; no change to the working SSH alias/agent. Production database backups and rollback images retained; isolated stock_tests infrastructure removed after verification.
 
 ## Plan (Debug email tessera Golden Filippini - Jul 7, 2026)
 - [x] Verificare salute server Hetzner: disco, inode, servizi e worker email.
