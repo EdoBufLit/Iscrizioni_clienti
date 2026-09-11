@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import html
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -12,6 +11,7 @@ from app.config import settings
 from app.models import Booking, BookingEvent, BookingStatus, Form, Organization, WhatsAppConnection
 from app.services.booking_formatting import format_booking_date_it
 from app.services.booking_customer_actions import create_booking_action_links
+from app.services.system_email_layout import build_system_email_html
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
 from app.services.email_templates import build_template_context, render_template_string
@@ -211,7 +211,15 @@ def process_post_event_survey_email(
                     "link_sondaggio": survey_link,
                 },
             ).strip()
-            html_body = f"<p>{html.escape(text).replace(chr(10), '<br>')}</p><p><a href='{html.escape(survey_link)}'>Apri sondaggio</a></p>"
+            html_body = build_system_email_html(
+                title=survey_form.title,
+                eyebrow="Il tuo parere conta",
+                organization_name=getattr(booking.organization, "name", "") or "",
+                body=text,
+                preheader=f"Condividi la tua esperienza: {survey_form.title}",
+                cta_url=survey_link,
+                cta_label="Apri sondaggio",
+            )
             try:
                 enqueue_email(
                     db,

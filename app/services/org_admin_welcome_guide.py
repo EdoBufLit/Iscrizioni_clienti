@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import html
 import io
 import logging
 import os
@@ -13,6 +12,7 @@ from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 
 from app.config import settings
+from app.services.system_email_layout import build_system_email_html
 from app.services.email_outbox import build_email_payload
 
 logger = logging.getLogger(__name__)
@@ -113,48 +113,21 @@ def build_org_admin_welcome_html(
     invite_url: str,
     bot_number: str,
 ) -> str:
-    safe_org = html.escape(organization_name or "la tua associazione")
-    safe_url = html.escape(invite_url)
-    safe_bot = html.escape(bot_number)
-    return f"""<!doctype html>
-<html>
-  <body style="margin:0;background:#edf5f4;padding:24px;font-family:Arial,Helvetica,sans-serif;color:#13202f;">
-    <div style="max-width:720px;margin:0 auto;background:#ffffff;border-radius:22px;overflow:hidden;border:1px solid #d9e4e8;box-shadow:0 18px 45px rgba(17,51,53,.12);">
-      <div style="background:#113335;padding:28px 30px;color:#ffffff;">
-        <div style="font-size:12px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#66d7c8;">ASSO.N.A.M.</div>
-        <h1 style="margin:10px 0 0;font-size:30px;line-height:1.15;">Benvenuto nell'area amministratore</h1>
-        <p style="margin:10px 0 0;color:#d7f5f1;font-size:15px;line-height:1.6;">Ora puoi gestire <strong>{safe_org}</strong> dalla piattaforma.</p>
-      </div>
-      <div style="padding:28px 30px;">
-        <a href="{safe_url}" style="display:inline-block;background:#0f5c58;color:#ffffff;text-decoration:none;border-radius:12px;padding:14px 20px;font-weight:800;">Accedi all'area riservata</a>
-        <p style="margin:18px 0 0;font-size:14px;color:#64748b;line-height:1.6;">La guida completa è allegata in PDF. Qui sotto trovi le cose importanti da ricordare.</p>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:22px;">
-          <div style="border:1px solid #d9e4e8;border-radius:16px;padding:16px;background:#f8fafc;">
-            <div style="font-size:22px;">💳</div>
-            <h2 style="font-size:16px;margin:8px 0 6px;">Nuove tessere</h2>
-            <p style="font-size:14px;line-height:1.55;margin:0;color:#475569;">Scrivi al bot WhatsApp <strong>{safe_bot}</strong> oppure contatta un admin ASSO.N.A.M.</p>
-          </div>
-          <div style="border:1px solid #d9e4e8;border-radius:16px;padding:16px;background:#fff8ed;">
-            <div style="font-size:22px;">🔔</div>
-            <h2 style="font-size:16px;margin:8px 0 6px;">Avviso scorte</h2>
-            <p style="font-size:14px;line-height:1.55;margin:0;color:#475569;">Quando le tessere stanno finendo arriva un avviso via WhatsApp dallo stesso bot e via email.</p>
-          </div>
-          <div style="border:1px solid #d9e4e8;border-radius:16px;padding:16px;background:#f8fafc;">
-            <div style="font-size:22px;">👥</div>
-            <h2 style="font-size:16px;margin:8px 0 6px;">Area riservata</h2>
-            <p style="font-size:14px;line-height:1.55;margin:0;color:#475569;">Gestisci soci, tessere, inviti, documenti, prenotazioni, contabilità e dati associazione.</p>
-          </div>
-          <div style="border:1px solid #d9e4e8;border-radius:16px;padding:16px;background:#f1fffb;">
-            <div style="font-size:22px;">📣</div>
-            <h2 style="font-size:16px;margin:8px 0 6px;">Comunicazioni</h2>
-            <p style="font-size:14px;line-height:1.55;margin:0;color:#475569;">Modulo opzionale da <strong>150 euro</strong>: campagne email, form pubblici, sondaggi e WhatsApp.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </body>
-</html>"""
+    return build_system_email_html(
+        title="Benvenuto nell'area amministratore",
+        eyebrow="Il tuo accesso ASSO.N.A.M.",
+        organization_name=organization_name or "la tua associazione",
+        preheader="Il tuo accesso alla piattaforma e la guida rapida per iniziare.",
+        body="Ora puoi gestire la tua associazione dalla piattaforma. La guida completa è allegata in PDF: qui trovi le informazioni per iniziare.",
+        cta_url=invite_url,
+        cta_label="Accedi all'area riservata",
+        details=[
+            ("Nuove tessere", f"Scrivi al bot WhatsApp {bot_number} oppure contatta un admin ASSO.N.A.M."),
+            ("Avviso scorte", "Quando le tessere stanno finendo arriva un avviso via WhatsApp dallo stesso bot e via email."),
+            ("Area riservata", "Gestisci soci, tessere, inviti, documenti, prenotazioni, contabilità e dati associazione."),
+            ("Modulo Comunicazioni", "Modulo opzionale da 150 euro: campagne email, form pubblici, sondaggi e WhatsApp."),
+        ],
+    )
 
 
 def _static_path(filename: str) -> str:

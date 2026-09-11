@@ -594,8 +594,11 @@ const OrgAdminCards = () => {
               <div className="min-w-0">
                 <div className="mb-4 grid gap-3 sm:grid-cols-3">
                   <div className="rounded-[0.8rem] border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Richieste</p>
-                    <p className="mt-2 text-2xl font-semibold tabular-nums text-slate-950">{replenishmentSummary?.total ?? 0}</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Tessere richieste</p>
+                    <p className="mt-2 text-2xl font-semibold tabular-nums text-slate-950">{(replenishmentSummary?.requested_cards ?? 0).toLocaleString("it-IT")}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {replenishmentSummary?.total ?? 0} richieste · {(replenishmentSummary?.whatsapp_cards ?? 0).toLocaleString("it-IT")} tessere via WhatsApp
+                    </p>
                   </div>
                   <div className="rounded-[0.8rem] border border-amber-200 bg-amber-50 p-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-700">Da pagare</p>
@@ -633,6 +636,7 @@ const OrgAdminCards = () => {
                               <td className={tdClass}>
                                 <strong className="block text-slate-950">#{item.id}</strong>
                                 <span className="text-xs text-slate-500">{formatDateTime(item.created_at)}</span>
+                                <span className="block text-xs font-medium text-slate-600">{item.source === "whatsapp" ? "WhatsApp" : "Area riservata"}</span>
                               </td>
                               <td className={`${tdClass} tabular-nums`}>{item.requested_cards}</td>
                               <td className={`${tdClass} tabular-nums`}>{item.requested_year}</td>
@@ -644,10 +648,10 @@ const OrgAdminCards = () => {
                                 )}
                               </td>
                               <td className={`${tdClass} font-semibold tabular-nums text-slate-950`}>
-                                {formatMoneyCents(item.amount_due_cents, item.currency)}
+                                {item.billing_status === "not_applicable" ? "—" : formatMoneyCents(item.amount_due_cents, item.currency)}
                               </td>
                               <td className={tdClass}>
-                                <StatusChip tone={item.billing_status === "paid" ? "success" : "warning"}>
+                                <StatusChip tone={item.billing_status === "paid" ? "success" : item.billing_status === "unpaid" ? "warning" : "muted"}>
                                   {replenishmentBillingLabel(item.billing_status)}
                                 </StatusChip>
                               </td>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { CENTRAL_COMMUNICATIONS_PATH, NOTIFICATIONS_UPDATED_EVENT, notifyCommunicationRead } from "../../../lib/centralCommunications";
 import {
   AuthError,
   deleteOrgAdminNotification,
@@ -39,6 +40,7 @@ const notificationTone = (type: string) => {
 };
 
 const notificationLabel = (type: string) => {
+  if (type === "central_communication") return "ASSONAM";
   if (type === "booking_request") return "Prenotazione";
   if (type === "form_submission") return "Richiesta";
   if (type === "document_accounting") return "Accounting";
@@ -55,14 +57,17 @@ const OrgAdminNotificationBell = () => {
   const [items, setItems] = useState<OrgAdminNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [error, setError] = useState("");
+  const [refresh, setRefresh] = useState(0);
 
   useEffect(() => {
     let active = true;
+    let latestRequest = 0;
 
     const loadCount = async () => {
+      const requestId = ++latestRequest;
       try {
         const response = await fetchOrgAdminUnreadNotificationCount();
-        if (!active) return;
+        if (!active || requestId !== latestRequest) return;
         setUnreadCount(response.unread_count);
       } catch (err) {
         if (!active) return;
@@ -72,8 +77,13 @@ const OrgAdminNotificationBell = () => {
         }
       }
     };
+    const reload = () => {
+      void loadCount();
+      setRefresh((value) => value + 1);
+    };
 
     void loadCount();
+    window.addEventListener(NOTIFICATIONS_UPDATED_EVENT, reload);
     const intervalId = window.setInterval(() => {
       void loadCount();
     }, 60000);
@@ -81,6 +91,7 @@ const OrgAdminNotificationBell = () => {
     return () => {
       active = false;
       window.clearInterval(intervalId);
+      window.removeEventListener(NOTIFICATIONS_UPDATED_EVENT, reload);
     };
   }, [navigate]);
 
@@ -113,7 +124,7 @@ const OrgAdminNotificationBell = () => {
     return () => {
       active = false;
     };
-  }, [navigate, open]);
+  }, [navigate, open, refresh]);
 
   useEffect(() => {
     if (!open) return;
@@ -144,6 +155,7 @@ const OrgAdminNotificationBell = () => {
           ),
         );
         setUnreadCount((current) => Math.max(0, current - 1));
+        notifyCommunicationRead();
       }
       setOpen(false);
       navigate(notification.href || "/org-admin");
@@ -163,6 +175,7 @@ const OrgAdminNotificationBell = () => {
       await markAllOrgAdminNotificationsRead();
       setItems((current) => current.map((item) => ({ ...item, is_read: true, read_at: item.read_at || new Date().toISOString() })));
       setUnreadCount(0);
+      notifyCommunicationRead();
     } catch (err) {
       if (err instanceof AuthError) {
         navigate("/org-admin/login", { replace: true });
@@ -202,6 +215,7 @@ const OrgAdminNotificationBell = () => {
             : "border-neutral-200 hover:border-brand/30"
         }`}
         aria-label="Apri notifiche"
+        aria-expanded={open}
       >
         <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 1-5.714 0M18 8.25a6 6 0 1 0-12 0v2.132a4 4 0 0 1-.924 2.54L3.75 14.5h16.5l-1.326-1.578A4 4 0 0 1 18 10.382V8.25Z" />
@@ -308,6 +322,9 @@ const OrgAdminNotificationBell = () => {
                 ))}
               </div>
             )}
+          </div>
+          <div className="org-admin-notification-popover__header border-t px-5 py-3">
+            <button type="button" className="text-sm font-semibold text-brand" onClick={() => { setOpen(false); navigate(CENTRAL_COMMUNICATIONS_PATH); }}>Tutte le comunicazioni ASSONAM →</button>
           </div>
         </div>
       )}

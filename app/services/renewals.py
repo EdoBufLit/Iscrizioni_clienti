@@ -38,6 +38,7 @@ from app.services.annual_memberships import (
 )
 from app.services.card_allocation import allocate_next_card, lock_card_allocation
 from app.services.card_reservations import reserve_payment_card, reserved_payment_allocation
+from app.services.system_email_layout import build_system_email_html
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
 from app.services.membership_payments import (
@@ -831,9 +832,15 @@ def send_renewal_reminder(
         subject=title,
         payload=build_email_payload(
             text_body=f"{title}\n\n{body}\n\n{dashboard_url}",
-            html_body=(
-                f"<h1>{title}</h1><p>{body}</p>"
-                f'<p><a href="{dashboard_url}">Apri area riservata</a></p>'
+            html_body=build_system_email_html(
+                title=title,
+                eyebrow="Rinnovo tessera",
+                organization_name=getattr(member.organization, "name", "") or "",
+                body=body,
+                preheader=body,
+                cta_url=dashboard_url,
+                cta_label="Apri area riservata",
+                details=[("Validità tessera attuale", source.valid_through.strftime("%d/%m/%Y"))],
             ),
             sender=build_sender_payload(mode="association", association=member.organization),
             meta={

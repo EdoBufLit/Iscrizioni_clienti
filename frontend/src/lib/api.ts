@@ -4335,6 +4335,8 @@ export type CardReplenishmentRequest = {
 
 export type CardReplenishmentSummary = {
   total: number;
+  requested_cards?: number;
+  whatsapp_cards?: number;
   unpaid: number;
   paid: number;
   outstanding_cents: number;

@@ -225,10 +225,11 @@ function profileInitials(value: string | null | undefined) {
 }
 
 function isSidebarItemActive(item: NavLeaf, location: ReturnType<typeof useLocation>) {
-  if (item.match?.some((path) => location.pathname.startsWith(path))) return true;
+  const matchesPath = (path: string) => location.pathname === path || location.pathname.startsWith(`${path}/`);
+  if (item.match?.some(matchesPath)) return true;
   const [itemPath, itemSearch = ""] = item.to.split("?");
   if (item.end) return location.pathname === itemPath;
-  if (!location.pathname.startsWith(itemPath)) return false;
+  if (!matchesPath(itemPath)) return false;
   if (!itemSearch) return true;
   const targetParams = new URLSearchParams(itemSearch);
   const currentParams = new URLSearchParams(location.search);
@@ -273,6 +274,7 @@ const OrgAdminLayout = () => {
 
     return [
       { items: [{ to: "/org-admin", label: "Home", end: true, icon: "home" }] },
+      { items: [{ to: "/org-admin/comunicazioni-assonam", label: "Comunicazioni ASSONAM", icon: "mail" }] },
       {
         label: "Comunicazioni",
         items: [
@@ -336,6 +338,7 @@ const OrgAdminLayout = () => {
 
   const mobileMoreNav = useMemo(() => {
     const items: MobileDashboardNavItem[] = [
+      { key: "central-communications", label: "Comunicazioni ASSONAM", to: "/org-admin/comunicazioni-assonam", activeMatch: ["/org-admin/comunicazioni-assonam"], icon: "docs" as const },
       { key: "cards", label: "Tessere", to: "/org-admin/tessere", activeMatch: ["/org-admin/tessere"], icon: "cards" as const },
       { key: "communications", label: "Comunicazioni", to: "/org-admin/comunicazioni", activeMatch: ["/org-admin/comunicazioni"], icon: "book" as const },
       { key: "documents", label: "Documenti", to: "/org-admin/documenti", activeMatch: ["/org-admin/documenti"], icon: "docs" as const },

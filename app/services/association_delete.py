@@ -13,6 +13,9 @@ from app.middleware import get_client_ip
 from app.models import (
     AdminRole,
     AdminUser,
+    AffiliateCommunication,
+    AffiliateCommunicationRead,
+    AffiliateCommunicationRecipient,
     Booking,
     CardBatch,
     CardMovement,
@@ -25,6 +28,7 @@ from app.models import (
     OperationLog,
     Organization,
     OrgAdminSession,
+    OrgAdminNotification,
     OrgAdminToken,
     RechargeRequest,
     RechargeRequestAccountingEvent,
@@ -119,6 +123,12 @@ def _purge_association_dependencies(db: Session, *, org: Organization) -> None:
             synchronize_session=False,
         )
     if admin_ids:
+        db.query(AffiliateCommunication).filter(
+            AffiliateCommunication.created_by_admin_id.in_(admin_ids)
+        ).update({AffiliateCommunication.created_by_admin_id: None}, synchronize_session=False)
+        db.query(AffiliateCommunicationRead).filter(
+            AffiliateCommunicationRead.admin_user_id.in_(admin_ids)
+        ).delete(synchronize_session=False)
         db.query(OperationLog).filter(OperationLog.actor_admin_id.in_(admin_ids)).update(
             {OperationLog.actor_admin_id: None},
             synchronize_session=False,
@@ -135,6 +145,19 @@ def _purge_association_dependencies(db: Session, *, org: Organization) -> None:
             {RechargeRequestAccountingEvent.actor_admin_id: None},
             synchronize_session=False,
         )
+
+    # Retain the central message's audience snapshot after removing the tenant.
+    # Explicit cleanup also supports SQLite installations without FK enforcement.
+    db.query(AffiliateCommunicationRecipient).filter(
+        AffiliateCommunicationRecipient.organization_id == org.id
+    ).update({AffiliateCommunicationRecipient.organization_id: None}, synchronize_session=False)
+    db.query(OrgAdminNotification).filter(
+        OrgAdminNotification.org_id == org.id
+    ).delete(synchronize_session=False)
+    if admin_ids:
+        db.query(OrgAdminNotification).filter(
+            OrgAdminNotification.admin_user_id.in_(admin_ids)
+        ).delete(synchronize_session=False)
 
     # Preserve the immutable accounting snapshot while severing tenant and lot
     # foreign keys before the organization/card batches are purged.

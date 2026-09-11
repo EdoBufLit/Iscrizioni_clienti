@@ -26,6 +26,7 @@ from app.middleware import (
 from app.public_uploads import PublicUploadsStaticFiles
 from app.routes import (
     admin,
+    affiliate_communications,
     attendance_stations,
     ingest_pienissimo,
     integrations,
@@ -271,6 +272,8 @@ app.include_router(renewals.router)
 # through the SPA catch-all, but its legacy backend routes are intentionally not
 # mounted so privileged access has exactly one MFA-protected entry point.
 app.include_router(org_admin.router)
+app.include_router(affiliate_communications.org_admin_router)
+app.include_router(affiliate_communications.super_admin_router)
 app.include_router(org_admin_attendance.router)
 app.include_router(attendance_stations.admin_router)
 app.include_router(attendance_stations.station_router)

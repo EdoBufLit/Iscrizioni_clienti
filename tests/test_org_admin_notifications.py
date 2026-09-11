@@ -359,6 +359,13 @@ def test_low_cards_email_targets_org_admin_login_email(db, monkeypatch, drain_em
     assert (captured[0]["to"] or "").lower() == admin.email.lower()
     assert (captured[0]["to"] or "").lower() != org.email.lower()
     assert "Tessere in esaurimento" in (captured[0]["subject"] or "")
+    html_body = captured[0]["html_body"] or ""
+    assert "Tessere disponibili" in html_body
+    assert ">25</p>" in html_body
+    assert html_body.count("<h1 ") == 1
+    assert "Georgia" not in html_body
+    assert "prefers-color-scheme: dark" in html_body
+    assert "/org-admin/tessere" in html_body
 
 
 def test_low_cards_alert_does_not_notify_orgs_that_never_had_50_cards(db, monkeypatch):

@@ -1,4 +1,5 @@
 import pytest
+from html import unescape
 from sqlalchemy import func
 import uuid
 from app.config import settings
@@ -677,7 +678,7 @@ def test_super_admin_create_flow_email(client, drain_email_outbox, monkeypatch):
     assert len(captured) == 1
     assert captured[0]["to"] == email
     assert "Invito area amministrazione associazione" in captured[0]["subject"]
-    assert "Benvenuto nell'area amministratore" in (captured[0]["html_body"] or "")
+    assert "Benvenuto nell'area amministratore" in unescape(captured[0]["html_body"] or "")
     assert "150 euro" in (captured[0]["html_body"] or "")
     assert "+39" in (captured[0]["html_body"] or "")
     assert captured[0]["attachments"] == [

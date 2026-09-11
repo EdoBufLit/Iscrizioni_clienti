@@ -49,6 +49,7 @@ const SuperAdminOrganizations = lazy(() => import("./pages/super-admin/SuperAdmi
 const SuperAdminMemberDetail = lazy(() => import("./pages/super-admin/SuperAdminMemberDetail"));
 const SuperAdminAffiliations = lazy(() => import("./pages/super-admin/SuperAdminAffiliations"));
 const SuperAdminDocuments = lazy(() => import("./pages/super-admin/SuperAdminDocuments"));
+const SuperAdminCommunications = lazy(() => import("./pages/super-admin/SuperAdminCommunications"));
 const SuperAdminCardLots = lazy(() => import("./pages/super-admin/SuperAdminCardLots"));
 const SuperAdminCardCredits = lazy(() => import("./pages/super-admin/SuperAdminCardCredits"));
 const SuperAdminSecurity = lazy(() => import("./pages/super-admin/SuperAdminSecurity"));
@@ -66,6 +67,7 @@ const OrgAdminAttendance = lazy(() => import("./pages/org-admin/OrgAdminAttendan
 const OrgAdminCards = lazy(() => import("./pages/org-admin/OrgAdminCards"));
 const OrgAdminQuote = lazy(() => import("./pages/org-admin/OrgAdminQuote"));
 const OrgAdminCommunications = lazy(() => import("./pages/org-admin/OrgAdminCommunications"));
+const OrgAdminCentralCommunications = lazy(() => import("./pages/org-admin/OrgAdminCentralCommunications"));
 const OrgAdminBookings = lazy(() => import("./pages/org-admin/OrgAdminBookings"));
 const OrgAdminStripeDemoBilling = lazy(() => import("./pages/org-admin/OrgAdminStripeDemoBilling"));
 const OrgAdminSettings = lazy(() => import("./pages/org-admin/OrgAdminSettings"));
@@ -160,6 +162,7 @@ const App = () => {
                 <Route path="associazioni" element={<SuperAdminOrganizations />} />
                 <Route path="affiliazioni" element={<SuperAdminAffiliations />} />
                 <Route path="documenti" element={<SuperAdminDocuments />} />
+                <Route path="comunicazioni" element={<SuperAdminCommunications />} />
                 <Route path="org-admins" element={<SuperAdminOrgAdmins />} />
                 <Route path="registro-lotti" element={<SuperAdminCardLots />} />
                 <Route path="crediti-tessere" element={<SuperAdminCardCredits />} />
@@ -181,6 +184,7 @@ const App = () => {
                 <Route path="prenotazioni" element={<OrgAdminBookings />} />
                 <Route path="documenti" element={<OrgAdminSharedDocuments />} />
                 <Route path="comunicazioni" element={<OrgAdminCommunications />} />
+                <Route path="comunicazioni-assonam" element={<OrgAdminCentralCommunications />} />
                 <Route path="billing" element={<OrgAdminStripeDemoBilling />} />
                 <Route path="forms" element={<Navigate to="/org-admin/comunicazioni?tab=moduli" replace />} />
                 <Route path="contabilita" element={<OrgAdminAccounting />} />

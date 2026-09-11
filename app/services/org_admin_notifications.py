@@ -18,6 +18,7 @@ from app.models import (
     OrganizationSharedDocument,
 )
 from app.services.email_outbox import build_email_payload, enqueue_email
+from app.services.system_email_layout import build_system_email_html
 
 logger = logging.getLogger(__name__)
 
@@ -94,22 +95,15 @@ def _build_email_html(
     cta_label: str,
     organization_name: str,
 ) -> str:
-    return f"""
-    <div style="background:#f3f4f6;padding:32px 16px;font-family:Georgia,'Times New Roman',serif;color:#111827;">
-      <div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:24px;overflow:hidden;border:1px solid rgba(15,23,42,0.08);box-shadow:0 30px 80px -50px rgba(15,23,42,0.35);">
-        <div style="padding:28px 32px;background:linear-gradient(135deg,#0f172a,#111827);color:#f8fafc;">
-          <div style="font-size:11px;font-weight:700;letter-spacing:0.28em;text-transform:uppercase;color:#cbd5e1;">ASSO.N.A.M.</div>
-          <h1 style="margin:16px 0 0;font-size:28px;line-height:1.1;font-weight:700;">{heading}</h1>
-        </div>
-        <div style="padding:32px;">
-          <p style="margin:0 0 8px;font-size:12px;letter-spacing:0.24em;text-transform:uppercase;color:#9ca3af;font-weight:700;">{organization_name}</p>
-          <h2 style="margin:0 0 14px;font-size:24px;line-height:1.2;color:#111827;">{title}</h2>
-          <p style="margin:0 0 24px;font-size:16px;line-height:1.7;color:#4b5563;">{body}</p>
-          <a href="{cta_url}" style="display:inline-block;padding:14px 22px;border-radius:999px;background:#0f766e;color:#ffffff;text-decoration:none;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;">{cta_label}</a>
-        </div>
-      </div>
-    </div>
-    """.strip()
+    return build_system_email_html(
+        title=title,
+        eyebrow=heading,
+        body=body,
+        preheader=body,
+        organization_name=organization_name,
+        cta_url=cta_url,
+        cta_label=cta_label,
+    )
 
 
 def notify_org_admins_about_shared_document(
@@ -167,7 +161,7 @@ def notify_org_admins_about_shared_document(
         title=document.title,
         body=body,
         cta_url=cta_url,
-        cta_label="Apri dashboard",
+        cta_label="Apri Contabilità" if is_accounting else "Apri Documenti",
         organization_name=organization.name,
     )
     text_body = f"{title}\n\n{body}\n\nApri la dashboard: {cta_url}"
@@ -244,7 +238,7 @@ def notify_org_admins_about_accounting_document(
         title=document.title,
         body=body,
         cta_url=cta_url,
-        cta_label="Apri dashboard",
+        cta_label="Apri Contabilità",
         organization_name=organization.name,
     )
     text_body = f"{title}\n\n{body}\n\nApri la dashboard: {cta_url}"
@@ -316,10 +310,17 @@ def notify_org_admins_low_cards(
         href=href,
     )
 
-    html_body = _build_email_html(
-        heading="Scorta tessere sotto soglia",
+    html_body = build_system_email_html(
+        eyebrow="Disponibilità tessere",
         title=title,
-        body=body,
+        body=(
+            "La disponibilità della tua associazione è sotto soglia. "
+            "Controlla le scorte e richiedi nuove tessere dalla sezione Tessere "
+            "per continuare le iscrizioni."
+        ),
+        preheader=f"Restano {remaining} tessere per {organization.name}. Controlla le scorte nell'area riservata.",
+        metric_value=str(remaining),
+        metric_label="Tessere disponibili",
         cta_url=cta_url,
         cta_label="Apri tessere",
         organization_name=organization.name,

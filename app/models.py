@@ -184,6 +184,7 @@ class OrgAdminNotificationType(str, enum.Enum):
     DOCUMENT_ACCOUNTING = "document_accounting"
     LOW_CARDS = "low_cards"
     RENEWAL = "renewal"
+    CENTRAL_COMMUNICATION = "central_communication"
 
 
 class MemberNotificationType(str, enum.Enum):
@@ -1335,6 +1336,47 @@ class AccountingShareLink(Base):
     )
 
 
+class AffiliateCommunication(Base):
+    """Immutable central message and its audience as they were at send time."""
+
+    __tablename__ = "affiliate_communications"
+
+    id = Column(Integer, primary_key=True)
+    subject = Column(String(200), nullable=False)
+    body = Column(Text, nullable=False)
+    audience = Column(String(16), nullable=False)
+    idempotency_key = Column(String(100), nullable=False, unique=True)
+    request_fingerprint = Column(String(64), nullable=False)
+    created_by_admin_id = Column(Integer, ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True)
+    created_by_email = Column(String, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    recipient_count = Column(Integer, nullable=False, default=0)
+    email_count = Column(Integer, nullable=False, default=0)
+    notification_count = Column(Integer, nullable=False, default=0)
+
+
+class AffiliateCommunicationRecipient(Base):
+    __tablename__ = "affiliate_communication_recipients"
+    __table_args__ = (UniqueConstraint("communication_id", "organization_id", name="uq_affiliate_communication_recipient"),)
+
+    id = Column(Integer, primary_key=True)
+    communication_id = Column(Integer, ForeignKey("affiliate_communications.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True, index=True)
+    organization_name = Column(String, nullable=False)
+    admin_count = Column(Integer, nullable=False, default=0)
+    email_count = Column(Integer, nullable=False, default=0)
+
+
+class AffiliateCommunicationRead(Base):
+    """Per-account reading state, retained even after a bell alert is removed."""
+
+    __tablename__ = "affiliate_communication_reads"
+
+    communication_id = Column(Integer, ForeignKey("affiliate_communications.id", ondelete="CASCADE"), primary_key=True)
+    admin_user_id = Column(Integer, ForeignKey("admin_users.id", ondelete="CASCADE"), primary_key=True)
+    read_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
 class OrgAdminNotification(Base):
     __tablename__ = "org_admin_notifications"
 
@@ -1348,6 +1390,10 @@ class OrgAdminNotification(Base):
     is_read = Column(Boolean, nullable=False, default=False, server_default="false", index=True)
     read_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    communication_id = Column(
+        Integer, ForeignKey("affiliate_communications.id", ondelete="SET NULL"),
+        nullable=True, index=True,
+    )
 
     admin_user = relationship(
         "AdminUser",

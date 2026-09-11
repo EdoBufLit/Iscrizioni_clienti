@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import html
 import logging
 import re
 from datetime import datetime, timezone
@@ -18,6 +17,7 @@ from app.models import (
 from app.services.card_lot_registry import ensure_recharge_request_batch
 from app.services.annual_memberships import as_rome_datetime
 from app.services.email_outbox import build_email_payload, enqueue_email
+from app.services.system_email_layout import build_system_email_html
 from app.services.numbering_scopes import (
     NUMBERING_MODE_SHARED_ASSONAM,
     get_assonam_central_scope,
@@ -188,7 +188,6 @@ def _queue_super_admin_notification(
         return
 
     amount_eur = recharge_request.amount_due_cents / 100
-    safe_org_name = html.escape(recharge_request.association_name)
     text_body = (
         f"Nuova richiesta tessere #{recharge_request.id}\n\n"
         f"Associazione: {recharge_request.association_name}\n"
@@ -197,14 +196,18 @@ def _queue_super_admin_notification(
         f"Debito registrato: EUR {amount_eur:.2f}\n\n"
         "Apri la sezione Super Admin > Crediti tessere per gestire lo stato contabile."
     )
-    html_body = (
-        "<h2>Nuova richiesta tessere</h2>"
-        f"<p><strong>Associazione:</strong> {safe_org_name}</p>"
-        f"<p><strong>Quantita:</strong> {recharge_request.requested_cards}</p>"
-        f"<p><strong>Anno lotto:</strong> {recharge_request.requested_year}</p>"
-        f"<p><strong>Debito registrato:</strong> EUR {amount_eur:.2f}</p>"
-        "<p>Apri la sezione <strong>Crediti tessere</strong> del Super Admin per "
-        "gestire lo stato contabile.</p>"
+    html_body = build_system_email_html(
+        title="Nuova richiesta tessere",
+        eyebrow=f"Richiesta #{recharge_request.id}",
+        organization_name=recharge_request.association_name,
+        preheader=f"{recharge_request.association_name} ha richiesto {recharge_request.requested_cards} tessere.",
+        metric_value=str(recharge_request.requested_cards),
+        metric_label="Tessere richieste",
+        body="Apri la sezione Crediti tessere del Super Admin per gestire lo stato contabile.",
+        details=[
+            ("Anno lotto", str(recharge_request.requested_year)),
+            ("Debito registrato", f"EUR {amount_eur:.2f}"),
+        ],
     )
     outbox_id = enqueue_email(
         db,
@@ -364,7 +367,9 @@ def update_replenishment_accounting(
     return event
 
 
-def replenishment_summary(db: Session, *, org_id: int | None = None) -> dict[str, int]:
+def replenishment_summary(
+    db: Session, *, org_id: int | None = None, include_whatsapp: bool = False
+) -> dict[str, int]:
     filters = [
         RechargeRequest.source == PORTAL_SOURCE,
         RechargeRequest.billing_status.in_([BILLING_STATUS_UNPAID, BILLING_STATUS_PAID]),
@@ -387,8 +392,30 @@ def replenishment_summary(db: Session, *, org_id: int | None = None) -> dict[str
         .scalar()
         or 0
     )
+    # Count requests once, independently of their allocated lots. WhatsApp
+    # orders have no portal billing status and must not become portal debts.
+    request_filters = list(filters)
+    if include_whatsapp:
+        request_filters = [RechargeRequest.source.in_([PORTAL_SOURCE, "whatsapp"])]
+        if org_id is not None:
+            request_filters.append(RechargeRequest.association_id == org_id)
+        total = int(db.query(RechargeRequest).filter(*request_filters).count())
+    requested_cards = int(
+        db.query(func.coalesce(func.sum(RechargeRequest.requested_cards), 0))
+        .filter(*request_filters)
+        .scalar()
+        or 0
+    )
+    whatsapp_cards = int(
+        db.query(func.coalesce(func.sum(RechargeRequest.requested_cards), 0))
+        .filter(*request_filters, RechargeRequest.source == "whatsapp")
+        .scalar()
+        or 0
+    )
     return {
         "total": total,
+        "requested_cards": requested_cards,
+        "whatsapp_cards": whatsapp_cards,
         "unpaid": unpaid,
         "paid": paid,
         "outstanding_cents": outstanding_cents,

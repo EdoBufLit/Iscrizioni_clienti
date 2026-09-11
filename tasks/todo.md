@@ -1,3 +1,36 @@
+## Plan (System emails, affiliate communications and WhatsApp card totals - Sep 11, 2026)
+- [x] Refresh low-stock and other dated system emails with a shared responsive, readable design; preserve delivery behavior and verify rendered examples.
+- [x] Add super-admin communications to one, selected or all active affiliates, with persistent recipient records, tenant-scoped reading, bell notifications and durable email delivery to active association admins.
+- [x] Build super-admin compose/history and association inbox/detail UI, with recipient preview and clear send result.
+- [x] Include WhatsApp card requests in the association requested-card total without duplicating lots or changing portal billing semantics.
+- [x] Verify authorization, recipient selection, read state, idempotent delivery and card totals; run targeted backend/frontend tests, build and desktop/mobile browser checks.
+- [ ] Review final diff, release through the existing workflow on Main, apply migration and verify live read-only health and infrastructure.
+
+### Implementation notes
+- Reuse the existing org-admin notification bell and email outbox. Central communications must be available independently of the optional association-to-member communications module.
+- Recipient selection is restricted to active, non-deleted affiliates. Store the sent audience and message so later changes to association state cannot alter historical recipients.
+- Verification uses isolated local fixtures and captured email; do not send a real communication to affiliates during testing.
+
+### Review (Sep 11, 2026)
+- Shared escaped, table-based system email design: low stock highlights the remaining count; document, welcome, login/MFA, booking, form, survey, renewal and document-correction emails use the same layout. Existing authored campaign/card templates and PDF attachments retained.
+- Super-admin compose, audience review and sent history at `/super-admin/comunicazioni`; association inbox at `/org-admin/comunicazioni-assonam`, independent of campaign module activation. Immutable audience snapshots, idempotency keys, active-admin notifications and durable email outbox publication are transactional.
+- Inbox and bell read state synchronize, including read-all; tenant reassignment blocks access to old notifications. Purging an association preserves sent history and recipient name/count snapshots.
+- Card request list and quantity totals include WhatsApp, without changing portal accounting. Fixture: 100 portal + 250 WhatsApp = 350 cards, two requests, portal debt unchanged.
+- Verification passed: 121 backend email/flow/form/renewal/card/security tests; 30 communication/notification/purge/migration tests (partially overlapping notification suite); all 67 frontend tests; production build; Python compileall; diff check. Migration `8c4d9e21f603` verified upgrade/downgrade with SQLite FK enforcement and PostgreSQL DDL.
+- Real local browser flow verified compose/review/send, bell opening, message reading and reload persistence, card total, desktop/mobile and dark theme. Four representative emails rendered in desktop/mobile/dark variants with no overflow. Artifacts in `%TEMP%/assonam-communications-20260911`; all test mail stayed local.
+- Deploy workflow updated to follow `Main` after the user changed the default branch. Production rollout and final live checks pending.
+
+## Plan (Local default branch update - Sep 11, 2026)
+- [x] Verify clean local checkout and exact remote default branch name.
+- [x] Fetch origin, switch to Main tracking origin/Main, and update origin/HEAD.
+- [x] Save the branch convention and verify local/remote alignment.
+
+## Review (Local default branch update - Sep 11, 2026)
+- Remote HEAD resolves to `refs/heads/Main`; fetched origin and switched to local `Main` tracking `origin/Main`.
+- `origin/HEAD` points to `origin/Main`; local and remote commits match at `d2558938e46495e508162ae080190a3778122418` (ahead/behind: 0/0).
+- Saved the working branch convention in `AGENTS.md` and `tasks/lessons.md`; retained the existing `fix/card-stock-reservations` branch.
+- Only local instruction/task notes changed; no application code changed.
+
 ## Plan (Automatic lot creation from the super-admin registry - Sep 8, 2026)
 - [x] Add a super-admin-only preview and creation endpoint accepting association and quantity, with current membership year as default.
 - [x] Allocate the next contiguous interval after historical numbers in the correct numbering domain; preserve dedicated/legacy rules, released lots, reservations and concurrent manual/recharge creation.

@@ -20,6 +20,7 @@ from app.models import (
 )
 from app.security import get_password_hash
 from app.services.card_lot_registry import ensure_recharge_request_batch
+from app.services.card_replenishments import replenishment_summary
 from app.services.numbering_scopes import (
     ensure_assonam_central_scope,
     ensure_dedicated_scope,
@@ -405,3 +406,78 @@ def test_existing_whatsapp_replenishment_flow_remains_not_applicable(client, db)
     assert existing.unit_price_cents == 100
     assert existing.amount_due_cents == 2_500
     assert existing.card_batch_id == batch.id
+
+
+def test_org_card_totals_include_whatsapp_without_adding_debt_or_duplicate_lots(client, db):
+    org, admin, _key, portal = _create_portal_request(client, db, quantity=120)
+    other_org = _create_org(db, shared=True)
+    whatsapp = RechargeRequest(
+        association_id=org.id,
+        association_name=org.name,
+        requester_whatsapp="whatsapp:+393331234567",
+        requested_cards=75,
+    )
+    pending = RechargeRequest(
+        association_id=org.id,
+        association_name=org.name,
+        requester_whatsapp="whatsapp:+393331234568",
+        requested_cards=25,
+    )
+    other = RechargeRequest(
+        association_id=other_org.id,
+        association_name=other_org.name,
+        requester_whatsapp="whatsapp:+393331234569",
+        requested_cards=900,
+    )
+    unlinked = RechargeRequest(
+        association_id=None,
+        association_name=org.name,
+        requester_whatsapp="whatsapp:+393331234570",
+        requested_cards=600,
+    )
+    db.add_all([whatsapp, pending, other, unlinked])
+    db.flush()
+    batch = ensure_recharge_request_batch(db, whatsapp.id)
+    db.commit()
+    assert batch is not None
+    lots_before = db.query(CardBatch).filter(CardBatch.org_id == org.id).count()
+
+    _login_org_admin(client, db, admin)
+    for _ in range(2):
+        response = client.get("/api/org-admin/cards/replenishments", params={"limit": 1})
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["total"] == 3
+        assert len(payload["items"]) == 1
+        assert payload["summary"] == {
+            "total": 3,
+            "requested_cards": 220,
+            "whatsapp_cards": 100,
+            "unpaid": 1,
+            "paid": 0,
+            "outstanding_cents": 12_000,
+            "paid_cents": 0,
+        }
+
+    listing = client.get("/api/org-admin/cards/replenishments").json()
+    assert {item["id"] for item in listing["items"]} == {
+        portal["item"]["id"], whatsapp.id, pending.id,
+    }
+    assert {item["source"] for item in listing["items"]} == {"org_admin_portal", "whatsapp"}
+    assert db.query(CardBatch).filter(CardBatch.org_id == org.id).count() == lots_before
+    assert db.get(RechargeRequest, whatsapp.id).billing_status == "not_applicable"
+    # The super-admin portal accounting summary retains its original scope.
+    accounting = replenishment_summary(db, org_id=org.id)
+    assert accounting["total"] == 1
+    assert accounting["requested_cards"] == 120
+    assert accounting["whatsapp_cards"] == 0
+
+
+def test_org_card_totals_are_zero_for_no_requests(client, db):
+    org = _create_org(db, shared=True)
+    _login_org_admin(client, db, _create_org_admin(db, org))
+    response = client.get("/api/org-admin/cards/replenishments")
+    assert response.status_code == 200, response.text
+    assert response.json()["items"] == []
+    assert response.json()["summary"]["requested_cards"] == 0
+    assert response.json()["summary"]["whatsapp_cards"] == 0

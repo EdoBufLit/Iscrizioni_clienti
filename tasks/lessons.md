@@ -3,6 +3,10 @@
 - Quando il cliente chiede fedelta esatta a mockup admin, non basta un re-skin: prima della consegna servono screenshot viewport-to-viewport delle superfici critiche, inclusi drawer/modali fixed. Inoltre le integrazioni esistenti nel dettaglio (es. SumUp) vanno preservate esplicitamente nella nuova IA e verificate nello screenshot.
 # Lessons
 
+- Sep 11, 2026: per le email di servizio usare un layout condiviso a tabelle con font sans-serif, colori espliciti, un solo titolo e CTA leggibile; verificare desktop, mobile e tema scuro. Il riepilogo tessere richieste deve includere le richieste WhatsApp registrate senza confondere numero richieste, quantita tessere e debiti del portale. Le comunicazioni centrali devono essere accessibili anche senza modulo campagne attivo.
+
+- Sep 11, 2026: l'utente ha rinominato il branch predefinito e richiesto di lavorare d'ora in poi su main. Il nome remoto esatto e `Main` (M maiuscola), con tracking `origin/Main`: usare questo branch per il lavoro successivo, senza riutilizzare `feat/redesign-landing-wizard` o creare branch alternativi salvo richiesta. Verificare sempre il nome esatto con `git ls-remote --symref origin HEAD` quando cambia il default.
+
 - Jul 7, 2026: quando si valida Cloudflare REST non basta il test system `no-reply@assonam.it`: testare anche un invio con sender associazione reale. `MAIL_FROM_DOMAIN` deve puntare a un dominio/sender verificato da Cloudflare, altrimenti gli invii tessera falliscono con `email.sending.error.email.invalid`.
 - Jul 7, 2026: in ogni deploy/smoke Hetzner controllare sempre anche spazio disco, inode e footprint Docker (`df -h`, `df -ih`, `docker system df`) prima di chiudere il task.
 - May 29, 2026: quando un form usa il blocco prenotazione `__booking_block__`, tutti i resolver pubblici devono passare da `form_uses_dynamic_booking_controls(form)`. Non basta correggere submit/frontend: anche `booking-events` e `booking-available-dates` devono riconoscere il blocco, altrimenti le chiusure live risultano aperte.

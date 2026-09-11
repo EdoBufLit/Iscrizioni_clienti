@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import html
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -13,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import DocStatus, Member, MemberDocument, MemberStatus
+from app.services.system_email_layout import build_system_email_html
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
 from app.utils import save_upload_file
@@ -391,14 +391,16 @@ def enqueue_document_rejection_email(
         "Il link e personale e scade dopo 72 ore. L'accesso permette esclusivamente "
         "di vedere la motivazione e reinviare il documento richiesto."
     )
-    html_body = (
-        f"<p>Ciao {html.escape(member_name)},</p>"
-        f"<p><strong>{html.escape(org_name)}</strong> ha richiesto la correzione "
-        f"del tuo {html.escape(doc_label)}.</p>"
-        f"<p><strong>Motivazione:</strong> {html.escape(reason)}</p>"
-        f'<p><a href="{html.escape(correction_url, quote=True)}">Carica la nuova versione</a></p>'
-        "<p>Il link e personale e scade dopo 72 ore. L'accesso permette esclusivamente "
-        "di vedere la motivazione e reinviare il documento richiesto.</p>"
+    html_body = build_system_email_html(
+        title="Documento da correggere",
+        eyebrow="Documenti socio",
+        organization_name=org_name,
+        preheader=f"È richiesta una nuova versione del tuo {doc_label}.",
+        body=f"Ciao {member_name},\n\n{org_name} ha richiesto la correzione del tuo {doc_label}.",
+        details=[("Motivazione", reason)],
+        cta_url=correction_url,
+        cta_label="Carica la nuova versione",
+        footer="Il link è personale e scade dopo 72 ore. L'accesso permette esclusivamente di vedere la motivazione e reinviare il documento richiesto.",
     )
     return enqueue_email(
         db,

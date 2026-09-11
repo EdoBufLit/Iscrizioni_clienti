@@ -47,6 +47,7 @@ const SuperAdminLayout = () => {
     { label: "Associazioni", path: "/super-admin/associazioni", icon: "users" },
     { label: "Affiliazioni", path: "/super-admin/affiliazioni", icon: "user" },
     { label: "Documenti", path: "/super-admin/documenti", icon: "documents" },
+    { label: "Comunicazioni", path: "/super-admin/comunicazioni", icon: "mail" },
     { label: "Amministratori", path: "/super-admin/org-admins", icon: "shield" },
     { label: "Registro lotti", path: "/super-admin/registro-lotti", icon: "cards" },
     { label: "Crediti tessere", path: "/super-admin/crediti-tessere", icon: "wallet" },
@@ -68,6 +69,7 @@ const SuperAdminLayout = () => {
 
   const mobileMoreNav = useMemo(
     (): MobileDashboardNavItem[] => [
+      { key: "communications", label: "Comunicazioni", to: "/super-admin/comunicazioni", activeMatch: ["/super-admin/comunicazioni"], icon: "book" as const },
       { key: "admins", label: "Amministratori", to: "/super-admin/org-admins", activeMatch: ["/super-admin/org-admins"], icon: "shield" as const },
       { key: "card-credits", label: "Crediti tessere", to: "/super-admin/crediti-tessere", activeMatch: ["/super-admin/crediti-tessere"], icon: "cards" as const },
       { key: "members", label: "Libro Soci", to: "/super-admin/soci", activeMatch: ["/super-admin/soci"], icon: "book" as const },

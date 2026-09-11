@@ -1,5 +1,9 @@
 # AI Agent Operating Rules
 
+## Working branch
+- From September 11, 2026, work on `Main` (capital M), the remote default branch, tracking `origin/Main`.
+- The user's reference to "main" means `Main`; do not use `feat/redesign-landing-wizard` as the working/default branch or create another branch unless requested.
+
 All AI agents (Codex, Jules, Copilot, etc.) must follow these rules.
 Failure to comply is considered a failed task.
 

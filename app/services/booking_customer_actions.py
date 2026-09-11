@@ -21,6 +21,7 @@ from app.models import (
 )
 from app.services.booking_formatting import format_booking_date_it
 from app.services.bookings import update_booking_status
+from app.services.system_email_layout import build_system_email_html
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
 from app.utils import hash_token
@@ -529,7 +530,15 @@ def _notify_admins(
                 subject=email_subject,
                 payload=build_email_payload(
                     text_body=f"{body}\n\nApri prenotazione: {href}",
-                    html_body=f"<p>{html.escape(body)}</p><p><a href='{html.escape(href)}'>Apri prenotazione</a></p>",
+                    html_body=build_system_email_html(
+                        title=title,
+                        eyebrow="Aggiornamento prenotazione",
+                        organization_name=getattr(booking.organization, "name", "") or "",
+                        body=body,
+                        preheader=body,
+                        cta_url=href,
+                        cta_label="Apri prenotazione",
+                    ),
                     sender=build_sender_payload(mode="association", association=booking.organization),
                     meta={
                         "booking_id": booking.id,

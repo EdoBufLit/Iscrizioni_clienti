@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import html
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.models import Form, FormSubmission
+from app.services.system_email_layout import build_system_email_html
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
 
@@ -30,9 +30,12 @@ def maybe_enqueue_high_score_survey_thank_you(
         f"Grazie per il tuo feedback su '{form.title}'.\n\n"
         f"Siamo felici che l'esperienza con {org_name} sia stata positiva."
     )
-    html_body = (
-        f"<p>Grazie per il tuo feedback su <strong>{html.escape(form.title)}</strong>.</p>"
-        f"<p>Siamo felici che l'esperienza con {html.escape(org_name)} sia stata positiva.</p>"
+    html_body = build_system_email_html(
+        title="Grazie per il tuo feedback",
+        eyebrow="Sondaggi",
+        organization_name=org_name,
+        body=text_body,
+        preheader=f"Grazie per il tuo feedback su {form.title}.",
     )
     enqueue_email(
         db,

@@ -1,5 +1,4 @@
 import csv
-import html
 import io
 import json
 
@@ -73,6 +72,7 @@ from app.models_affiliation import (
     AffiliationPaymentStatus,
 )
 from app.services.email_outbox import build_email_payload, enqueue_email
+from app.services.system_email_layout import build_system_email_html
 from app.services.file_deletion import enqueue_file_deletion
 from app.services.csv_safety import neutralize_csv_formula
 from app.services.email_sender import (
@@ -275,6 +275,7 @@ from app.services.org_admin_sessions import (
     set_org_admin_session_cookie,
 )
 from app.services import org_admin_mfa_enrollment
+from app.services.affiliate_communications import record_communication_read
 from app.services.super_admin_auth import (
     active_totp_factor,
     build_provisioning_uri,
@@ -2016,7 +2017,6 @@ def request_magic_link(
             frontend_base = str(request.base_url).rstrip("/")
 
         link = f"{frontend_base}/auth/verify?token={token_str}&role=org_admin"
-        safe_link = html.escape(link, quote=True)
         logger.info(
             "Generated org-admin magic link: %s", redact_url(link)
         )
@@ -2040,14 +2040,16 @@ def request_magic_link(
                     f"{link}\n\n"
                     "Il codice e il link scadono tra pochi minuti. Se non hai richiesto tu l'accesso, ignora questa email."
                 ),
-                html_body=(
-                    "<div style=\"font-family:Inter,Arial,sans-serif;color:#0f172a;line-height:1.5\">"
-                    "<h1 style=\"font-size:22px;margin:0 0 12px\">Accesso area amministrazione</h1>"
-                    "<p>Se sei nell'app ASSONAM, lascia aperta la schermata di login e inserisci questo codice:</p>"
-                    f"<p style=\"font-size:32px;font-weight:800;letter-spacing:8px;margin:16px 0;color:#00594f\">{login_code}</p>"
-                    f"<p>In alternativa puoi <a href=\"{safe_link}\">aprire il link di accesso</a>.</p>"
-                    "<p style=\"color:#64748b;font-size:13px\">Il codice e il link scadono tra pochi minuti. Se non hai richiesto tu l'accesso, ignora questa email.</p>"
-                    "</div>"
+                html_body=build_system_email_html(
+                    title="Accesso area amministrazione",
+                    eyebrow="Accesso sicuro",
+                    preheader="Il tuo codice per accedere all'area amministrazione ASSO.N.A.M.",
+                    body="Se sei nell'app ASSONAM, lascia aperta la schermata di login e inserisci questo codice. In alternativa, apri il link di accesso qui sotto.",
+                    metric_value=login_code,
+                    metric_label="Codice di accesso",
+                    cta_url=link,
+                    cta_label="Apri il link di accesso",
+                    footer="Il codice e il link scadono tra pochi minuti. Se non hai richiesto tu l'accesso, ignora questa email.",
                 ),
                 meta={
                     "admin_id": admin.id,
@@ -2425,14 +2427,14 @@ def request_org_admin_mfa_setup_email_code(
                 "Il codice scade tra 5 minuti e può essere usato una sola volta. "
                 "Se non hai richiesto tu l'attivazione, ignora questa email e revoca le sessioni sconosciute."
             ),
-            html_body=(
-                '<div style="font-family:Inter,Arial,sans-serif;color:#0f172a;line-height:1.5">'
-                '<h1 style="font-size:22px;margin:0 0 12px">Attivazione verifica in due passaggi</h1>'
-                "<p>Inserisci questo codice nella tua area riservata ASSONAM:</p>"
-                f'<p style="font-size:32px;font-weight:800;letter-spacing:8px;margin:16px 0;color:#00594f">{code}</p>'
-                '<p style="color:#64748b;font-size:13px">Il codice scade tra 5 minuti e può essere usato una sola volta. '
-                "Se non hai richiesto tu l'attivazione, ignora questa email e revoca le sessioni sconosciute.</p>"
-                "</div>"
+            html_body=build_system_email_html(
+                title="Attivazione verifica in due passaggi",
+                eyebrow="Sicurezza account",
+                preheader="Il codice di sicurezza per attivare la verifica in due passaggi.",
+                body="Inserisci questo codice nella tua area riservata ASSONAM.",
+                metric_value=code,
+                metric_label="Codice di sicurezza",
+                footer="Il codice scade tra 5 minuti e può essere usato una sola volta. Se non hai richiesto tu l'attivazione, ignora questa email e revoca le sessioni sconosciute.",
             ),
             meta={
                 "admin_id": authenticated.admin.id,
@@ -2772,7 +2774,10 @@ def list_org_admin_notifications(
 
     items = (
         db.query(OrgAdminNotification)
-        .filter(OrgAdminNotification.admin_user_id == admin.id)
+        .filter(
+            OrgAdminNotification.admin_user_id == admin.id,
+            OrgAdminNotification.org_id == admin.org_id,
+        )
         .order_by(
             OrgAdminNotification.created_at.desc(),
             OrgAdminNotification.id.desc(),
@@ -2784,6 +2789,7 @@ def list_org_admin_notifications(
         db.query(func.count(OrgAdminNotification.id))
         .filter(
             OrgAdminNotification.admin_user_id == admin.id,
+            OrgAdminNotification.org_id == admin.org_id,
             OrgAdminNotification.is_read.is_(False),
         )
         .scalar()
@@ -2808,6 +2814,7 @@ def get_org_admin_notifications_unread_count(
         db.query(func.count(OrgAdminNotification.id))
         .filter(
             OrgAdminNotification.admin_user_id == admin.id,
+            OrgAdminNotification.org_id == admin.org_id,
             OrgAdminNotification.is_read.is_(False),
         )
         .scalar()
@@ -2831,6 +2838,7 @@ def mark_org_admin_notification_read(
         .filter(
             OrgAdminNotification.id == notification_id,
             OrgAdminNotification.admin_user_id == admin.id,
+            OrgAdminNotification.org_id == admin.org_id,
         )
         .first()
     )
@@ -2840,6 +2848,11 @@ def mark_org_admin_notification_read(
     if not notification.is_read:
         notification.is_read = True
         notification.read_at = datetime.utcnow()
+        if notification.communication_id is not None:
+            record_communication_read(
+                db, communication_id=notification.communication_id,
+                admin_user_id=admin.id, now=notification.read_at,
+            )
         db.add(notification)
         db.commit()
 
@@ -2861,6 +2874,7 @@ def delete_org_admin_notification(
         .filter(
             OrgAdminNotification.id == notification_id,
             OrgAdminNotification.admin_user_id == admin.id,
+            OrgAdminNotification.org_id == admin.org_id,
         )
         .first()
     )
@@ -2883,10 +2897,22 @@ def mark_all_org_admin_notifications_read(
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     now = datetime.utcnow()
+    communication_notifications = db.query(OrgAdminNotification).filter(
+        OrgAdminNotification.admin_user_id == admin.id,
+        OrgAdminNotification.org_id == admin.org_id,
+        OrgAdminNotification.communication_id.is_not(None),
+        OrgAdminNotification.is_read.is_(False),
+    ).all()
+    for notification in communication_notifications:
+        record_communication_read(
+            db, communication_id=notification.communication_id,
+            admin_user_id=admin.id, now=now,
+        )
     updated = (
         db.query(OrgAdminNotification)
         .filter(
             OrgAdminNotification.admin_user_id == admin.id,
+            OrgAdminNotification.org_id == admin.org_id,
             OrgAdminNotification.is_read.is_(False),
         )
         .update(
@@ -7546,7 +7572,7 @@ def list_card_replenishments(
         .options(joinedload(RechargeRequest.card_batch))
         .filter(
             RechargeRequest.association_id == admin.org_id,
-            RechargeRequest.source == "org_admin_portal",
+            RechargeRequest.source.in_(["org_admin_portal", "whatsapp"]),
         )
     )
     total = int(query.count())
@@ -7559,7 +7585,7 @@ def list_card_replenishments(
     return {
         "items": [serialize_replenishment_request(item) for item in items],
         "total": total,
-        "summary": replenishment_summary(db, org_id=admin.org_id),
+        "summary": replenishment_summary(db, org_id=admin.org_id, include_whatsapp=True),
         "capability": replenishment_capability(db, org),
     }
 

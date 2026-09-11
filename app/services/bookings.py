@@ -28,6 +28,7 @@ from app.services.booking_event_availability import (
     is_form_date_closed,
     series_matches_date,
 )
+from app.services.system_email_layout import build_system_email_html
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
 from app.services.email_templates import build_template_context, render_template_string
@@ -651,18 +652,20 @@ def _enqueue_booking_email(
         f"Persone: {booking.party_size or '-'}\n"
         f"{action_message}"
     )
-    html_body = (
-        f"<p>{html.escape(intro)}</p>"
-        f"<ul>"
-        f"<li><strong>Nome:</strong> {html.escape(booking.customer_name)}</li>"
-        f"<li><strong>Data:</strong> {html.escape(date_line)}</li>"
-        f"<li><strong>Orario:</strong> {html.escape(time_line)}</li>"
-        f"<li><strong>Persone:</strong> {booking.party_size or '-'}</li>"
-        f"</ul>"
-        f"<p>{html.escape(action_message)}</p>"
+    organization = getattr(booking, "organization", None) or getattr(getattr(booking, "form", None), "organization", None)
+    html_body = build_system_email_html(
+        title=subject,
+        eyebrow="Prenotazioni",
+        organization_name=getattr(organization, "name", "") or "",
+        preheader=intro,
+        body=body_text_override or f"{intro}\n\n{action_message}",
+        details=[] if body_text_override else [
+            ("Nome", booking.customer_name),
+            ("Data", date_line),
+            ("Orario", time_line),
+            ("Persone", str(booking.party_size or "-")),
+        ],
     )
-    if body_text_override:
-        html_body = f"<p>{html.escape(body_text_override).replace(chr(10), '<br>')}</p>"
     enqueue_email(
         db,
         email_type=email_type,

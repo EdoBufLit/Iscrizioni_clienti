@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import html
 import io
 import re
 import unicodedata
@@ -35,6 +34,7 @@ from app.services.booking_event_availability import (
 )
 from app.services.csv_safety import neutralize_csv_formula
 from app.services.email_outbox import build_email_payload, enqueue_email
+from app.services.system_email_layout import build_system_email_html
 from app.services.email_sender import build_sender_payload
 from app.services.email_templates import render_template_content
 from app.services.whatsapp_automations import serialize_whatsapp_automation
@@ -1063,10 +1063,7 @@ def create_submission(
 
 def _format_submission_for_email(form: Form, payload: dict[str, Any]) -> tuple[str, str]:
     lines = [f"Nuova risposta ricevuta per il form '{form.title}'."]
-    html_rows: list[str] = [
-        f"<p>Nuova risposta ricevuta per il form <strong>{html.escape(form.title)}</strong>.</p>",
-        "<ul>",
-    ]
+    details: list[tuple[str, str]] = []
     field_map = {field.field_key: field for field in form.fields or []}
     for key, value in payload.items():
         field = field_map.get(key)
@@ -1080,9 +1077,15 @@ def _format_submission_for_email(form: Form, payload: dict[str, Any]) -> tuple[s
         else:
             printable = str(value)
         lines.append(f"- {label}: {printable}")
-        html_rows.append(f"<li><strong>{html.escape(label)}:</strong> {html.escape(printable)}</li>")
-    html_rows.append("</ul>")
-    return "\n".join(lines), "".join(html_rows)
+        details.append((label, printable))
+    return "\n".join(lines), build_system_email_html(
+        title="Nuova risposta ricevuta",
+        eyebrow="Form online",
+        organization_name=getattr(form.organization, "name", "") or "",
+        body=lines[0],
+        preheader=lines[0],
+        details=details,
+    )
 
 
 def _template_context_value(value: Any) -> str | None:
@@ -1387,9 +1390,12 @@ def enqueue_submission_notifications(
                 f"Abbiamo ricevuto la tua richiesta per '{form.title}'.\n\n"
                 f"{form.success_message or 'Ti ricontatteremo al più presto.'}"
             )
-            confirmation_html = (
-                f"<p>Abbiamo ricevuto la tua richiesta per <strong>{html.escape(form.title)}</strong>.</p>"
-                f"<p>{html.escape(form.success_message or 'Ti ricontatteremo al più presto.')}</p>"
+            confirmation_html = build_system_email_html(
+                title="Richiesta ricevuta",
+                eyebrow="Conferma invio",
+                organization_name=getattr(form.organization, "name", "") or "",
+                preheader=f"Abbiamo ricevuto la tua richiesta per {form.title}.",
+                body=confirmation_text,
             )
             enqueue_email(
                 db,
