@@ -4,7 +4,7 @@
 - [x] Build super-admin compose/history and association inbox/detail UI, with recipient preview and clear send result.
 - [x] Include WhatsApp card requests in the association requested-card total without duplicating lots or changing portal billing semantics.
 - [x] Verify authorization, recipient selection, read state, idempotent delivery and card totals; run targeted backend/frontend tests, build and desktop/mobile browser checks.
-- [ ] Review final diff, release through the existing workflow on Main, apply migration and verify live read-only health and infrastructure.
+- [x] Review final diff, release through the existing workflow on Main, apply migration and verify live read-only health and infrastructure.
 
 ### Implementation notes
 - Reuse the existing org-admin notification bell and email outbox. Central communications must be available independently of the optional association-to-member communications module.
@@ -18,7 +18,10 @@
 - Card request list and quantity totals include WhatsApp, without changing portal accounting. Fixture: 100 portal + 250 WhatsApp = 350 cards, two requests, portal debt unchanged.
 - Verification passed: 121 backend email/flow/form/renewal/card/security tests; 30 communication/notification/purge/migration tests (partially overlapping notification suite); all 67 frontend tests; production build; Python compileall; diff check. Migration `8c4d9e21f603` verified upgrade/downgrade with SQLite FK enforcement and PostgreSQL DDL.
 - Real local browser flow verified compose/review/send, bell opening, message reading and reload persistence, card total, desktop/mobile and dark theme. Four representative emails rendered in desktop/mobile/dark variants with no overflow. Artifacts in `%TEMP%/assonam-communications-20260911`; all test mail stayed local.
-- Deploy workflow updated to follow `Main` after the user changed the default branch. Production rollout and final live checks pending.
+- Deploy workflow updated to follow `Main` after the user changed the default branch. Implementation commit `74e613e2b638f82f39e4659aacd124ae20b9da2e`; production run `34651633790`.
+- Fresh backup `/opt/assonam/backups/before-communications-release-20260911.dump`: 187329190 bytes, mode 600, readable pg_restore catalog, SHA256 `27cb5f67d722edaa875865d54c1a5a462eb9c303eab7e75647ce69c114653537`.
+- Live smoke passed: checkout on Main at implementation commit, Alembic at `8c4d9e21f603`, HTTP health/database OK, both communication APIs return 401 anonymously. Read-only real-data check includes 2201 WhatsApp cards across 11 requests for one association, with no portal debt added. Zero central communications created by smoke; new email renderer loaded without sending mail. App workers healthy, zero restarts; disk 39%, inode use 10%.
+- Release completed successfully on Sep 12 (Europe/Rome): workflow `34651633790`, including the final 180-second canary. Public frontend HTTP 200 serves both new communication modules from `/assets/index-D6-KmRF0.js`. Local QA servers stopped and screenshots retained.
 
 ## Plan (Local default branch update - Sep 11, 2026)
 - [x] Verify clean local checkout and exact remote default branch name.
