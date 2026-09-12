@@ -307,24 +307,34 @@ def test_allocator_failure_rolls_back_request_debt_notification_and_lot(
     assert db.query(EmailOutbox).count() == outbox_count_before
 
 
-def test_super_admin_updates_paid_state_with_append_only_events_and_audit(client, db):
+@pytest.mark.parametrize("source", ["org_admin_portal", "whatsapp"])
+def test_super_admin_updates_paid_state_with_append_only_events_and_audit(client, db, source):
     org, _admin, _key, created = _create_portal_request(client, db, quantity=40)
     request_id = created["item"]["id"]
+    db.get(RechargeRequest, request_id).source = source
+    db.commit()
     _login_super_admin(client)
 
     paid = client.patch(
         f"/api/super-admin/recharge-credits/{request_id}/accounting",
         json={
             "billing_status": "paid",
+            "paid_at": "2026-09-12T10:00:00+02:00",
             "payment_reference": "BON-2026-001",
             "accounting_note": "Bonifico verificato",
         },
     )
     assert paid.status_code == 200, paid.text
     assert paid.json()["item"]["billing_status"] == "paid"
-    assert paid.json()["item"]["paid_at"] is not None
+    assert paid.json()["item"]["paid_at"] == "2026-09-12T08:00:00"
     assert paid.json()["item"]["payment_reference"] == "BON-2026-001"
     assert len(paid.json()["item"]["accounting_events"]) == 1
+    paid_summary = client.get(
+        "/api/super-admin/recharge-credits", params={"org_id": org.id}
+    ).json()["summary"]
+    assert paid_summary["outstanding_cents"] == 0
+    assert paid_summary["paid_cents"] == 4_000
+    assert (paid_summary["unpaid"], paid_summary["paid"]) == (0, 1)
 
     unpaid = client.patch(
         f"/api/super-admin/recharge-credits/{request_id}/accounting",
@@ -337,6 +347,12 @@ def test_super_admin_updates_paid_state_with_append_only_events_and_audit(client
     assert unpaid.json()["item"]["billing_status"] == "unpaid"
     assert unpaid.json()["item"]["paid_at"] is None
     assert len(unpaid.json()["item"]["accounting_events"]) == 2
+    unpaid_summary = client.get(
+        "/api/super-admin/recharge-credits", params={"org_id": org.id}
+    ).json()["summary"]
+    assert unpaid_summary["outstanding_cents"] == 4_000
+    assert unpaid_summary["paid_cents"] == 0
+    assert (unpaid_summary["unpaid"], unpaid_summary["paid"]) == (1, 0)
 
     events = (
         db.query(RechargeRequestAccountingEvent)
@@ -362,9 +378,12 @@ def test_super_admin_updates_paid_state_with_append_only_events_and_audit(client
     )
 
 
-def test_recharge_credit_mutation_requires_recent_super_admin_step_up(client, db, monkeypatch):
+@pytest.mark.parametrize("source", ["org_admin_portal", "whatsapp"])
+def test_recharge_credit_mutation_requires_recent_super_admin_step_up(client, db, monkeypatch, source):
     _org, _admin, _key, created = _create_portal_request(client, db, quantity=10)
     request_id = created["item"]["id"]
+    db.get(RechargeRequest, request_id).source = source
+    db.commit()
     _login_super_admin(client)
     monkeypatch.setattr(settings, "SUPER_ADMIN_MFA_REQUIRED", True)
 
@@ -384,7 +403,7 @@ def test_recharge_credit_mutation_requires_recent_super_admin_step_up(client, db
     )
 
 
-def test_existing_whatsapp_replenishment_flow_remains_not_applicable(client, db):
+def test_allocator_preserves_explicit_legacy_accounting_status(client, db):
     org = _create_org(db, shared=True)
     existing = RechargeRequest(
         association_id=org.id,
@@ -393,6 +412,7 @@ def test_existing_whatsapp_replenishment_flow_remains_not_applicable(client, db)
         requester_profile_name="Mario Rossi",
         requested_cards=25,
         notes=None,
+        billing_status="not_applicable",
     )
     db.add(existing)
     db.flush()
@@ -408,7 +428,7 @@ def test_existing_whatsapp_replenishment_flow_remains_not_applicable(client, db)
     assert existing.card_batch_id == batch.id
 
 
-def test_org_card_totals_include_whatsapp_without_adding_debt_or_duplicate_lots(client, db):
+def test_org_card_totals_include_whatsapp_accounting_without_duplicate_lots(client, db):
     org, admin, _key, portal = _create_portal_request(client, db, quantity=120)
     other_org = _create_org(db, shared=True)
     whatsapp = RechargeRequest(
@@ -416,24 +436,29 @@ def test_org_card_totals_include_whatsapp_without_adding_debt_or_duplicate_lots(
         association_name=org.name,
         requester_whatsapp="whatsapp:+393331234567",
         requested_cards=75,
+        billing_status="unpaid",
     )
     pending = RechargeRequest(
         association_id=org.id,
         association_name=org.name,
         requester_whatsapp="whatsapp:+393331234568",
         requested_cards=25,
+        billing_status="paid",
+        paid_at=datetime.utcnow(),
     )
     other = RechargeRequest(
         association_id=other_org.id,
         association_name=other_org.name,
         requester_whatsapp="whatsapp:+393331234569",
         requested_cards=900,
+        billing_status="unpaid",
     )
     unlinked = RechargeRequest(
         association_id=None,
         association_name=org.name,
         requester_whatsapp="whatsapp:+393331234570",
         requested_cards=600,
+        billing_status="unpaid",
     )
     db.add_all([whatsapp, pending, other, unlinked])
     db.flush()
@@ -453,10 +478,10 @@ def test_org_card_totals_include_whatsapp_without_adding_debt_or_duplicate_lots(
             "total": 3,
             "requested_cards": 220,
             "whatsapp_cards": 100,
-            "unpaid": 1,
-            "paid": 0,
-            "outstanding_cents": 12_000,
-            "paid_cents": 0,
+            "unpaid": 2,
+            "paid": 1,
+            "outstanding_cents": 19_500,
+            "paid_cents": 2_500,
         }
 
     listing = client.get("/api/org-admin/cards/replenishments").json()
@@ -465,12 +490,10 @@ def test_org_card_totals_include_whatsapp_without_adding_debt_or_duplicate_lots(
     }
     assert {item["source"] for item in listing["items"]} == {"org_admin_portal", "whatsapp"}
     assert db.query(CardBatch).filter(CardBatch.org_id == org.id).count() == lots_before
-    assert db.get(RechargeRequest, whatsapp.id).billing_status == "not_applicable"
-    # The super-admin portal accounting summary retains its original scope.
+    assert db.get(RechargeRequest, whatsapp.id).billing_status == "unpaid"
+    # Both the shared summary and the tenant endpoint use the same accounting.
     accounting = replenishment_summary(db, org_id=org.id)
-    assert accounting["total"] == 1
-    assert accounting["requested_cards"] == 120
-    assert accounting["whatsapp_cards"] == 0
+    assert accounting == listing["summary"]
 
 
 def test_org_card_totals_are_zero_for_no_requests(client, db):
@@ -481,3 +504,152 @@ def test_org_card_totals_are_zero_for_no_requests(client, db):
     assert response.json()["items"] == []
     assert response.json()["summary"]["requested_cards"] == 0
     assert response.json()["summary"]["whatsapp_cards"] == 0
+
+
+def test_super_admin_credit_summary_matches_all_filters_before_pagination(client, db):
+    org = _create_org(db, shared=True)
+    other_org = _create_org(db, shared=True)
+    rows = [
+        RechargeRequest(
+            association_id=org.id,
+            association_name=org.name,
+            requester_whatsapp=f"whatsapp:test-{index}",
+            requested_cards=10,
+            source="whatsapp",
+            billing_status="unpaid",
+            status="blocked_non_shared",
+        )
+        for index in range(104)
+    ]
+    for source, quantity, billing_status in [
+        ("whatsapp", 250, "paid"),
+        ("org_admin_portal", 100, "unpaid"),
+        ("org_admin_portal", 75, "paid"),
+    ]:
+        rows.append(RechargeRequest(
+            association_id=org.id,
+            association_name=org.name,
+            requester_whatsapp="test:credits",
+            requested_cards=quantity,
+            source=source,
+            billing_status=billing_status,
+            paid_at=datetime.utcnow() if billing_status == "paid" else None,
+            status="new",
+        ))
+    db.add_all(rows)
+    db.add(RechargeRequest(
+        association_id=other_org.id,
+        association_name=other_org.name,
+        requester_whatsapp="whatsapp:other",
+        requested_cards=999,
+        billing_status="unpaid",
+    ))
+    db.flush()
+    # Two history entries on one row must not inflate listing totals.
+    for previous_status, new_status in [("unpaid", "paid"), ("paid", "unpaid")]:
+        db.add(RechargeRequestAccountingEvent(
+            recharge_request_id=rows[0].id,
+            previous_status=previous_status,
+            new_status=new_status,
+            changes_json={},
+        ))
+    db.commit()
+    _login_super_admin(client)
+
+    def assert_listing(params, expected):
+        response = client.get("/api/super-admin/recharge-credits", params=params)
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["total"] == len(expected)
+        assert payload["summary"] == {
+            "total": len(expected),
+            "requested_cards": sum(row.requested_cards for row in expected),
+            "whatsapp_cards": sum(row.requested_cards for row in expected if row.source == "whatsapp"),
+            "unpaid": sum(row.billing_status == "unpaid" for row in expected),
+            "paid": sum(row.billing_status == "paid" for row in expected),
+            "outstanding_cents": sum(row.amount_due_cents for row in expected if row.billing_status == "unpaid"),
+            "paid_cents": sum(row.amount_due_cents for row in expected if row.billing_status == "paid"),
+        }
+        expected_ids = {row.id for row in expected}
+        assert {item["id"] for item in payload["items"]}.issubset(expected_ids)
+        return payload
+
+    # No scope argument: the default includes online and WhatsApp, using q too.
+    first = assert_listing({"q": org.name, "limit": 100}, rows)
+    second = assert_listing({"org_id": org.id, "limit": 100, "offset": 100}, rows)
+    assert len(first["items"]) == 100
+    assert len(second["items"]) == 7
+    assert {item["id"] for item in first["items"] + second["items"]} == {row.id for row in rows}
+    assert {item["source"] for item in first["items"]} == {"whatsapp", "org_admin_portal"}
+
+    for scope in ("portal", "whatsapp", "historical"):
+        source = "org_admin_portal" if scope == "portal" else "whatsapp"
+        for billing_status in ("all", "unpaid", "paid"):
+            selected = [row for row in rows if row.source == source and (
+                billing_status == "all" or row.billing_status == billing_status
+            )]
+            assert_listing({
+                "org_id": org.id,
+                "scope": scope,
+                "billing_status": billing_status,
+                "limit": 1,
+            }, selected)
+
+    assert_listing({
+        "org_id": org.id,
+        "scope": "whatsapp",
+        "billing_status": "unpaid",
+        "allocation_status": "blocked_non_shared",
+        "q": org.name,
+        "limit": 1,
+    }, rows[:104])
+    assert_listing({"org_id": org.id, "q": "no-matching-request"}, [])
+
+
+def test_org_admin_cannot_access_or_mutate_super_admin_credit_registry(client, db):
+    org, admin, _key, created = _create_portal_request(client, db, quantity=15)
+    request_id = created["item"]["id"]
+    db.get(RechargeRequest, request_id).source = "whatsapp"
+    db.commit()
+    client.post("/api/super-admin/auth/logout")
+    _login_org_admin(client, db, admin)
+
+    assert client.get("/api/super-admin/recharge-credits", params={"org_id": org.id}).status_code in (401, 403)
+    denied = client.patch(
+        f"/api/super-admin/recharge-credits/{request_id}/accounting",
+        json={"billing_status": "paid"},
+    )
+    assert denied.status_code in (401, 403), denied.text
+    db.expire_all()
+    assert db.get(RechargeRequest, request_id).billing_status == "unpaid"
+
+
+def test_whatsapp_credit_can_be_paid_before_lot_allocation(client, db):
+    org = _create_org(db, shared=False)
+    admin = _create_org_admin(db, org)
+    pending = RechargeRequest(
+        association_id=org.id,
+        association_name=org.name,
+        requester_whatsapp="whatsapp:pending-credit",
+        requested_cards=250,
+        source="whatsapp",
+        billing_status="unpaid",
+        status="blocked_non_shared",
+    )
+    db.add(pending)
+    db.commit()
+    _login_super_admin(client)
+    response = client.patch(
+        f"/api/super-admin/recharge-credits/{pending.id}/accounting",
+        json={"billing_status": "paid", "payment_reference": "BON-WA-250"},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["item"]["amount_due_cents"] == 25_000
+    assert response.json()["item"]["card_batch_id"] is None
+    assert response.json()["item"]["allocation_status"] == "blocked_non_shared"
+    _login_org_admin(client, db, admin)
+    listing = client.get("/api/org-admin/cards/replenishments").json()
+    assert listing["summary"]["outstanding_cents"] == 0
+    assert listing["summary"]["paid_cents"] == 25_000
+    assert listing["summary"]["requested_cards"] == 250
+    assert listing["items"][0]["billing_status"] == "paid"

@@ -133,6 +133,7 @@ from app.services.card_replenishments import (
     BILLING_STATUS_PAID,
     BILLING_STATUS_UNPAID,
     PORTAL_SOURCE,
+    WHATSAPP_SOURCE,
     load_replenishment_request,
     replenishment_summary,
     serialize_replenishment_request,
@@ -4694,7 +4695,7 @@ def list_recharge_credits(
     allocation_status: str | None = Query(default=None, max_length=64),
     org_id: int | None = Query(default=None, ge=1),
     q: str | None = Query(default=None, max_length=120),
-    scope: Literal["portal", "historical", "all"] = "portal",
+    scope: Literal["portal", "whatsapp", "historical", "all"] = "all",
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -4706,6 +4707,8 @@ def list_recharge_credits(
     )
     if scope == "portal":
         query = query.filter(RechargeRequest.source == PORTAL_SOURCE)
+    elif scope == "whatsapp":
+        query = query.filter(RechargeRequest.source == WHATSAPP_SOURCE)
     elif scope == "historical":
         query = query.filter(RechargeRequest.source != PORTAL_SOURCE)
     if billing_status != "all":
@@ -4724,7 +4727,8 @@ def list_recharge_credits(
             )
         )
 
-    total = int(query.count())
+    summary = replenishment_summary(db, query=query)
+    total = summary["total"]
     items = (
         query.order_by(RechargeRequest.created_at.desc(), RechargeRequest.id.desc())
         .offset(offset)
@@ -4737,7 +4741,7 @@ def list_recharge_credits(
             for item in items
         ],
         "total": total,
-        "summary": replenishment_summary(db),
+        "summary": summary,
     }
 
 

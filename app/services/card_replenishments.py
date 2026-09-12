@@ -4,8 +4,8 @@ import logging
 import re
 from datetime import datetime, timezone
 
-from sqlalchemy import func
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import case, func
+from sqlalchemy.orm import Query, Session, joinedload
 
 from app.config import settings
 from app.models import (
@@ -35,6 +35,8 @@ BILLING_STATUS_NOT_APPLICABLE = "not_applicable"
 BILLING_STATUS_UNPAID = "unpaid"
 BILLING_STATUS_PAID = "paid"
 PORTAL_SOURCE = "org_admin_portal"
+WHATSAPP_SOURCE = "whatsapp"
+BILLABLE_SOURCES = (PORTAL_SOURCE, WHATSAPP_SOURCE)
 
 _IDEMPOTENCY_KEY_RE = re.compile(r"^[A-Za-z0-9._:-]{8,64}$")
 
@@ -309,12 +311,12 @@ def update_replenishment_accounting(
     payment_reference: str | None,
     accounting_note: str | None,
 ) -> RechargeRequestAccountingEvent:
-    if recharge_request.source != PORTAL_SOURCE or recharge_request.billing_status not in {
+    if recharge_request.source not in BILLABLE_SOURCES or recharge_request.billing_status not in {
         BILLING_STATUS_UNPAID,
         BILLING_STATUS_PAID,
     }:
         raise ValueError(
-            "Le richieste storiche non fanno parte del registro crediti del portale"
+            "Questa richiesta non ha una posizione contabile modificabile"
         )
     if billing_status not in {BILLING_STATUS_UNPAID, BILLING_STATUS_PAID}:
         raise ValueError("Stato contabile non valido")
@@ -368,56 +370,34 @@ def update_replenishment_accounting(
 
 
 def replenishment_summary(
-    db: Session, *, org_id: int | None = None, include_whatsapp: bool = False
+    db: Session,
+    *,
+    org_id: int | None = None,
+    query: Query | None = None,
 ) -> dict[str, int]:
-    filters = [
-        RechargeRequest.source == PORTAL_SOURCE,
-        RechargeRequest.billing_status.in_([BILLING_STATUS_UNPAID, BILLING_STATUS_PAID]),
-    ]
+    # Reuse the listing filters before pagination. Lots and accounting events
+    # must not multiply requests, so the aggregate never joins those tables.
+    base = query if query is not None else db.query(RechargeRequest).filter(
+        RechargeRequest.source.in_(BILLABLE_SOURCES)
+    )
     if org_id is not None:
-        filters.append(RechargeRequest.association_id == org_id)
-    base = db.query(RechargeRequest).filter(*filters)
-    total = int(base.count())
-    unpaid = int(base.filter(RechargeRequest.billing_status == BILLING_STATUS_UNPAID).count())
-    paid = int(base.filter(RechargeRequest.billing_status == BILLING_STATUS_PAID).count())
-    outstanding_cents = int(
-        db.query(func.coalesce(func.sum(RechargeRequest.amount_due_cents), 0))
-        .filter(*filters, RechargeRequest.billing_status == BILLING_STATUS_UNPAID)
-        .scalar()
-        or 0
-    )
-    paid_cents = int(
-        db.query(func.coalesce(func.sum(RechargeRequest.amount_due_cents), 0))
-        .filter(*filters, RechargeRequest.billing_status == BILLING_STATUS_PAID)
-        .scalar()
-        or 0
-    )
-    # Count requests once, independently of their allocated lots. WhatsApp
-    # orders have no portal billing status and must not become portal debts.
-    request_filters = list(filters)
-    if include_whatsapp:
-        request_filters = [RechargeRequest.source.in_([PORTAL_SOURCE, "whatsapp"])]
-        if org_id is not None:
-            request_filters.append(RechargeRequest.association_id == org_id)
-        total = int(db.query(RechargeRequest).filter(*request_filters).count())
-    requested_cards = int(
-        db.query(func.coalesce(func.sum(RechargeRequest.requested_cards), 0))
-        .filter(*request_filters)
-        .scalar()
-        or 0
-    )
-    whatsapp_cards = int(
-        db.query(func.coalesce(func.sum(RechargeRequest.requested_cards), 0))
-        .filter(*request_filters, RechargeRequest.source == "whatsapp")
-        .scalar()
-        or 0
-    )
-    return {
-        "total": total,
-        "requested_cards": requested_cards,
-        "whatsapp_cards": whatsapp_cards,
-        "unpaid": unpaid,
-        "paid": paid,
-        "outstanding_cents": outstanding_cents,
-        "paid_cents": paid_cents,
-    }
+        base = base.filter(RechargeRequest.association_id == org_id)
+    unpaid = RechargeRequest.billing_status == BILLING_STATUS_UNPAID
+    paid = RechargeRequest.billing_status == BILLING_STATUS_PAID
+    totals = base.order_by(None).with_entities(
+        func.count(RechargeRequest.id).label("total"),
+        func.coalesce(func.sum(RechargeRequest.requested_cards), 0).label("requested_cards"),
+        func.coalesce(func.sum(case(
+            (RechargeRequest.source == WHATSAPP_SOURCE, RechargeRequest.requested_cards),
+            else_=0,
+        )), 0).label("whatsapp_cards"),
+        func.coalesce(func.sum(case((unpaid, 1), else_=0)), 0).label("unpaid"),
+        func.coalesce(func.sum(case((paid, 1), else_=0)), 0).label("paid"),
+        func.coalesce(func.sum(case(
+            (unpaid, RechargeRequest.amount_due_cents), else_=0,
+        )), 0).label("outstanding_cents"),
+        func.coalesce(func.sum(case(
+            (paid, RechargeRequest.amount_due_cents), else_=0,
+        )), 0).label("paid_cents"),
+    ).one()
+    return {key: int(value) for key, value in totals._mapping.items()}

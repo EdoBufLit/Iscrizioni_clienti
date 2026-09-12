@@ -1,3 +1,23 @@
+## Plan (Unified WhatsApp and online card credits - Sep 12, 2026)
+- [x] Initialize new WhatsApp orders as unpaid at EUR 1 per card, including orders awaiting allocation; migrate existing unclassified WhatsApp orders with accounting history.
+- [x] Enable WhatsApp accounting updates with existing MFA/audit and calculate shared association/super-admin summaries over the exact filtered dataset.
+- [x] Show both origins by default, add complete association selector and pagination, and refresh filtered KPIs after payment changes.
+- [x] Test migration, creation, payment reversals, filters, pagination, tenant isolation and MFA; verify desktop/mobile/dark browser flows, Python compilation and frontend build.
+- [ ] Back up production, release on Main, verify migration/data totals and production health/infrastructure.
+
+### Accepted decisions
+- Historical WhatsApp orders start as unpaid. Debt starts when the order is registered, even before lot allocation.
+- Online means the association portal. Payments are recorded manually by the super admin; amount is quantity multiplied by EUR 1.
+- Accounting totals and table use the same active filters, independent of pagination. Existing recorded payments, notes and lot identities are preserved.
+
+### Verification and release notes
+- 44 backend tests passed for replenishment accounting, WhatsApp bot, lot registry/management, MFA and organization stock movements. Three isolated SQLite migration tests passed, including replay/downgrade and old-worker orders.
+- Migration also verified on isolated PostgreSQL 16.12 with JSONB and JSON audit columns, real row-lock contention with a simultaneous payment, no-lot requests, preservation and replay. No production database used by these tests.
+- Browser fixture verified 105 total requests, 103 selected requests across pages of 100 and 3, 451 selected cards. Marking the 250-card WhatsApp order paid moved EUR 250 to paid and left EUR 201 outstanding; association summary matched. No JavaScript errors.
+- All 75 frontend tests passed (22 files), including eight new credits-page interaction tests. Python compileall, TypeScript/production build and diff checks passed. Final browser QA includes desktop/mobile and dark controls with measured text contrast 13.03:1; mobile KPIs use two columns. Artifacts: `%TEMP%/assonam-credits-20260912`.
+- Pre-release backup `/opt/assonam/backups/before-unified-credits-20260912.dump`: 187351225 bytes, mode 600, readable pg_restore catalog, SHA256 `c4cb49b1d278e9d1ffc5143f7cbd138b3b577bac70814266aa644a71b1556f25`.
+- Read-only pre-release snapshot: 24 WhatsApp requests, 3823 cards / EUR 3823, all previously not_applicable. Disk 37%, inode usage 9%.
+
 ## Plan (System emails, affiliate communications and WhatsApp card totals - Sep 11, 2026)
 - [x] Refresh low-stock and other dated system emails with a shared responsive, readable design; preserve delivery behavior and verify rendered examples.
 - [x] Add super-admin communications to one, selected or all active affiliates, with persistent recipient records, tenant-scoped reading, bell notifications and durable email delivery to active association admins.

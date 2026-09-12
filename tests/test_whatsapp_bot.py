@@ -19,6 +19,11 @@ def db():
     session.close()
 
 
+@pytest.fixture(autouse=True)
+def prevent_real_telegram_notifications(monkeypatch):
+    monkeypatch.setattr(whatsapp_bot_service, "send_telegram_message", lambda _text: None)
+
+
 def _create_org(db, *, name: str, slug: str) -> Organization:
     org = Organization(
         name=name,
@@ -121,6 +126,12 @@ def test_whatsapp_bot_creates_recharge_request_after_candidate_selection(
     assert request_row.requester_whatsapp == wa_from
     assert request_row.requester_profile_name == "Mario Rossi"
     assert request_row.requested_cards == 120
+    assert request_row.billing_status == "unpaid"
+    assert request_row.amount_due_cents == 12_000
+    assert request_row.unit_price_cents == 100
+    assert request_row.currency == "EUR"
+    assert request_row.card_batch_id is None
+    assert request_row.status == "blocked_non_shared"
     assert request_row.notes is None
 
     session_row = (
@@ -200,6 +211,9 @@ def test_whatsapp_bot_auto_creates_shared_assonam_batch_from_recharge_request(
     assert request_row.association_id == shared_org.id
     assert request_row.card_batch_id is not None
     assert request_row.status == "lot_created"
+    assert request_row.source == "whatsapp"
+    assert request_row.billing_status == "unpaid"
+    assert request_row.amount_due_cents == 30_000
 
     batch = db.query(CardBatch).filter(CardBatch.id == request_row.card_batch_id).first()
     assert batch is not None

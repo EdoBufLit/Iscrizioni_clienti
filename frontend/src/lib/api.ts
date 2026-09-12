@@ -6560,9 +6560,10 @@ export async function fetchSuperAdminRechargeCredits(params?: {
   allocation_status?: string;
   org_id?: number;
   q?: string;
-  scope?: "portal" | "historical" | "all";
+  scope?: "portal" | "whatsapp" | "historical" | "all";
   limit?: number;
   offset?: number;
+  signal?: AbortSignal;
 }): Promise<SuperAdminRechargeCreditsResponse> {
   const search = new URLSearchParams();
   if (params?.billing_status) search.set("billing_status", params.billing_status);
@@ -6573,7 +6574,9 @@ export async function fetchSuperAdminRechargeCredits(params?: {
   if (params?.limit != null) search.set("limit", String(params.limit));
   if (params?.offset != null) search.set("offset", String(params.offset));
   const query = search.toString();
-  const res = await fetch(`/api/super-admin/recharge-credits${query ? `?${query}` : ""}`);
+  const res = await fetch(`/api/super-admin/recharge-credits${query ? `?${query}` : ""}`, {
+    signal: params?.signal,
+  });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) {
     throw new Error(await parseApiErrorDetail(res, "Errore nel caricamento dei crediti tessere"));

@@ -1,0 +1,42 @@
+.super-admin-v2 .sa-card-credits .theme-input,
+.super-admin-v2 .sa-card-credits .premium-select,
+:root[data-theme="dark"] .super-admin-v2 .sa-card-credits .theme-input,
+:root[data-theme="dark"] .super-admin-v2 .sa-card-credits .premium-select {
+  color: var(--sa-text) !important;
+  -webkit-text-fill-color: var(--sa-text) !important;
+  min-height: 2.65rem;
+}
+
+.super-admin-v2 .sa-card-credits .theme-input::placeholder {
+  color: var(--sa-soft) !important;
+  -webkit-text-fill-color: var(--sa-soft) !important;
+  opacity: 1;
+}
+
+.super-admin-v2 .sa-card-credits .premium-select option {
+  background: var(--sa-panel-strong);
+  color: var(--sa-text);
+}
+
+@media (max-width: 640px) {
+  .sa-card-credits .sa-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem;
+  }
+
+  .sa-card-credits .sa-kpi {
+    min-width: 0;
+    min-height: 6.5rem;
+    align-items: flex-start;
+    gap: 0.35rem;
+    padding: 0.8rem;
+  }
+
+  .sa-card-credits .sa-kpi__icon {
+    display: none;
+  }
+
+  .sa-card-credits .sa-kpi__hint {
+    font-size: 0.72rem;
+  }
+}

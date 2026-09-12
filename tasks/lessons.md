@@ -3,6 +3,8 @@
 - Quando il cliente chiede fedelta esatta a mockup admin, non basta un re-skin: prima della consegna servono screenshot viewport-to-viewport delle superfici critiche, inclusi drawer/modali fixed. Inoltre le integrazioni esistenti nel dettaglio (es. SumUp) vanno preservate esplicitamente nella nuova IA e verificate nello screenshot.
 # Lessons
 
+- Sep 12, 2026: when card orders from a second channel are added to association totals, inspect the super-admin receivables ledger as well. The user requires WhatsApp and portal orders in the same accounting workflow, with payment actions and filtered totals. Historical WhatsApp orders are unpaid and debt starts on request, as explicitly confirmed; do not preserve the previous portal-only exclusion.
+
 - Sep 11, 2026: per le email di servizio usare un layout condiviso a tabelle con font sans-serif, colori espliciti, un solo titolo e CTA leggibile; verificare desktop, mobile e tema scuro. Il riepilogo tessere richieste deve includere le richieste WhatsApp registrate senza confondere numero richieste, quantita tessere e debiti del portale. Le comunicazioni centrali devono essere accessibili anche senza modulo campagne attivo.
 
 - Sep 11, 2026: l'utente ha rinominato il branch predefinito e richiesto di lavorare d'ora in poi su main. Il nome remoto esatto e `Main` (M maiuscola), con tracking `origin/Main`: usare questo branch per il lavoro successivo, senza riutilizzare `feat/redesign-landing-wizard` o creare branch alternativi salvo richiesta. Verificare sempre il nome esatto con `git ls-remote --symref origin HEAD` quando cambia il default.

@@ -62,14 +62,19 @@ describe("card replenishment API", () => {
       }), { status: 200, headers: { "Content-Type": "application/json" } });
     }));
 
-    await fetchSuperAdminRechargeCredits({ billing_status: "unpaid", scope: "portal", q: "Club Roma" });
+    const controller = new AbortController();
+    await fetchSuperAdminRechargeCredits({ billing_status: "unpaid", scope: "whatsapp", org_id: 7, q: "Club Roma", limit: 100, offset: 100, signal: controller.signal });
     await patchSuperAdminRechargeCreditAccounting(19, {
       billing_status: "paid",
       payment_reference: "BON-19",
     });
 
     expect(calls[0]?.input).toContain("billing_status=unpaid");
-    expect(calls[0]?.input).toContain("scope=portal");
+    expect(calls[0]?.input).toContain("scope=whatsapp");
+    expect(calls[0]?.input).toContain("org_id=7");
+    expect(calls[0]?.input).toContain("offset=100");
+    expect(calls[0]?.input).toContain("limit=100");
+    expect(calls[0]?.init?.signal).toBe(controller.signal);
     expect(calls[0]?.input).toContain("q=Club+Roma");
     expect(calls[1]?.input).toBe("/api/super-admin/recharge-credits/19/accounting");
     expect(calls[1]?.init?.method).toBe("PATCH");

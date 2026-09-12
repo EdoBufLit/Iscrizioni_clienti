@@ -12,6 +12,12 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.models import Organization, RechargeRequest, WhatsAppSession
 from app.services.card_lot_registry import ensure_recharge_request_batch
+from app.services.card_replenishments import (
+    BILLING_STATUS_UNPAID,
+    CARD_REPLENISHMENT_CURRENCY,
+    CARD_REPLENISHMENT_UNIT_PRICE_CENTS,
+    WHATSAPP_SOURCE,
+)
 from app.services.telegram_notifications import send_telegram_message
 
 logger = logging.getLogger(__name__)
@@ -369,6 +375,11 @@ def _handle_order_notes(
         requester_profile_name=_normalize_text(profile_name) or None,
         requested_cards=requested_cards,
         notes=notes,
+        source=WHATSAPP_SOURCE,
+        unit_price_cents=CARD_REPLENISHMENT_UNIT_PRICE_CENTS,
+        amount_due_cents=requested_cards * CARD_REPLENISHMENT_UNIT_PRICE_CENTS,
+        currency=CARD_REPLENISHMENT_CURRENCY,
+        billing_status=BILLING_STATUS_UNPAID,
     )
     db.add(recharge_request)
     db.flush()

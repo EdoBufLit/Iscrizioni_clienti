@@ -7585,7 +7585,7 @@ def list_card_replenishments(
     return {
         "items": [serialize_replenishment_request(item) for item in items],
         "total": total,
-        "summary": replenishment_summary(db, org_id=admin.org_id, include_whatsapp=True),
+        "summary": replenishment_summary(db, query=query),
         "capability": replenishment_capability(db, org),
     }
 
