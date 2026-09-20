@@ -5,6 +5,7 @@
 Confermato un difetto di ricerca nell'elenco soci. La ricerca live cerca la
 stringa intera separatamente in nome e cognome e non rimuove gli spazi dalla
 query: un nome completo o un'email incollata con spazi possono non trovare il socio.
+Questa descrizione riguarda lo stato precedente al rilascio documentato sotto.
 
 Non confermata la riemissione della tessera o la modifica della data di iscrizione
 nei tentativi ripetuti esaminati. Per verificare il caso specifico segnalato dal
@@ -48,7 +49,7 @@ stato e paginazione e le ricerche per email, codice fiscale e tessera.
   emissione in audit.
 - `python -m compileall -q app init_db.py` e `git diff --check` superati.
 
-La correzione e locale, non ancora pubblicata. I dati incompleti non sono stati
+La correzione e stata inizialmente verificata in locale. I dati incompleti non sono stati
 modificati. La verifica generale richiesta e conclusa; il riscontro individuale
 resta da confrontare con gli esempi del cliente.
 
@@ -78,9 +79,24 @@ Corretta anche la gestione UI delle risposte precedenti che arrivano in ritardo.
 Verifiche finali: 56 test backend, 4 test frontend, typecheck/build, compileall,
 diff check; smoke browser reale su desktop e mobile 390px in tema scuro.
 Benchmark locale SQLite con 10.001 soci: 33.5-59.6 ms, inclusa una ricerca con
-10.001 suggerimenti paginati. Nessuna pubblicazione eseguita.
+10.001 suggerimenti paginati.
 
 L'esempio individuale successivamente fornito dall'utente e stato verificato
 in produzione in sola lettura: socio presente con nome esatto, attivo 2026,
 una sola emissione nello storico disponibile e invio email registrato. Questo
 riscontro non dimostra la ricezione dell'email nella casella del destinatario.
+
+## Rilascio
+
+Push richiesto dall'utente e completato su `Main`, commit
+`4eed20c2bdae23d2c441410f7c10a3844439306b`. Deploy Hetzner
+`35507840976` concluso con successo, incluso controllo finale di stabilita.
+Backup del database eseguito e verificato prima del push.
+
+Verificata la funzione distribuita sul database PostgreSQL live in transazione
+READ ONLY: nome completo e inverso, refuso nel nome, email con spazi e refuso
+nell'email trovano il socio atteso con classificazione corretta. Nessuna modifica
+alla sua anagrafica o tessera. Pagina pubblica HTTPS 200 e nuovo bundle
+`OrgAdminMembers-C6-mkA3j.js`; API soci protetta con risposta anonima 401.
+Salute applicazione/database OK, worker sani e senza riavvii; disco al 39%,
+inode al 10%. La correzione e la ricerca per similitudine sono online.

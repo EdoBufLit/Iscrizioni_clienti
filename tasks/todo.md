@@ -2,7 +2,7 @@
 - [x] Aggiungere tolleranza a piccoli refusi nei nomi/email, con risultati esatti prima dei simili, filtri e paginazione coerenti.
 - [x] Distinguere le corrispondenze simili nella UI e impedire che ricerche precedenti sovrascrivano i risultati correnti.
 - [x] Verificare esempi realisti, falsi positivi, isolamento associazione, filtri, paginazione, prestazioni e frontend; documentare stato di rilascio.
-- [ ] Push su Main richiesto dall'utente, deploy automatico e verifica live di ricerca, salute applicazione e infrastruttura.
+- [x] Push su Main richiesto dall'utente, deploy automatico e verifica live di ricerca, salute applicazione e infrastruttura.
 
 ### Specifica
 - Ricerca automatica di errori di un carattere (aggiunta, omissione, sostituzione o inversione adiacente) per nomi/email; termini troppo corti e numeri tessera restano esatti.
@@ -17,7 +17,9 @@
 - Benchmark SQLite isolato su 10001 soci: 33.5-59.6 ms per query, anche con 10001 suggerimenti e pagina da 25. Misure locali, non garanzia latenza produzione.
 - Smoke browser su build reale e database QA separato: query mario.rossi mostra email esatta prima di mairo/mariu con badge; leggibilita verificata desktop e mobile 390px in tema scuro. Nessuna email reale inviata. Server e scheda QA chiusi.
 - Socio specifico richiesto dall'utente verificato live in READ ONLY: corrispondenza esatta, tessera attiva 2026; una emissione nei log e invio email registrato. Nessuna anagrafica live modificata.
-- Rilascio autorizzato dall'utente: verifica finale e push su Main in corso.
+- Rilascio completato: commit `4eed20c2bdae23d2c441410f7c10a3844439306b` su Main, workflow `35507840976` concluso con successo (incluso canary finale).
+- Backup pre-release `/opt/assonam/backups/before-member-search-20260920.dump`: 187459386 byte, mode 600, catalogo pg_restore valido, SHA256 `7079e7a0c580da93e5c7470493d48ec11211ed7c3a5cbcf19ff921fd172f3901`.
+- Smoke sul codice distribuito e PostgreSQL live in READ ONLY: nome completo/inverso, refuso nome, email con spazi/refuso trovano il socio atteso con classificazione esatta/simile; anagrafica invariata. HTTPS pubblico 200, bundle `OrgAdminMembers-C6-mkA3j.js` con nuova UI; API anonima 401. Health/DB OK, worker sani e zero riavvii; disco 39%, inode 10%.
 
 ## Plan (Verifica soci Golden Age Club - Speakeasy - Sep 20, 2026)
 - [x] Ricostruire ricerca soci, riconoscimento iscritti e date tessera, confrontando codice e dati live in sola lettura se disponibili.
