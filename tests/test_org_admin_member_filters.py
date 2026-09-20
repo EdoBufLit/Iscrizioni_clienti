@@ -204,6 +204,103 @@ def test_org_admin_member_filters(client, db):
     assert by_email["m2@example.com"]["signup_source"] == SignupSource.PIENISSIMO.value
 
 
+@pytest.fixture
+def searchable_members(client, db):
+    suffix = datetime.utcnow().strftime("%H%M%S%f")
+    org = Organization(name="Search Org", slug=f"search-org-{suffix}", is_active=True)
+    other_org = Organization(name="Other Search Org", slug=f"search-other-{suffix}", is_active=True)
+    db.add_all([org, other_org])
+    db.flush()
+    admin = AdminUser(
+        email=f"search-admin-{suffix}@example.com",
+        role=AdminRole.ORG_ADMIN,
+        org_id=org.id,
+        is_active=True,
+    )
+    db.add(admin)
+    members = {}
+    now = datetime.utcnow()
+    for index, key in enumerate(["active", "expired", "deleted", "pending", "other", "partial"]):
+        member = Member(
+            org_id=other_org.id if key == "other" else org.id,
+            first_name="Maria Anna",
+            last_name="Bianchi" if key == "partial" else "De Rossi",
+            email=f"search-{key}-{suffix}@example.com",
+            fiscal_code=f"SEARCHCF{index}",
+            status=MemberStatus.PENDING_DOCS if key == "pending" else MemberStatus.ACTIVE,
+            card_no=54123 + index if key != "pending" else None,
+            card_year=now.year - 1 if key == "expired" else now.year,
+            valid_until=now - timedelta(days=1) if key == "expired" else None,
+            joined_at=now + timedelta(seconds=index),
+            deleted_at=now if key == "deleted" else None,
+        )
+        members[key] = member
+        db.add(member)
+    db.commit()
+    _login_org_admin(client, db, admin.id)
+    return members
+
+
+def test_org_admin_member_search_normalizes_full_names_and_email(client, searchable_members):
+    member = searchable_members["active"]
+    for query in [
+        "Maria Anna De Rossi",
+        "De Rossi Maria Anna",
+        "  maria\tanna   de rossi  ",
+        "anna de ros",
+        f"  {member.email.upper()}\t",
+        member.fiscal_code,
+        str(member.card_no),
+    ]:
+        response = client.get("/api/org-admin/members", params={"q": query, "status": "active"})
+        assert response.status_code == 200, response.text
+        assert [item["id"] for item in response.json()["items"]] == [member.id], query
+
+    no_match = client.get(
+        "/api/org-admin/members", params={"q": "Maria Zeta", "status": "active"}
+    )
+    assert no_match.status_code == 200, no_match.text
+    assert no_match.json()["total"] == 0
+
+    whitespace = client.get(
+        "/api/org-admin/members", params={"q": " \t\n ", "status": "active"}
+    )
+    assert whitespace.status_code == 200, whitespace.text
+    assert {item["id"] for item in whitespace.json()["items"]} == {
+        member.id, searchable_members["partial"].id
+    }
+
+
+def test_org_admin_full_name_search_preserves_status_scope_and_pagination(client, searchable_members):
+    for status, expected_keys in [
+        ("active", ["active"]),
+        ("expired", ["expired"]),
+        ("pending", ["pending"]),
+        ("all", ["active", "expired", "deleted", "pending"]),
+    ]:
+        response = client.get(
+            "/api/org-admin/members", params={"q": "Maria Anna De Rossi", "status": status}
+        )
+        assert response.status_code == 200, response.text
+        assert {item["id"] for item in response.json()["items"]} == {
+            searchable_members[key].id for key in expected_keys
+        }, status
+
+    page = client.get(
+        "/api/org-admin/members",
+        params={
+            "q": "Maria Anna De Rossi",
+            "status": "all",
+            "order": "joined_at_asc",
+            "limit": 1,
+            "offset": 1,
+        },
+    )
+    assert page.status_code == 200, page.text
+    assert page.json()["total"] == 4
+    assert [item["id"] for item in page.json()["items"]] == [searchable_members["expired"].id]
+
+
 def test_org_admin_members_summary_uses_snapshot_and_expired_temporary_cards(client, db):
     suffix = datetime.utcnow().strftime("%H%M%S%f")
     org = Organization(

@@ -3851,6 +3851,7 @@ export async function createOrgAdminReferralInvite(payload: {
 export type OrgAdminMember = {
   id: number;
   name: string;
+  search_match?: "exact" | "similar";
   email: string | null;
   status: string | null;
   workflow_status?: string | null;

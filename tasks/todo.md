@@ -1,3 +1,36 @@
+## Plan (Ricerca soci per similitudine - Sep 20, 2026)
+- [x] Aggiungere tolleranza a piccoli refusi nei nomi/email, con risultati esatti prima dei simili, filtri e paginazione coerenti.
+- [x] Distinguere le corrispondenze simili nella UI e impedire che ricerche precedenti sovrascrivano i risultati correnti.
+- [x] Verificare esempi realisti, falsi positivi, isolamento associazione, filtri, paginazione, prestazioni e frontend; documentare stato di rilascio.
+- [ ] Push su Main richiesto dall'utente, deploy automatico e verifica live di ricerca, salute applicazione e infrastruttura.
+
+### Specifica
+- Ricerca automatica di errori di un carattere (aggiunta, omissione, sostituzione o inversione adiacente) per nomi/email; termini troppo corti e numeri tessera restano esatti.
+- Nessuna modifica automatica dell'email, invio di messaggi o fusione anagrafiche. Corrispondenze simili indicate come tali; risultati esatti prioritari.
+- Implementazione locale sulla correzione gia preparata, senza nuove dipendenze o modifiche schema database.
+
+### Review
+- Servizio member_search: ricerca letterale con spazi normalizzati, suggerimenti per un refuso su nomi/email (incluso @ mancante), email completa confrontata integralmente per non suggerire indirizzi solo per dominio comune. Termini di almeno 4 caratteri e almeno 3 lettere; nomi composti con massimo un refuso complessivo. Numeri tessera/CF rimangono ricerche letterali.
+- Prefiltro SQL all'interno dei filtri originali, lettura scalare in blocchi da 500 e caricamento entita della sola pagina. Esatti prioritari; totale e paginazione includono i simili; ordinamento stabile con ID come spareggio. Nessun cap nascosto sui risultati.
+- Badge Corrispondenza simile in tabella, mobile e dettaglio rapido; hint accessibile; protezione risposte obsolete di richieste precedenti.
+- 56 test backend e 4 test interazione frontend superati; typecheck, build frontend, compileall e diff check OK. Review indipendente e 8480 casi generati verificano il prefiltro per errori di un carattere.
+- Benchmark SQLite isolato su 10001 soci: 33.5-59.6 ms per query, anche con 10001 suggerimenti e pagina da 25. Misure locali, non garanzia latenza produzione.
+- Smoke browser su build reale e database QA separato: query mario.rossi mostra email esatta prima di mairo/mariu con badge; leggibilita verificata desktop e mobile 390px in tema scuro. Nessuna email reale inviata. Server e scheda QA chiusi.
+- Socio specifico richiesto dall'utente verificato live in READ ONLY: corrispondenza esatta, tessera attiva 2026; una emissione nei log e invio email registrato. Nessuna anagrafica live modificata.
+- Rilascio autorizzato dall'utente: verifica finale e push su Main in corso.
+
+## Plan (Verifica soci Golden Age Club - Speakeasy - Sep 20, 2026)
+- [x] Ricostruire ricerca soci, riconoscimento iscritti e date tessera, confrontando codice e dati live in sola lettura se disponibili.
+- [x] Riprodurre le anomalie confermate con dati isolati e applicare correzioni mirate senza modificare le anagrafiche del cliente.
+- [x] Eseguire verifiche di regressione e documentare cause, impatto e stato effettivo delle eventuali correzioni.
+
+### Review
+- Analisi avviata su Main; modifiche preesistenti a tasks/todo.md e tasks/lessons.md preservate.
+- Confermato live su 8 soci: email esatta trova 8/8, email con spazi e nome completo 0/8. Correzione locale ricerca con normalizzazione whitespace e parole su nome/cognome.
+- 2494 soci attivi 2026, nessun duplicato email normalizzata; 632 senza cognome, di cui 426 segnaposto Socio. 37 retry su 34 soci conservano emissione/data originaria negli audit disponibili.
+- 33 test passati tra ricerca/filtri, legacy, ingest, emissione e verifica tessera; nuova regressione retry a mesi di distanza e doppi download senza variazioni date/numero/stock. Compileall e diff check OK.
+- Verifica generale completata come richiesto; nessuna modifica live o pubblicazione. Riscontro individuale da fare quando arrivano gli esempi del cliente. Evidenze e limiti in docs/verifica_golden_age_2026-09-20.md.
+
 ## Plan (Unified WhatsApp and online card credits - Sep 12, 2026)
 - [x] Initialize new WhatsApp orders as unpaid at EUR 1 per card, including orders awaiting allocation; migrate existing unclassified WhatsApp orders with accounting history.
 - [x] Enable WhatsApp accounting updates with existing MFA/audit and calculate shared association/super-admin summaries over the exact filtered dataset.

@@ -135,6 +135,11 @@ const MembersTable = memo(function MembersTable({
                     <td className={`${tdClass} font-medium text-neutral-900`}>
                       <div className="flex flex-wrap items-center gap-2">
                         <span>{m.name}</span>
+                        {m.search_match === "similar" && (
+                          <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-800">
+                            Corrispondenza simile
+                          </span>
+                        )}
                         {isPienissimoIntegration && (
                           <span className="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-cyan-700">
                             INTEGRAZIONE PIENISSIMO
@@ -241,6 +246,11 @@ const MembersTable = memo(function MembersTable({
                   <div className="min-w-0">
                     <h3 className="truncate text-sm font-semibold text-neutral-900">{member.name}</h3>
                     <p className="mt-1 truncate text-xs text-neutral-500">{member.email ?? "Email non indicata"}</p>
+                    {member.search_match === "similar" && (
+                      <span className="mt-2 inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-800">
+                        Corrispondenza simile
+                      </span>
+                    )}
                   </div>
                   <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-medium ${lifecycleMeta.tone}`}>
                     {lifecycleMeta.label}

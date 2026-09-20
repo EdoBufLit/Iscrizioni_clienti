@@ -3,12 +3,14 @@ import { ChangeEvent, memo, useEffect, useRef, useState } from "react";
 type DebouncedSearchInputProps = {
   resetKey: number;
   initialValue?: string;
+  describedBy?: string;
   onDebouncedChange: (value: string) => void;
 };
 
 const DebouncedSearchInput = memo(function DebouncedSearchInput({
   resetKey,
   initialValue = "",
+  describedBy,
   onDebouncedChange,
 }: DebouncedSearchInputProps) {
   const [value, setValue] = useState(initialValue);
@@ -56,6 +58,8 @@ const DebouncedSearchInput = memo(function DebouncedSearchInput({
       <input
         className="theme-input w-full rounded-md py-2 pl-9 pr-3 text-sm sm:max-w-xs"
         type="search"
+        aria-label="Cerca soci"
+        aria-describedby={describedBy}
         placeholder="Cerca nome, cognome, email, CF o tessera..."
         value={value}
         onChange={handleChange}

@@ -296,6 +296,80 @@ def test_ingest_second_call_returns_already_issued_without_side_effects(client, 
         clear_captured_emails()
 
 
+def test_ingest_repeat_months_later_preserves_card_dates_and_stock(client, db, monkeypatch):
+    from app.models import AnnualMembershipTerm, OperationLog
+
+    original_date = datetime(datetime.utcnow().year, 2, 1, 18, 30)
+
+    class OriginalDateTime(datetime):
+        @classmethod
+        def utcnow(cls):
+            return original_date
+
+    class RepeatDateTime(datetime):
+        @classmethod
+        def utcnow(cls):
+            return original_date.replace(month=6)
+
+    monkeypatch.setattr("app.routes.ingest_pienissimo.datetime", OriginalDateTime)
+    monkeypatch.setattr("app.services.integration_issuer.datetime", OriginalDateTime)
+    org, batch = _create_org_with_batch(db, slug_prefix="ingest-preserve-dates")
+    _create_integration_key(db, org_id=org.id, active=True)
+    email = f"preserve-dates.{uuid.uuid4().hex[:8]}@example.com"
+    first = client.post(
+        f"/api/ingest/pienissimo/{org.slug}",
+        json={"email": email, "first_name": "Mario", "last_name": "Rossi", "send_email": False},
+    )
+    assert first.status_code == 200, first.text
+    first_payload = first.json()
+    member = db.get(Member, first_payload["member_id"])
+    term = db.query(AnnualMembershipTerm).filter_by(member_id=member.id).one()
+    db.refresh(batch)
+    member_fields = (
+        "first_name", "last_name", "email", "external_customer_id", "joined_at",
+        "decision_at", "valid_from", "valid_until", "card_no", "card_year", "batch_id",
+    )
+    term_fields = ("starts_on", "valid_through", "issued_at", "activated_at", "card_no", "card_year")
+    before_member = tuple(getattr(member, field) for field in member_fields)
+    before_term = tuple(getattr(term, field) for field in term_fields)
+    before_next_no = batch.next_no
+    assert member.joined_at == original_date
+
+    monkeypatch.setattr("app.routes.ingest_pienissimo.datetime", RepeatDateTime)
+    monkeypatch.setattr("app.services.integration_issuer.datetime", RepeatDateTime)
+    repeated = client.post(
+        f"/api/ingest/pienissimo/{org.slug}",
+        json={
+            "email": f"  {email.upper()}  ",
+            "external_customer_id": "different-retry-id",
+            "first_name": "Changed",
+            "last_name": "Name",
+            "send_email": False,
+        },
+    )
+    assert repeated.status_code == 200, repeated.text
+    repeated_payload = repeated.json()
+    assert repeated_payload["status"] == "already_issued"
+    for key in ("member_id", "card_number", "card_verification_token", "download_pdf_url"):
+        assert repeated_payload[key] == first_payload[key]
+
+    # Repeated downloads must also preserve the membership and allocation.
+    for _ in range(2):
+        downloaded = client.get(repeated_payload["download_pdf_url"])
+        assert downloaded.status_code == 200, downloaded.text
+        assert downloaded.content.startswith(b"%PDF")
+    for row in (member, term, batch):
+        db.refresh(row)
+    assert tuple(getattr(member, field) for field in member_fields) == before_member
+    assert tuple(getattr(term, field) for field in term_fields) == before_term
+    assert batch.next_no == before_next_no
+    assert db.query(Member).filter_by(org_id=org.id).count() == 1
+    assert db.query(AnnualMembershipTerm).filter_by(member_id=member.id).count() == 1
+    assert db.query(OperationLog).filter_by(
+        action="integration_issue_member", entity_type="member", entity_id=member.id,
+    ).count() == 1
+
+
 def test_ingest_blocks_deleted_member_email(client, db):
     org, _batch = _create_org_with_batch(db, slug_prefix="ingest-deleted")
     _create_integration_key(db, org_id=org.id, active=True)

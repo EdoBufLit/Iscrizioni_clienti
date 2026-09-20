@@ -75,6 +75,7 @@ from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.system_email_layout import build_system_email_html
 from app.services.file_deletion import enqueue_file_deletion
 from app.services.csv_safety import neutralize_csv_formula
+from app.services.member_search import normalize_member_search, search_member_page
 from app.services.email_sender import (
     build_sender_payload,
     resolve_email_sender,
@@ -6065,19 +6066,6 @@ def list_org_members(
             Member.status.notin_([MemberStatus.REJECTED, MemberStatus.EXPIRED])
         )
 
-    if q:
-        pattern = f"%{q}%"
-        query = query.filter(
-            or_(
-                Member.first_name.ilike(pattern),
-                Member.last_name.ilike(pattern),
-                Member.email.ilike(pattern),
-                Member.fiscal_code.ilike(pattern),
-                cast(Member.card_no, String).ilike(pattern),
-                cast(Member.card_year, String).ilike(pattern),
-            )
-        )
-
     if status_filter:
         if status_filter == "active":
             query = query.filter(*member_active_filters(now=current_time))
@@ -6150,7 +6138,6 @@ def list_org_members(
             )
             query = query.filter(has_docs, ~has_bad)
 
-    total = query.count()
     status_rank = case(
         (Member.status == MemberStatus.ACTIVE, 1),
         (Member.status == MemberStatus.PENDING_VERIFICATION, 2),
@@ -6174,7 +6161,13 @@ def list_org_members(
     else:
         query = query.order_by(Member.joined_at.is_(None), Member.joined_at.desc())
 
-    members = query.offset(offset).limit(min(limit, 100)).all()
+    normalized_query = normalize_member_search(q)
+    members, total, similar_member_ids = search_member_page(
+        query.order_by(Member.id.asc()),
+        normalized_query,
+        limit=max(1, min(limit, 100)),
+        offset=max(0, offset),
+    )
 
     # Avoid N+1 for docs_count
     member_ids = [m.id for m in members]
@@ -6262,6 +6255,7 @@ def list_org_members(
                 "id": m.id,
                 "name": f"{m.first_name} {m.last_name}",
                 "email": m.email,
+                **({"search_match": "similar" if m.id in similar_member_ids else "exact"} if normalized_query else {}),
                 "status": get_member_lifecycle_status(m, now=current_time),
                 "workflow_status": m.status.value if m.status else None,
                 "is_active": is_member_active(m, now=current_time),

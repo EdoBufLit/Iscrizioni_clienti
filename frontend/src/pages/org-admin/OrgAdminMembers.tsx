@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   fetchOrgAdminMembers,
@@ -94,6 +94,7 @@ const OrgAdminMembers = () => {
   const [membershipSettings, setMembershipSettings] = useState<OrgAdminMembershipSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const membersRequestId = useRef(0);
 
   const [debouncedSearch, setDebouncedSearch] = useState(searchParams.get("q") || "");
   const [status, setStatus] = useState(searchParams.get("status") || "active");
@@ -134,6 +135,7 @@ const OrgAdminMembers = () => {
   }, [adminLoading, admin, navigate]);
 
   const loadMembers = useCallback(async () => {
+    const requestId = ++membersRequestId.current;
     if (adminLoading || !admin) {
       return;
     }
@@ -152,6 +154,7 @@ const OrgAdminMembers = () => {
         limit: PAGE_SIZE,
         offset: (page - 1) * PAGE_SIZE,
       });
+      if (requestId !== membersRequestId.current) return;
       setMembers(response.items);
       setTotal(response.total);
       setSelectedMemberId((current) => {
@@ -159,18 +162,22 @@ const OrgAdminMembers = () => {
         return response.items[0]?.id ?? null;
       });
     } catch (err) {
+      if (requestId !== membersRequestId.current) return;
       if (err instanceof AuthError) {
         navigate("/org-admin/login", { replace: true });
       } else {
         setError(true);
       }
     } finally {
-      setLoading(false);
+      if (requestId === membersRequestId.current) setLoading(false);
     }
   }, [adminLoading, admin, debouncedSearch, status, access, source, docs, order, page, navigate]);
 
   useEffect(() => {
     void loadMembers();
+    return () => {
+      membersRequestId.current += 1;
+    };
   }, [loadMembers]);
 
   useEffect(() => {
@@ -371,11 +378,15 @@ const OrgAdminMembers = () => {
             <DebouncedSearchInput
               resetKey={searchResetKey}
               initialValue={debouncedSearch}
+              describedBy="member-search-hint"
               onDebouncedChange={(value) => {
                 setDebouncedSearch(value);
                 setPage(1);
               }}
             />
+            <p id="member-search-hint" className="mt-2 text-xs text-neutral-500">
+              La ricerca trova anche nomi ed email con piccoli errori di scrittura. Le corrispondenze simili sono indicate nei risultati.
+            </p>
           </div>
           <div className="org-admin-mobile-filter-grid flex flex-wrap items-center gap-3">
             <select className="premium-select min-w-[140px] flex-1 sm:flex-none" value={status} onChange={(e) => onFilterChange(setStatus, e.target.value)}>
@@ -488,6 +499,11 @@ function MemberSidePanel({
             <div className="mt-1">
               <StatusChip tone={workflowTone(member)}>{member.workflow_status || member.status || "Sconosciuto"}</StatusChip>
             </div>
+            {member.search_match === "similar" && (
+              <div className="mt-2">
+                <StatusChip tone="warning">Corrispondenza simile</StatusChip>
+              </div>
+            )}
           </div>
         </div>
 
@@ -551,4 +567,3 @@ function MemberSidePanel({
 }
 
 export default OrgAdminMembers;
-
