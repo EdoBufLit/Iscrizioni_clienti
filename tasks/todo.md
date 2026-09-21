@@ -1,7 +1,7 @@
 ## Plan (Conferma Golden Age senza riquadro scuro e rilascio - Sep 21, 2026)
 - [x] Rimuovere il riquadro del logo solo nella conferma Golden Age, con contrasto adeguato in entrambi i temi.
 - [x] Verificare la build reale su mobile/desktop e modalita chiara/scura, conservando il marchio originale sulle tessere approvate.
-- [ ] Pubblicare su Main la versione approvata con questa correzione e verificare deploy, asset live e salute dell'applicazione.
+- [x] Pubblicare su Main la versione approvata con questa correzione e verificare deploy, asset live e salute dell'applicazione.
 
 ### Specifica
 - L'utente approva le anteprime precedenti e chiede unicamente di eliminare lo sfondo nero del logo nella pagina finale. Procedere al rilascio dopo la correzione, senza una nuova richiesta di approvazione.
@@ -12,12 +12,19 @@
 - Screenshot della build reale a 320/390/1440 px nei due temi: nessun overflow o errore JavaScript; trasparenza del wrapper verificata con stili calcolati. Immagini `conferma-logo-light.png` e `conferma-logo-dark.png` in `output/golden-age-preview-20260921`.
 - 58 test backend e 12 frontend superati nuovamente; typecheck incluso nella build di produzione completata.
 
+### Rilascio e verifica live
+- Commit `dc8c3f6902fdd88322cb6c27af230b1b56ad6ab8` pubblicato su Main. Workflow `35613574587` completato con successo, incluso il canary finale.
+- Backup prima del rilascio: `/opt/assonam/backups/before-golden-age-logo-20260921-1637.dump`, 187481584 byte, mode 600, catalogo pg_restore valido, SHA256 `3acdad48d967601dbd44208f7575e89f749fb210295373a38673648a065f3233`.
+- Browser sul sito reale, senza mock API: logo 2400x1780 con SHA256 identico all'asset approvato, wrapper trasparente e senza bordo nei due temi, filtro del tema corretto, nessun overflow o errore JS. Solo token dimostrativo nella query per mostrare la vista finale; nessun invio o emissione. Screenshot live e confronto in `output/golden-age-preview-20260921`.
+- PNG e PDF generati sul runtime distribuito con dati fittizi: logo risolto correttamente, PNG 856x540 e PDF valido. Nessuna modifica alle anagrafiche e nessuna email inviata per i test.
+- Health HTTPS 200 con DB OK, servizi applicativi sani e zero riavvii; disco 39%, inode 9%, cache build Docker assente. Server preview locale chiuso. Modifiche preesistenti alle lezioni conservate fuori dal commit.
+
 ## Plan (Nuovo logo Golden Age, anteprima prima del rilascio - Sep 21, 2026)
 - [x] Integrare il marchio originale trasparente e definire uno spazio leggibile senza deformazioni, limitato a Golden Age/oasi-2.
 - [x] Allineare anteprime area socio/admin, PNG scaricabile, PDF ed email usando lo stesso asset e proporzioni corrette.
 - [x] Verificare browser desktop/mobile, rendering PNG/PDF/email, nomi lunghi e regressioni sugli altri circoli.
 - [x] Preparare screenshot reali e PDF di esempio con dati fittizi per approvazione visiva prima di push/deploy.
-- [ ] Pubblicare dopo il riscontro dell'utente sulla resa visiva.
+- [x] Pubblicare dopo il riscontro dell'utente sulla resa visiva.
 
 ### Specifica
 - Conservare il logo fornito e il colore oro originale, con trasparenza reale; non ridisegnare il marchio.
@@ -33,7 +40,7 @@
 - Verifica: 58 test backend mirati e 12 frontend superati; typecheck, build di produzione, compileall e diff check OK. Browser sulla build reale con API simulate: viewport 320/360/390/430/768/1440, tema scuro, fronte/retro, nomi lunghi; admin e pagina pubblica a 390/1440; template email/download a 390/800. Nessun errore JS, overflow o immagine mancante nei casi verificati.
 - Rendering PDF verificato visivamente con Poppler. Screenshot, metriche e PDF dimostrativo in `output/golden-age-preview-20260921`; tavola finale `anteprima-golden-age.png`. Dati tutti fittizi; nessuna email reale inviata.
 - Verifica email limitata al template renderizzato e all'immagine incorporata: nessuna prova su caselle Gmail/Outlook reali. Le email gia inviate mantengono l'immagine incorporata originale; i nuovi invii e download useranno il nuovo asset dopo il rilascio.
-- Stato: modifiche locali su Main, nessun commit/push/deploy per questa modifica. Atteso riscontro visivo dell'utente come richiesto.
+- Stato finale: anteprima approvata; correzione del riquadro nella conferma e rilascio completati come riportato sopra.
 
 ## Plan (Verifica logo tessera e avviso socio gia attivo - Sep 21, 2026)
 - [x] Verificare percorso di modifica logo e personalizzazioni Golden Age/Speakeasy.

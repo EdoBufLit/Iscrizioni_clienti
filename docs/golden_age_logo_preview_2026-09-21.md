@@ -42,4 +42,8 @@ La verifica dei template email non equivale a una prova su tutti i client di pos
 
 Anteprima approvata dall'utente il 21 settembre, con richiesta di rimuovere il riquadro scuro nella conferma finale. Correzione completata: wrapper trasparente, oro piu scuro solo nella pagina in tema chiaro tramite CSS e colore originale in tema scuro. Asset della tessera invariato. Screenshot di entrambi i temi in `conferma-logo-light.png` e `conferma-logo-dark.png`, verificati a 320/390/1440 px.
 
-Rilascio autorizzato, in corso. Nessuna modifica ai dati o allo schema database necessaria; esito finale registrato in `tasks/todo.md`.
+Rilascio completato su Main con commit `dc8c3f6902fdd88322cb6c27af230b1b56ad6ab8`; workflow `35613574587` concluso con successo, incluso canary finale. Nessuna modifica ai dati o allo schema database necessaria.
+
+Verifica browser sul sito reale: logo 2400x1780 e SHA256 identico all'asset approvato, trasparenza del wrapper, filtro chiaro/scuro corretto, nessun overflow o errore JS. Vista finale aperta con token dimostrativo nella query, senza emissioni o invii. Screenshot live `conferma-logo-live-light.png`, `conferma-logo-live-dark.png` e tavola `conferma-confronto.png`.
+
+PNG e PDF generati anche nel runtime distribuito con dati fittizi. Health HTTPS 200, DB OK, worker sani e zero riavvii; disco 39%, inode 9%. Backup verificato prima del rilascio; dettagli in `tasks/todo.md`.
