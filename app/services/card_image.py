@@ -18,7 +18,6 @@ _CREAM = (253, 246, 227)
 _MUTED = (201, 168, 176)
 _GREEN = (74, 222, 128)
 _RED = (248, 113, 113)
-_OASI2_LOGO_SHIFT_X = -4
 logger = logging.getLogger(__name__)
 
 # Credit-card ratio canvas (1.586 : 1)
@@ -481,7 +480,7 @@ def generate_card_image_bytes(
     from PIL import Image, ImageDraw
 
     normalized_slug = (organization_slug or "").strip().lower()
-    is_oasi2 = normalized_slug == "oasi-2"
+    is_oasi2 = _is_legacy_card(normalized_slug)
     association_label = club_display_name or organization_name
 
     if not _is_legacy_card(normalized_slug):
@@ -531,14 +530,9 @@ def generate_card_image_bytes(
 
     # Organization logo in top area (no watermark in oasi-2)
     if org_logo_path and os.path.exists(org_logo_path):
-        if is_oasi2:
-            logo_box_w = 270
-            logo_box_x = int(((_W - logo_box_w) / 2) + _OASI2_LOGO_SHIFT_X)
-            _paste_logo(
-                img, org_logo_path, logo_box_w, 78, logo_box_x, 14, opacity=0.99
-            )
-        else:
-            _paste_logo(img, org_logo_path, 200, 52, (_W - 200) // 2, 14, opacity=0.95)
+        # Both Golden Age aliases use the complete stacked brand mark.
+        # Keep it opaque and centered above the member details.
+        _paste_logo(img, org_logo_path, 336, 224, (_W - 336) // 2, 14)
         draw = ImageDraw.Draw(img)
 
     # Header
@@ -564,14 +558,18 @@ def generate_card_image_bytes(
     draw.text(
         (28, mid_y - 8), "NOME E COGNOME", font=_load_font(17, bold=True), fill=_MUTED
     )
-    safe_name = (member_full_name or "-")[:32]
-    draw.text((28, mid_y + 16), safe_name, font=_load_font(44, bold=True), fill=_WHITE)
+    _draw_fit_text(
+        draw, (28, mid_y + 16), member_full_name or "-",
+        max_width=_W - 56, size=44, fill=_WHITE, style={}, bold=True, min_size=16,
+    )
 
     draw.text(
         (28, mid_y + 72), "ASSOCIAZIONE", font=_load_font(17, bold=True), fill=_MUTED
     )
-    safe_assoc = (association_label or organization_name or "-")[:40]
-    draw.text((28, mid_y + 94), safe_assoc, font=_load_font(28), fill=_CREAM)
+    _draw_fit_text(
+        draw, (28, mid_y + 94), association_label or organization_name or "-",
+        max_width=_W - 56, size=28, fill=_CREAM, style={}, min_size=14,
+    )
 
     # Footer
     divider_y = _H - 112

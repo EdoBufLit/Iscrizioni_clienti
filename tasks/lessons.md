@@ -3,6 +3,8 @@
 - Quando il cliente chiede fedelta esatta a mockup admin, non basta un re-skin: prima della consegna servono screenshot viewport-to-viewport delle superfici critiche, inclusi drawer/modali fixed. Inoltre le integrazioni esistenti nel dettaglio (es. SumUp) vanno preservate esplicitamente nella nuova IA e verificate nello screenshot.
 # Lessons
 
+- Sep 21, 2026: nella conferma tesseramento Golden Age il logo deve essere libero da riquadri neri/grigi. Per un marchio oro trasparente verificare separatamente il contrasto su tema chiaro e scuro; eventuali adattamenti cromatici della pagina non devono modificare l'asset o le tessere gia approvate.
+
 - Sep 12, 2026: when card orders from a second channel are added to association totals, inspect the super-admin receivables ledger as well. The user requires WhatsApp and portal orders in the same accounting workflow, with payment actions and filtered totals. Historical WhatsApp orders are unpaid and debt starts on request, as explicitly confirmed; do not preserve the previous portal-only exclusion.
 
 - Sep 11, 2026: per le email di servizio usare un layout condiviso a tabelle con font sans-serif, colori espliciti, un solo titolo e CTA leggibile; verificare desktop, mobile e tema scuro. Il riepilogo tessere richieste deve includere le richieste WhatsApp registrate senza confondere numero richieste, quantita tessere e debiti del portale. Le comunicazioni centrali devono essere accessibili anche senza modulo campagne attivo.

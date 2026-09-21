@@ -673,6 +673,7 @@ export default function OrgAdminMemberDetail() {
     fullName: `${member.first_name} ${member.last_name}`.trim(),
     organizationName: admin?.organization?.name ?? null,
     organizationSlug: admin?.organization?.slug ?? null,
+    organizationLogoUrl: membershipSettings?.card_logo_url ?? null,
     cardNumber,
     cardStatus: member.status,
     cardYear: member.card_year ?? null,
@@ -1313,4 +1314,3 @@ export default function OrgAdminMemberDetail() {
     </div>
   );
 }
-

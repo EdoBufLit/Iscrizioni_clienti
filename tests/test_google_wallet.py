@@ -274,5 +274,5 @@ def test_google_wallet_object_payload_uses_oasi2_branding_fallback(db, monkeypat
 
     assert payload["hexBackgroundColor"] == "#0B3C75"
     assert payload["cardTitle"]["defaultValue"]["value"] == "Golden Age Club - Speakeasy"
-    assert payload["logo"]["sourceUri"]["uri"].endswith("/static/card-logos/oasi-2.png")
+    assert payload["logo"]["sourceUri"]["uri"].endswith("/static/card-logos/golden-age-20260921.png")
     assert payload["heroImage"]["sourceUri"]["uri"].endswith("/static/wallet-heroes/oasi-2-hero.png")

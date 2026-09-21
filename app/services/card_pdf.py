@@ -26,7 +26,6 @@ _CREAM = HexColor("#fdf6e3")
 _MUTED = HexColor("#c9a8b0")
 _STATUS_OK = HexColor("#4ade80")
 _STATUS_ERR = HexColor("#f87171")
-_OASI2_LOGO_SHIFT_X = -4
 
 # ─── Card geometry on A4 ──────────────────────────────────────────────────────
 _PAGE_W, _PAGE_H = A4  # 595.27 × 841.89 pt
@@ -133,6 +132,29 @@ def _label(c: canvas.Canvas, text: str, x: float, y: float, size: float = 7.5) -
     c.drawString(x, y, text.upper())
 
 
+def _draw_fit_string(
+    c: canvas.Canvas,
+    text: str,
+    x: float,
+    y: float,
+    *,
+    font_name: str,
+    size: float,
+    min_size: float,
+    max_width: float,
+) -> None:
+    """Keep legacy card data inside its row without clipping the right edge."""
+    text = (text or "—").strip() or "—"
+    width = c.stringWidth(text, font_name, size)
+    fitted_size = max(min_size, min(size, size * max_width / max(width, 1)))
+    if c.stringWidth(text, font_name, fitted_size) > max_width:
+        while text and c.stringWidth(text + "...", font_name, fitted_size) > max_width:
+            text = text[:-1]
+        text += "..."
+    c.setFont(font_name, fitted_size)
+    c.drawString(x, y, text)
+
+
 def _divider(c: canvas.Canvas, x: float, y: float, w: float) -> None:
     c.setStrokeColor(_GOLD_DIV)
     c.setLineWidth(0.6)
@@ -187,7 +209,7 @@ def _draw_front(
 ) -> None:
     x, y, w, h = _CARD_X, _CARD_Y, _CARD_W, _CARD_H
     norm_slug = (organization_slug or "").strip().lower()
-    is_oasi2 = norm_slug == "oasi-2"
+    is_oasi2 = norm_slug in {"oasi-2", "golden-age-club"}
     assoc_label = club_display_name or organization_name
 
     # Background
@@ -213,15 +235,9 @@ def _draw_front(
 
     # Org logo in top area (always visible, no watermark style)
     if org_logo_path and os.path.exists(org_logo_path):
-        if is_oasi2:
-            lw, lh = _logo_dims(org_logo_path, 170, 54)
-            # Slight left nudge requested by customer for oasi-2.
-            logo_x = x + (w - lw) / 2 + _OASI2_LOGO_SHIFT_X
-            logo_y = y + h - lh - 10
-        else:
-            lw, lh = _logo_dims(org_logo_path, 140, 32)
-            logo_x = x + (w - lw) / 2
-            logo_y = y + h - 3 - lh - 6
+        lw, lh = _logo_dims(org_logo_path, 200, 134)
+        logo_x = x + (w - lw) / 2
+        logo_y = y + h - lh - 10
         c.drawImage(
             org_logo_path,
             logo_x,
@@ -269,13 +285,17 @@ def _draw_front(
 
     _label(c, "Nome e cognome", x + 18, body_y + 20, size=7.5)
     c.setFillColor(_WHITE)
-    c.setFont("Helvetica-Bold", 19)
-    c.drawString(x + 18, body_y - 2, (member_full_name or "—")[:38])
+    _draw_fit_string(
+        c, member_full_name, x + 18, body_y - 2,
+        font_name="Helvetica-Bold", size=19, min_size=11, max_width=w - 36,
+    )
 
     _label(c, "Associazione", x + 18, body_y - 24, size=7.5)
     c.setFillColor(_CREAM)
-    c.setFont("Helvetica", 12)
-    c.drawString(x + 18, body_y - 40, (assoc_label or organization_name or "—")[:50])
+    _draw_fit_string(
+        c, assoc_label or organization_name, x + 18, body_y - 40,
+        font_name="Helvetica", size=12, min_size=8.5, max_width=w - 36,
+    )
 
     # ── Footer ──
     foot_y = y + 22
@@ -319,17 +339,18 @@ def _draw_back(
     pad = 10
     plate_w = qr_size + pad * 2
     plate_h = qr_size + pad * 2
-    plate_x = x + (w - plate_w) / 2
-    plate_y = y + (h * 0.54) - plate_h / 2 + 8
+    plate_x = x + 22
+    plate_y = y + (h - plate_h) / 2
 
     c.setFillColor(_WHITE)
     c.roundRect(plate_x, plate_y, plate_w, plate_h, radius=8, fill=1, stroke=0)
     c.drawImage(qr_reader, plate_x + pad, plate_y + pad, qr_size, qr_size)
 
-    # ── Data rows below QR ──
-    row_y = plate_y - 12
-    col_l = x + w * 0.10
-    col_r = x + w * 0.48
+    # Seven rows cannot fit below a full-size QR on a landscape card.
+    # Keep the QR at its original readable size and bound the details beside it.
+    row_y = y + h - 42
+    col_l = x + 244
+    value_width = w - 264
 
     rows = [
         ("N. Tessera", str(card_number), True),
@@ -337,15 +358,18 @@ def _draw_back(
         ("Tipo", membership_type_label or "Annuale", False),
         ("Scadenza", valid_until_text or "-", False),
         ("Stato", "Attiva" if card_status == "attiva" else "Non attiva", False),
-        ("Socio", (member_full_name or "—")[:28], False),
-        ("Associazione", (organization_name or "—")[:28], False),
+        ("Socio", member_full_name or "—", False),
+        ("Associazione", organization_name or "—", False),
     ]
     for i, (lbl, val, gold) in enumerate(rows):
-        ry = row_y - i * 17
+        ry = row_y - i * 35
         _label(c, lbl, col_l, ry, size=6.5)
         c.setFillColor(_GOLD_BRT if gold else _CREAM)
-        c.setFont("Helvetica-Bold" if gold else "Helvetica", 8)
-        c.drawString(col_r, ry, val)
+        _draw_fit_string(
+            c, val, col_l, ry - 13,
+            font_name="Helvetica-Bold" if gold else "Helvetica",
+            size=10, min_size=7, max_width=value_width,
+        )
 
     # Verification URL (tiny, bottom)
     c.setFillColor(_MUTED)

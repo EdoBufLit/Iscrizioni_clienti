@@ -31,7 +31,7 @@ def build_member_card_email(
     pure-HTML bordeaux card is rendered as fallback.
     """
     normalized_org_slug = (organization_slug or "").strip().lower()
-    is_oasi2_card = normalized_org_slug == "oasi-2"
+    is_oasi2_card = normalized_org_slug in {"oasi-2", "golden-age-club"}
 
     safe_name = html.escape(member_full_name or "")
     safe_club = html.escape(club_display_name or organization_name or "")
@@ -71,7 +71,7 @@ def build_member_card_email(
                 <img
                   src="cid:{html.escape(card_image_cid)}"
                   alt="La tua tessera {safe_club}"
-                  style="display:block;width:100%;max-width:608px;border-radius:18px;border:0;"
+                  style="display:block;width:100%;max-width:608px;height:auto;border-radius:18px;border:0;"
                 />
               </td>
             </tr>"""
@@ -90,13 +90,15 @@ def build_member_card_email(
 
         org_logo_header = ""
         if safe_org_logo_url:
-            logo_height = "56px" if is_oasi2_card else "44px"
-            logo_max_width = "240px" if is_oasi2_card else "220px"
-            logo_shift = "transform:translateX(-4px);" if is_oasi2_card else ""
+            logo_style = (
+                "display:block;width:180px;max-width:100%;height:auto;opacity:1;"
+                if is_oasi2_card
+                else "height:44px;max-width:220px;object-fit:contain;"
+            )
             org_logo_header = f"""\
                   <tr>
                     <td align="center" style="padding:14px 24px 2px 24px;">
-                      <img src="{safe_org_logo_url}" alt="Logo" style="height:{logo_height};max-width:{logo_max_width};object-fit:contain;{logo_shift}" />
+                      <img src="{safe_org_logo_url}" alt="Logo" style="{logo_style}" />
                     </td>
                   </tr>"""
 

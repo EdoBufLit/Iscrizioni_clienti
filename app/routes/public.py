@@ -81,6 +81,7 @@ from app.services.member_membership import (
 )
 from app.services.org_branding import (
     resolve_assonam_logo_url,
+    resolve_card_logo_disk_path,
     resolve_card_logo_url,
     resolve_club_display_name,
 )
@@ -1130,7 +1131,7 @@ def _render_card_download_html(
     requested_pdf_format: bool,
 ) -> str:
     normalized_org_slug = (organization_slug or "").strip().lower()
-    is_oasi2_card = normalized_org_slug == "oasi-2"
+    is_oasi2_card = normalized_org_slug in {"oasi-2", "golden-age-club"}
     safe_club = html.escape(
         (club_display_name or organization_name or "Associazione").strip()
     )
@@ -1196,12 +1197,14 @@ def _render_card_download_html(
 
     org_logo_top_block = ""
     if safe_org_logo:
-        logo_height = "56px" if is_oasi2_card else "44px"
-        logo_max_width = "240px" if is_oasi2_card else "220px"
-        logo_shift = "transform:translateX(-4px);" if is_oasi2_card else ""
+        logo_style = (
+            "display:block;margin:0 auto;width:180px;max-width:100%;height:auto;"
+            if is_oasi2_card
+            else "height:44px;max-width:220px;object-fit:contain;"
+        )
         org_logo_top_block = f"""
         <div style="padding:14px 22px 0 22px;text-align:center;">
-          <img src="{safe_org_logo}" alt="Logo associazione" style="height:{logo_height};max-width:{logo_max_width};object-fit:contain;{logo_shift}" />
+          <img src="{safe_org_logo}" alt="Logo associazione" style="{logo_style}" />
         </div>
         """
 
@@ -1528,26 +1531,7 @@ def card_wallet_google(token: str):
 
 def _resolve_logo_disk_path(org: Organization | None) -> str | None:
     """Return the absolute disk path for the org logo, or None if unavailable."""
-    if org is None:
-        return None
-    card_logo_url = (getattr(org, "card_logo_url", None) or "").strip()
-    if card_logo_url.startswith("/uploads/"):
-        rel = card_logo_url.removeprefix("/uploads/").replace("/", os.sep)
-        p = os.path.join(settings.UPLOAD_DIR, rel)
-        if os.path.exists(p):
-            return p
-    if org.logo_path:
-        p = os.path.join(settings.UPLOAD_DIR, org.logo_path)
-        return p if os.path.exists(p) else None
-    slug = (getattr(org, "slug", None) or "").strip().lower()
-    if slug:
-        static_p = os.path.normpath(
-            os.path.join(
-                os.path.dirname(__file__), "..", "static", "card-logos", f"{slug}.png"
-            )
-        )
-        return static_p if os.path.exists(static_p) else None
-    return None
+    return resolve_card_logo_disk_path(org)
 
 
 def _organization_card_style(org: Organization | None) -> dict[str, object]:

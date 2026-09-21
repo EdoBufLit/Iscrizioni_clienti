@@ -40,6 +40,7 @@ from app.services.qr_code import generate_qr_png_bytes
 from app.services.org_branding import (
     resolve_assonam_logo_url,
     resolve_card_email_subject,
+    resolve_card_logo_disk_path,
     resolve_card_logo_url,
     resolve_club_display_name,
 )
@@ -50,24 +51,7 @@ logger = logging.getLogger(__name__)
 
 
 def _resolve_org_logo_disk_path(org: Organization) -> str | None:
-    card_logo_url = (getattr(org, "card_logo_url", None) or "").strip()
-    if card_logo_url.startswith("/uploads/"):
-        rel = card_logo_url.removeprefix("/uploads/").replace("/", os.sep)
-        p = os.path.join(settings.UPLOAD_DIR, rel)
-        if os.path.exists(p):
-            return p
-    if org.logo_path:
-        p = os.path.join(settings.UPLOAD_DIR, org.logo_path)
-        return p if os.path.exists(p) else None
-    slug = (getattr(org, "slug", None) or "").strip().lower()
-    if slug:
-        static_p = os.path.normpath(
-            os.path.join(
-                os.path.dirname(__file__), "..", "static", "card-logos", f"{slug}.png"
-            )
-        )
-        return static_p if os.path.exists(static_p) else None
-    return None
+    return resolve_card_logo_disk_path(org)
 
 
 def _organization_card_style(org: Organization | None) -> dict[str, object]:

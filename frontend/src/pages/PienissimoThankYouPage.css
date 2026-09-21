@@ -1,0 +1,9 @@
+/* Deeper gold on a light surface, without adding a plate behind the mark. */
+.golden-age-confirmation-logo {
+  filter: brightness(0.7);
+}
+
+/* The supplied gold already has strong contrast against the dark surface. */
+:root[data-theme="dark"] .golden-age-confirmation-logo {
+  filter: none;
+}

@@ -233,7 +233,7 @@ def test_public_org_info_uses_oasi2_logo_fallback_when_card_logo_missing(client,
     assert res.status_code == 200, res.text
     payload = res.json()
     assert payload["club_display_name"] == "Golden Age Club - Speakeasy"
-    assert payload["card_logo_url"].endswith("/static/card-logos/oasi-2.png")
+    assert payload["card_logo_url"].endswith("/static/card-logos/golden-age-20260921.png")
 
 
 def test_member_card_download_page_and_wallet_placeholder_endpoints(client, db):

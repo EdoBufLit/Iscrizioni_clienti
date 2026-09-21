@@ -21,6 +21,7 @@ import {
   type OrgAdminMetrics,
 } from "../../lib/api";
 import Skeleton from "../../components/ui/Skeleton";
+import { MemberCardPreview } from "../../components/cards/MemberCardPreview";
 import { EmptyState, KpiCard, PageHeader, SectionPanel, StatusChip } from "./components/OrgAdminPrimitives";
 import { useOrgAdmin } from "./OrgAdminLayout";
 
@@ -727,17 +728,26 @@ const OrgAdminCards = () => {
               )}
             </SectionPanel>
 
-            <SectionPanel title="Builder tessera" eyebrow="Design standard">
+            <SectionPanel title="Builder tessera" eyebrow={membershipSettings?.card_style_locked ? "Design dedicato" : "Design standard"}>
               <form className="card-builder card-builder--wide space-y-6" onSubmit={handleCardDesignSubmit}>
                   {membershipSettings?.card_style_locked ? (
                     <div className="rounded-[0.85rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-                      Design bloccato per questa associazione: la tessera Golden Age Club resta invariata.
+                      Il design della tessera Golden Age Club e gestito da ASSONAM.
                     </div>
                   ) : null}
+                  {membershipSettings?.card_style_locked ? (
+                    <MemberCardPreview className="max-w-[540px]" cardData={{
+                      fullName: "Socio di esempio", organizationName: admin?.organization?.name,
+                      organizationSlug: admin?.organization?.slug, organizationLogoUrl: cardLogoPreviewUrl,
+                      cardNumber: "12345", cardYear: new Date().getFullYear(), cardStatus: "attiva",
+                      membershipTypeLabel: "Annuale",
+                    }} />
+                  ) : (
                   <div className="grid gap-4 lg:grid-cols-2">
                     <CardDesignPreview style={cardStyleDraft} logoUrl={cardLogoPreviewUrl} orgName={admin?.organization?.name} side="front" />
                     <CardDesignPreview style={cardStyleDraft} logoUrl={cardLogoPreviewUrl} orgName={admin?.organization?.name} side="back" />
                   </div>
+                  )}
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     {([
                       ["primary_color", "Bordeaux"],

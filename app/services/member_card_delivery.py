@@ -23,6 +23,7 @@ from app.services.member_membership import (
 from app.services.org_branding import (
     resolve_assonam_logo_url,
     resolve_card_email_subject,
+    resolve_card_logo_disk_path,
     resolve_card_logo_url,
     resolve_club_display_name,
 )
@@ -37,24 +38,7 @@ _PUBLIC_MEMBER_CARD_VIEW_TEMPLATE = (
 
 
 def _resolve_org_logo_disk_path(org: Organization | None) -> str | None:
-    if org is None:
-        return None
-    card_logo_url = (getattr(org, "card_logo_url", None) or "").strip()
-    if card_logo_url.startswith("/uploads/"):
-        rel = card_logo_url.removeprefix("/uploads/").replace("/", os.sep)
-        candidate = os.path.join(settings.UPLOAD_DIR, rel)
-        if os.path.exists(candidate):
-            return candidate
-    if org.logo_path:
-        candidate = os.path.join(settings.UPLOAD_DIR, org.logo_path)
-        return candidate if os.path.exists(candidate) else None
-    slug = (getattr(org, "slug", None) or "").strip().lower()
-    if slug:
-        static_candidate = os.path.normpath(
-            os.path.join(os.path.dirname(__file__), "..", "static", "card-logos", f"{slug}.png")
-        )
-        return static_candidate if os.path.exists(static_candidate) else None
-    return None
+    return resolve_card_logo_disk_path(org)
 
 
 def _organization_card_style(org: Organization | None) -> dict[str, object]:

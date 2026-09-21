@@ -1,6 +1,7 @@
 import { useId, useMemo, useState } from "react";
 import { ASSONAM_LOGO_SRC, getCurrentCardYearLabel } from "../../lib/brand";
 import { buildMemberCardQrImageUrl } from "../../lib/memberCardQr";
+import { GoldenAgeCardBack, GoldenAgeCardFront } from "./GoldenAgeCardArtwork";
 
 export type MemberCardPreviewData = {
   firstName?: string | null;
@@ -118,7 +119,7 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
   const organizationName = toSafeText(cardData.organizationName);
   const organizationSlug = toSafeText(cardData.organizationSlug).toLowerCase();
   const organizationLogoUrl = toSafeText(cardData.organizationLogoUrl);
-  const isOasi2Card = organizationSlug === "oasi-2";
+  const isOasi2Card = ["oasi-2", "golden-age-club"].includes(organizationSlug);
   const organizationLabel = clubDisplayName !== EMPTY ? clubDisplayName : organizationName;
   const cardNumber = toDisplayCardNumber(cardData.cardNumber);
   const cardYear = toDisplayYear(cardData.cardYear) || getCurrentCardYearLabel();
@@ -168,6 +169,10 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
               boxShadow,
             }}
           >
+            {isOasi2Card ? (
+              <GoldenAgeCardFront name={displayName} association={organizationLabel} logoUrl={organizationLogoUrl} year={cardYear} number={cardNumber} status={toSafeText(cardData.cardStatus)} membershipType={membershipTypeLabel} />
+            ) : (
+            <>
             {!isOasi2Card && (
               <>
                 <span
@@ -329,6 +334,8 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
                 </span>
               </span>
             </span>
+            </>
+            )}
           </span>
 
           {/* ─── BACK FACE ─── */}
@@ -343,6 +350,10 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
               boxShadow,
             }}
           >
+            {isOasi2Card ? (
+              <GoldenAgeCardBack name={displayName} number={cardNumber} year={cardYear} qrUrl={qrImageUrl} membershipType={membershipTypeLabel} validUntil={validUntil} />
+            ) : (
+            <>
             {/* Subtle diagonal pattern */}
             <span
               className="pointer-events-none absolute inset-0 opacity-[0.025]"
@@ -416,6 +427,8 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
                 ) : null}
               </span>
             </span>
+            </>
+            )}
           </span>
         </span>
       </button>

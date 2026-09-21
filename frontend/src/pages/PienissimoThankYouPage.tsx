@@ -6,6 +6,7 @@ import {
   type PienissimoIngestResponse,
 } from "../lib/api";
 import { applySeo } from "../lib/seo";
+import "./PienissimoThankYouPage.css";
 
 type SubmitStatus = "idle" | "loading" | "success" | "error";
 
@@ -71,6 +72,7 @@ const PienissimoThankYouPage = () => {
   const isSuccess = status === "success" || Boolean(queryCardToken);
   const ingestStatus = successData?.status ?? (queryCardToken ? (queryStatus || "already_issued") : null);
   const isAlreadyIssued = ingestStatus === "already_issued" || ingestStatus === "active_card";
+  const isGoldenAge = ["oasi-2", "golden-age-club"].includes((orgSlug || "").toLowerCase());
 
   const canSubmit = Boolean(orgSlug) && !isLoading && normalizedEmail.length > 0 && isEmailValid;
 
@@ -151,7 +153,7 @@ const PienissimoThankYouPage = () => {
             {cardLogoUrl && (
               <div
                 className="inline-flex items-center justify-center"
-                style={{
+                style={isGoldenAge ? undefined : {
                   background: "rgba(0,0,0,0.65)",
                   border: "1px solid rgba(255,255,255,0.12)",
                   borderRadius: 14,
@@ -163,9 +165,9 @@ const PienissimoThankYouPage = () => {
                 <img
                   src={cardLogoUrl}
                   alt={`Logo ${clubDisplayName}`}
-                  className="object-contain"
+                  className={`object-contain${isGoldenAge ? " golden-age-confirmation-logo" : ""}`}
                   style={{
-                    height: "clamp(48px, 10vw, 72px)",
+                    height: isGoldenAge ? "clamp(100px, 25vw, 140px)" : "clamp(48px, 10vw, 72px)",
                     maxWidth: "clamp(120px, 40vw, 230px)",
                     minWidth: 90,
                     minHeight: 40,

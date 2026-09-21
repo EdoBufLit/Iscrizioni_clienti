@@ -263,6 +263,8 @@ from app.services.membership_payments import (
     payment_status_is_paid,
 )
 from app.services.org_branding import (
+    resolve_card_logo_disk_path,
+    resolve_card_logo_url,
     resolve_club_display_name,
     wallet_branding_defaults,
 )
@@ -645,30 +647,7 @@ def _normalize_member_identity_document_fields(
 
 
 def _resolve_org_logo_disk_path(org: Organization | None) -> str | None:
-    if org is None:
-        return None
-    card_logo_url = (getattr(org, "card_logo_url", None) or "").strip()
-    if card_logo_url.startswith("/uploads/"):
-        rel = card_logo_url.removeprefix("/uploads/").replace("/", os.sep)
-        candidate = os.path.join(settings.UPLOAD_DIR, rel)
-        if os.path.exists(candidate):
-            return candidate
-    if org.logo_path:
-        candidate = os.path.join(settings.UPLOAD_DIR, org.logo_path)
-        return candidate if os.path.exists(candidate) else None
-    slug = (getattr(org, "slug", None) or "").strip().lower()
-    if slug:
-        static_candidate = os.path.normpath(
-            os.path.join(
-                os.path.dirname(__file__),
-                "..",
-                "static",
-                "card-logos",
-                f"{slug}.png",
-            )
-        )
-        return static_candidate if os.path.exists(static_candidate) else None
-    return None
+    return resolve_card_logo_disk_path(org)
 
 
 def _resolve_assonam_disk_path() -> str | None:
@@ -959,7 +938,11 @@ def _serialize_org_membership_settings(org: Organization) -> dict[str, object]:
             getattr(org, "cash_only_signup_payment", False)
         ),
         "online_payment_required": organization_requires_membership_payment(org),
-        "card_logo_url": getattr(org, "card_logo_url", None),
+        "card_logo_url": (
+            resolve_card_logo_url(org)
+            if (getattr(org, "slug", "") or "").strip().lower() in {"oasi-2", "golden-age-club"}
+            else getattr(org, "card_logo_url", None)
+        ),
         "card_style": _serialize_card_style(org),
         "card_style_locked": (getattr(org, "slug", "") or "").strip().lower() in {"oasi-2", "golden-age-club"},
     }

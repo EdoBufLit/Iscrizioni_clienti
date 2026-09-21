@@ -1,3 +1,52 @@
+## Plan (Conferma Golden Age senza riquadro scuro e rilascio - Sep 21, 2026)
+- [x] Rimuovere il riquadro del logo solo nella conferma Golden Age, con contrasto adeguato in entrambi i temi.
+- [x] Verificare la build reale su mobile/desktop e modalita chiara/scura, conservando il marchio originale sulle tessere approvate.
+- [ ] Pubblicare su Main la versione approvata con questa correzione e verificare deploy, asset live e salute dell'applicazione.
+
+### Specifica
+- L'utente approva le anteprime precedenti e chiede unicamente di eliminare lo sfondo nero del logo nella pagina finale. Procedere al rilascio dopo la correzione, senza una nuova richiesta di approvazione.
+- Logo trasparente, oro piu scuro solo su questa pagina in tema chiaro per contrasto; oro originale in tema scuro. Asset e tessere approvate invariati.
+
+### Verifiche prima del rilascio
+- Wrapper Golden Age senza fondo, bordo, ombra o blur; filtro CSS brightness(0.7) solo sul logo della conferma in tema chiaro, disattivato in dark mode. Altri circoli e tessere approvate invariati.
+- Screenshot della build reale a 320/390/1440 px nei due temi: nessun overflow o errore JavaScript; trasparenza del wrapper verificata con stili calcolati. Immagini `conferma-logo-light.png` e `conferma-logo-dark.png` in `output/golden-age-preview-20260921`.
+- 58 test backend e 12 frontend superati nuovamente; typecheck incluso nella build di produzione completata.
+
+## Plan (Nuovo logo Golden Age, anteprima prima del rilascio - Sep 21, 2026)
+- [x] Integrare il marchio originale trasparente e definire uno spazio leggibile senza deformazioni, limitato a Golden Age/oasi-2.
+- [x] Allineare anteprime area socio/admin, PNG scaricabile, PDF ed email usando lo stesso asset e proporzioni corrette.
+- [x] Verificare browser desktop/mobile, rendering PNG/PDF/email, nomi lunghi e regressioni sugli altri circoli.
+- [x] Preparare screenshot reali e PDF di esempio con dati fittizi per approvazione visiva prima di push/deploy.
+- [ ] Pubblicare dopo il riscontro dell'utente sulla resa visiva.
+
+### Specifica
+- Conservare il logo fornito e il colore oro originale, con trasparenza reale; non ridisegnare il marchio.
+- Conservare la tessera bordeaux dedicata, la presenza ASSONAM, le informazioni del socio e il QR. Aumentare lo spazio del logo evitando sovrapposizioni e dipendenze dalla dimensione viewport.
+- Utilizzare dati fittizi nelle anteprime, nessun invio email reale e nessuna modifica anagrafica.
+- La richiesta esplicita e mostrare prima il risultato: preparazione e verifica locale complete, pubblicazione dopo riscontro sull'anteprima.
+
+### Review
+- Asset originale `MARCHIO_GAC-01.png` preservato. Rimossi solo margini trasparenti e ridimensionato a 2400x1780: nuovo file versionato `app/static/card-logos/golden-age-20260921.png`, 432298 byte; nessuna modifica a disegno o colori.
+- Resolver locale unico per invio email, emissione, download pubblico e admin; stesso logo esposto nelle API socio/pubbliche/admin. Vecchio asset conservato per i riferimenti storici.
+- Marchio completo opaco, centrato in uno spazio dedicato; bordeaux e ASSONAM conservati. Anteprima SVG proporzionale alle dimensioni della tessera, testi lunghi adattati alla larghezza. Builder e dettaglio admin ora mostrano la tessera dedicata e il logo risolto.
+- PDF: corretto anche il preesistente overflow dei sette dati sul retro, affiancandoli al QR senza ridurne la dimensione.
+- Verifica: 58 test backend mirati e 12 frontend superati; typecheck, build di produzione, compileall e diff check OK. Browser sulla build reale con API simulate: viewport 320/360/390/430/768/1440, tema scuro, fronte/retro, nomi lunghi; admin e pagina pubblica a 390/1440; template email/download a 390/800. Nessun errore JS, overflow o immagine mancante nei casi verificati.
+- Rendering PDF verificato visivamente con Poppler. Screenshot, metriche e PDF dimostrativo in `output/golden-age-preview-20260921`; tavola finale `anteprima-golden-age.png`. Dati tutti fittizi; nessuna email reale inviata.
+- Verifica email limitata al template renderizzato e all'immagine incorporata: nessuna prova su caselle Gmail/Outlook reali. Le email gia inviate mantengono l'immagine incorporata originale; i nuovi invii e download useranno il nuovo asset dopo il rilascio.
+- Stato: modifiche locali su Main, nessun commit/push/deploy per questa modifica. Atteso riscontro visivo dell'utente come richiesto.
+
+## Plan (Verifica logo tessera e avviso socio gia attivo - Sep 21, 2026)
+- [x] Verificare percorso di modifica logo e personalizzazioni Golden Age/Speakeasy.
+- [x] Ricostruire la condizione del messaggio di tessera attiva e confrontarla con elenco soci, date e dati live in sola lettura.
+- [x] Eseguire verifiche mirate, documentare evidenze e distinguere i casi confermati da quelli che richiedono un esempio del cliente.
+
+### Review
+- Associazione confermata dall'utente: Golden Age Club / Speakeasy; incluso l'esempio individuale richiesto. Nessuna modifica applicativa o live.
+- Logo: builder e upload volutamente bloccati per oasi-2/golden-age-club; configurazione live conferma il blocco e l'uso dell'asset statico dedicato.
+- Live in READ ONLY: 2.517 soci attivi 2026, nessuna joined_at a gennaio, prima data conservata 19 febbraio; filtro elenco e controllo attivita concordano su tutti i soci.
+- Esempio individuale: presente, una emissione il 19 settembre, email con stato sent; trovato dalla ricerca live in 6/6 modi e dal resolver pubblico per email. Nessuna prova di emissione a gennaio o spostamento data.
+- 32 test ingest/ricerca superati. Health/DB OK, disco 38%, inode 9%. Dettagli e limiti in docs/verifica_golden_age_2026-09-21.md, senza dati personali del socio.
+
 ## Plan (Ricerca soci per similitudine - Sep 20, 2026)
 - [x] Aggiungere tolleranza a piccoli refusi nei nomi/email, con risultati esatti prima dei simili, filtri e paginazione coerenti.
 - [x] Distinguere le corrispondenze simili nella UI e impedire che ricerche precedenti sovrascrivano i risultati correnti.
@@ -52,6 +101,10 @@
 - All 75 frontend tests passed (22 files), including eight new credits-page interaction tests. Python compileall, TypeScript/production build and diff checks passed. Final browser QA includes desktop/mobile and dark controls with measured text contrast 13.03:1; mobile KPIs use two columns. Artifacts: `%TEMP%/assonam-credits-20260912`.
 - Pre-release backup `/opt/assonam/backups/before-unified-credits-20260912.dump`: 187351225 bytes, mode 600, readable pg_restore catalog, SHA256 `c4cb49b1d278e9d1ffc5143f7cbd138b3b577bac70814266aa644a71b1556f25`.
 - Read-only pre-release snapshot: 24 WhatsApp requests, 3823 cards / EUR 3823, all previously not_applicable. Disk 37%, inode usage 9%.
+- Implementation commit `7d2def5e665f21be8799961d8ccf206b1f524d17`, pushed to Main; deployment workflow `34711590875`.
+- Live checks passed: migration head `9d5e7a31c802`, all 24 historical WhatsApp requests now unpaid, 24 migration audit entries, EUR 3823 outstanding, totals verified for all nine represented associations. No old-worker orders needed a backfill replay. No test payment or email sent in production.
+- Public frontend HTTP 200 serves `/assets/index-DeMVD7di.js` with `SuperAdminCardCredits-DYVgu7QM.js` and scoped dark/mobile CSS `SuperAdminCardCredits-xn9Sj-L3.css`. Protected API returns 401 anonymously; health/database OK; application workers healthy with zero restarts, disk 38%, inodes 9%.
+- Temporary PostgreSQL QA container and its verified anonymous volume removed; only the two production volumes remain. Local QA servers stopped, screenshots and captured evidence retained outside the repository.
 
 ## Plan (System emails, affiliate communications and WhatsApp card totals - Sep 11, 2026)
 - [x] Refresh low-stock and other dated system emails with a shared responsive, readable design; preserve delivery behavior and verify rendered examples.

@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 
+from app.config import settings
 from app.models import Organization
 
 logger = logging.getLogger(__name__)
 
 _SUBJECT_FALLBACK_TEMPLATE = "La tua tessera {org_name}"
 _EMAIL_LIKE_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+GOLDEN_AGE_CARD_LOGO_URL = "/static/card-logos/golden-age-20260921.png"
 _CLUB_DISPLAY_NAME_BY_SLUG_OVERRIDE = {
     # Customer-facing naming override requested for card rendering.
     "oasi-2": "Golden Age Club - Speakeasy",
@@ -16,12 +19,13 @@ _CLUB_DISPLAY_NAME_BY_SLUG_OVERRIDE = {
 }
 _CARD_LOGO_BY_SLUG_FALLBACK = {
     # Requested by customer branding: dedicated Golden Age logo for oasi-2 cards.
-    "oasi-2": "/static/card-logos/oasi-2.png",
+    "oasi-2": GOLDEN_AGE_CARD_LOGO_URL,
+    "golden-age-club": GOLDEN_AGE_CARD_LOGO_URL,
 }
 _WALLET_BRANDING_BY_SLUG_FALLBACK = {
     "oasi-2": {
         "bg_color": "#0B3C75",
-        "logo_url": "/static/card-logos/oasi-2.png",
+        "logo_url": GOLDEN_AGE_CARD_LOGO_URL,
         "hero_image_url": "/static/wallet-heroes/oasi-2-hero.png",
         "title_override": "Golden Age Club - Speakeasy",
     }
@@ -140,6 +144,43 @@ def resolve_card_logo_url(
     if logo_path and slug:
         return _to_absolute_url(f"/api/organizations/{slug}/logo", base_url=base_url)
 
+    return None
+
+
+def resolve_card_logo_disk_path(org: Organization | None) -> str | None:
+    """Resolve the local card artwork consistently for downloads and email."""
+    if org is None:
+        return None
+
+    static_dir = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "static"))
+    explicit = (getattr(org, "card_logo_url", None) or "").strip()
+    if explicit.startswith("/uploads/"):
+        relative_path = explicit.removeprefix("/uploads/").replace("/", os.sep)
+        candidate = os.path.join(settings.UPLOAD_DIR, relative_path)
+        if os.path.exists(candidate):
+            return candidate
+    elif explicit.startswith("/static/"):
+        relative_path = explicit.removeprefix("/static/").replace("/", os.sep)
+        candidate = os.path.join(static_dir, relative_path)
+        if os.path.exists(candidate):
+            return candidate
+
+    slug = (getattr(org, "slug", None) or "").strip().lower()
+    fallback_url = _CARD_LOGO_BY_SLUG_FALLBACK.get(slug)
+    if fallback_url:
+        candidate = os.path.join(
+            static_dir, fallback_url.removeprefix("/static/").replace("/", os.sep)
+        )
+        if os.path.exists(candidate):
+            return candidate
+
+    logo_path = getattr(org, "logo_path", None)
+    if logo_path:
+        candidate = os.path.join(settings.UPLOAD_DIR, logo_path)
+        return candidate if os.path.exists(candidate) else None
+    if slug:
+        candidate = os.path.join(static_dir, "card-logos", f"{slug}.png")
+        return candidate if os.path.exists(candidate) else None
     return None
 
 
