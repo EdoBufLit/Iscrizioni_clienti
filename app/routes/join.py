@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Form, UploadFile
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError, TimeoutError as DatabasePoolTimeout
 from datetime import date, datetime, timedelta
 from app.db import get_db
 from app.models import (
@@ -19,7 +19,7 @@ from app.models import (
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.file_deletion import enqueue_file_deletion
 from app.services.email_sender import build_sender_payload
-from app.utils import generate_token, save_upload_file, hash_token
+from app.utils import generate_token, save_upload_file_sync, hash_token
 from app.services.card_allocation import allocate_next_card
 from app.services.annual_memberships import sync_annual_membership_term
 from app.services.fiscal_code import validate_fiscal_code
@@ -627,7 +627,7 @@ def api_join_start(
     "/api/join/continue",
     dependencies=[Depends(sqlite_card_allocation_request_guard)],
 )
-async def api_join_continue(
+def api_join_continue(
     request: Request,
     token: str = Form(...),
     id_document: UploadFile = File(...),
@@ -661,7 +661,7 @@ async def api_join_continue(
 
     try:
         # Process ID Document
-        rel_path_id, size_id, sha_id = await save_upload_file(
+        rel_path_id, size_id, sha_id = save_upload_file_sync(
             id_document, sub_directory=sub_path
         )
         doc_id = MemberDocument(
@@ -694,7 +694,7 @@ async def api_join_continue(
         )
 
         # Process Fiscal Code Document
-        rel_path_fc, size_fc, sha_fc = await save_upload_file(
+        rel_path_fc, size_fc, sha_fc = save_upload_file_sync(
             fiscal_code_document, sub_directory=sub_path
         )
         doc_fc = MemberDocument(
@@ -802,6 +802,8 @@ async def api_join_continue(
                     pass
         db.rollback()
         logger.error("Error during file upload error_type=%s", type(e).__name__)
+        if isinstance(e, (DBAPIError, DatabasePoolTimeout)):
+            raise
         raise HTTPException(
             status_code=500, detail="Internal server error during upload"
         )
@@ -811,7 +813,7 @@ async def api_join_continue(
     "/api/join/{org_slug}/submit",
     dependencies=[Depends(sqlite_card_allocation_request_guard)],
 )
-async def api_join_submit_multipart(
+def api_join_submit_multipart(
     request: Request,
     org_slug: str,
     first_name: str = Form(...),
@@ -1092,7 +1094,7 @@ async def api_join_submit_multipart(
 
         # 2. Save Docs
         if id_document:
-            rel_path_id, size_id, sha_id = await save_upload_file(
+            rel_path_id, size_id, sha_id = save_upload_file_sync(
                 id_document, sub_directory=sub_path
             )
             doc_obj_id = MemberDocument(
@@ -1120,7 +1122,7 @@ async def api_join_submit_multipart(
             )
 
         if fiscal_code_document:
-            rel_path_fc, size_fc, sha_fc = await save_upload_file(
+            rel_path_fc, size_fc, sha_fc = save_upload_file_sync(
                 fiscal_code_document, sub_directory=sub_path
             )
             doc_obj_fc = MemberDocument(
@@ -1283,6 +1285,8 @@ async def api_join_submit_multipart(
                         os.remove(os.path.join(settings.UPLOAD_DIR, p))
                     except OSError:
                         pass
+        if isinstance(exc, (DBAPIError, DatabasePoolTimeout)):
+            raise
         raise HTTPException(
             status_code=500,
             detail=f"Errore nel salvataggio della richiesta. (ref: {request_id})",

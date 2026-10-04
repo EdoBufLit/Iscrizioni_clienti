@@ -51,6 +51,27 @@ A minimal web application for association member signup, document upload, and me
    | `JOIN_TOKEN_EXPIRE_MINUTES` | Signup continue link validity | `120` |
    | `SKIP_CREATE_ALL` | Disable auto schema creation | `0` (dev) / `1` (prod) |
 
+### Runtime availability safeguards
+
+The web image runs two supervised Uvicorn workers. In deployed environments,
+each worker checks that its request event loop responds: a stall lasting about
+45-50 seconds terminates that worker, and Uvicorn replaces it automatically.
+Checkout and multipart signup handlers run their synchronous DB/provider/file
+work in FastAPI's worker pool, so allocation waits do not freeze the event loop.
+
+Application PostgreSQL connections enforce a 5-second lock timeout, 30-second
+statement timeout, 60-second idle-in-transaction timeout, and 5-second connection
+and pool acquisition timeouts. Each process uses at most 10 pooled connections.
+Limits are restored whenever a connection is checked out; Alembic uses its own
+engine. Video rendering releases its read transaction before build/render work.
+Retryable database failures return a redacted HTTP 503 with `Retry-After: 5`;
+provider checkout creation is never automatically replayed by the error handler.
+
+`/health` returns HTTP 503 if its DB check fails. Compose and the deployment
+canary verify both HTTP status and the JSON DB result. Docker health status
+alone does not restart a running container; worker recovery comes from the
+event-loop watchdog and Uvicorn supervisor.
+
 ### Affiliazione Feature Flags (safe deploy)
 
 - `AFFILIAZIONE_ENABLED=false` (default): public affiliation routes are hidden (`404`) while super-admin review endpoints remain available.

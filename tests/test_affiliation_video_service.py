@@ -45,13 +45,22 @@ def test_process_video_job_marks_done_when_file_exists_even_with_non_zero_exit(
     render_script.parent.mkdir(parents=True, exist_ok=True)
     render_script.write_text("// test renderer", encoding="utf-8")
 
-    monkeypatch.setattr(
-        affiliation_video_service,
-        "_ensure_renderer_build",
-        lambda _renderer_dir: render_script,
-    )
+    render_sessions = []
+    original_render = affiliation_video_service._render_job
+
+    def inspect_render_session(db, job):
+        render_sessions.append(db)
+        return original_render(db, job)
+
+    def fake_build(_renderer_dir):
+        assert not render_sessions[-1].in_transaction(), "Build must not hold an idle DB transaction"
+        return render_script
+
+    monkeypatch.setattr(affiliation_video_service, "_render_job", inspect_render_session)
+    monkeypatch.setattr(affiliation_video_service, "_ensure_renderer_build", fake_build)
 
     def fake_run(command, cwd=None, capture_output=None, text=None, **kwargs):
+        assert not render_sessions[-1].in_transaction(), "Rendering must not hold an idle DB transaction"
         assert isinstance(command, list)
         assert kwargs.get("shell") in {None, False}
         output_path = Path(command[command.index("--output") + 1])

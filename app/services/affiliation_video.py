@@ -449,7 +449,6 @@ def _render_job(db: Session, job: VideoJob) -> None:
 
     renderer_dir = _resolve_directory(Path(settings.AFFILIATION_VIDEO_RENDERER_DIR), label="Renderer")
 
-    render_script = _ensure_renderer_build(renderer_dir)
     org_name = (
         (application.organization_name or "").strip()
         or (application.organization_legal_name or "").strip()
@@ -475,15 +474,21 @@ def _render_job(db: Session, job: VideoJob) -> None:
         job.finished_at = datetime.utcnow()
         return
 
+    # Snapshot command inputs and release the read transaction before build
+    # or rendering. These subprocesses can outlive the DB idle timeout.
+    application_id = application.id
+    mode = _normalize_mode(job.mode)
+    db.commit()
+    render_script = _ensure_renderer_build(renderer_dir)
     command = [
         "node",
         str(render_script),
         "--orgId",
-        str(application.id),
+        str(application_id),
         "--orgName",
         org_name,
         "--mode",
-        _normalize_mode(job.mode),
+        mode,
         "--template",
         "personalized",
         "--output",

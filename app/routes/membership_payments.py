@@ -71,7 +71,7 @@ from app.services.file_deletion import enqueue_file_deletion
 from app.services.sqlite_card_allocation_guard import (
     sqlite_card_allocation_request_guard,
 )
-from app.utils import generate_token, hash_token, save_upload_file
+from app.utils import generate_token, hash_token, save_upload_file_sync
 
 logger = logging.getLogger(__name__)
 
@@ -236,7 +236,7 @@ def _clear_member_documents(db: Session, member: Member) -> None:
     db.flush()
 
 
-async def _upsert_member_for_checkout(
+def _upsert_member_for_checkout(
     *,
     request: Request,
     db: Session,
@@ -414,7 +414,7 @@ async def _upsert_member_for_checkout(
 
     if id_document and (not existing or allow_existing_update):
         sub_path = f"{org.id}/{member.id}"
-        rel_path_id, size_id, sha_id = await save_upload_file(
+        rel_path_id, size_id, sha_id = save_upload_file_sync(
             id_document, sub_directory=sub_path
         )
         db.add(
@@ -463,7 +463,7 @@ def _extract_checkout_reference(payload: dict[str, Any]) -> str | None:
     "/api/public/orgs/{org_slug}/membership-payment/create-checkout",
     dependencies=[Depends(sqlite_card_allocation_request_guard)],
 )
-async def create_membership_payment_checkout(
+def create_membership_payment_checkout(
     request: Request,
     response: Response,
     org_slug: str,
@@ -501,6 +501,8 @@ async def create_membership_payment_checkout(
     if not organization_requires_membership_payment(org) or not organization_has_sumup_config(org):
         raise HTTPException(status_code=400, detail="Pagamento online non disponibile per questa associazione.")
 
+    # This synchronous endpoint runs in FastAPI's worker pool. PostgreSQL lock
+    # waits and uploaded-file reads must never block the ASGI event loop.
     # Serialize signup, payment lookup and reservation in one numbering domain
     # before touching the member, including simultaneous same-email submits.
     lock_card_allocation(db, org_id=org.id, year=datetime.utcnow().year)
@@ -542,7 +544,7 @@ async def create_membership_payment_checkout(
         )
     )
 
-    member, reused_existing_member = await _upsert_member_for_checkout(
+    member, reused_existing_member = _upsert_member_for_checkout(
         request=request,
         db=db,
         org=org,

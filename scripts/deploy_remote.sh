@@ -430,7 +430,7 @@ if [ "$ENABLE_WHATSAPP_EVOLUTION" = "true" ]; then
 fi
 
 docker compose $COMPOSE_FILES exec -T web python -c \
-  "import urllib.request; response = urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=10); assert response.status == 200"
+  "import json, urllib.request; response = urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=10); payload = json.load(response); assert response.status == 200 and payload.get('status') == 'ok' and payload.get('db') is True"
 current_revision="$(docker compose $COMPOSE_FILES exec -T web alembic current | awk 'NF {print $1}' | tail -n 1 | tr -d '\r')"
 head_revision="$(docker compose $COMPOSE_FILES exec -T web alembic heads | awk 'NF {print $1}' | tail -n 1 | tr -d '\r')"
 if [ -z "$current_revision" ] || [ "$current_revision" != "$head_revision" ]; then

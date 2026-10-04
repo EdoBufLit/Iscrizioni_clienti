@@ -313,3 +313,9 @@ If a block or workflow remains active because it is represented by an explicit b
 ## May 28, 2026 - Booking closures must be explicit rules, not missing slots
 
 Do not interpret "date without slots" as closed when a default booking schedule exists. Model operational closures as explicit serate rules (`is_closed`) with weekday/date scope, give them precedence over defaults, and keep form-level restrictions as an allow-list of selected open serate.
+
+## Oct 4, 2026 - Outage recovery must address transaction isolation
+
+- User correction: a single transaction must never block the entire service for hours. A restart restores availability but does not finish prevention work.
+- Never execute blocking PostgreSQL allocation locks directly in an async request handler, especially when the lock holder subsequently awaits upload I/O. Keep blocking business work off the event loop and bound lock/idle-transaction lifetimes.
+- Verify concurrent requests and runtime safeguards before release; healthy containers alone do not prove application responsiveness.

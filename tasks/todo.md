@@ -5915,3 +5915,45 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Notifiche: reminder WhatsApp espone chip per link conferma/disdetta/note; le mail booking usano il template utente selezionato e il submit registra gli esiti WhatsApp sulla prenotazione.
 - Mobile: form pubblico senza overflow a 390px, privacy dentro contenitore, preset font salvato/renderizzato.
 - Verifiche OK: `python -m compileall app init_db.py`, `pytest tests/test_forms_module.py -k "booking_event or dynamic_booking or booking_submit_sends_one_whatsapp or booking_request_skips_form_emails or booking_rooms or auto_assign"`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build`, `git diff --check`, smoke Playwright 390px.
+
+## Plan (Assonam availability incident - Oct 4, 2026)
+- [x] Check public HTTPS, DNS and health from independent paths.
+- [x] Inspect server, proxy, containers, resource pressure and recent logs without exposing secrets or customer data.
+- [x] Identify the cause and apply a minimal reversible recovery if supported by evidence.
+- [x] Verify public pages, database health and runtime stability; record evidence and remaining limits.
+
+### Scope
+- Work on Main tracking origin/Main; preserve all existing local changes.
+- Check production first; avoid deployments, database changes or restarts without a diagnosed need.
+
+### Review
+- Public Cloudflare HTTPS (IPv4/IPv6), direct origin HTTPS and server-local app health all stalled before recovery. SSH, nginx, Docker and PostgreSQL were available. Disk 40%, inodes 9%, available memory about 12 GB; web OOM false.
+- At 09:37 Europe/Rome, web backend 836339 was idle in a transaction for over 8h43m after INSERT INTO members and held two allocation advisory locks. Web backend 829692 and payment-worker backend 825425 waited on that backend. Their lock wait ages place the initial stall around 00:53 Europe/Rome on Oct 4.
+- Targeted recovery at 09:38: restarted existing app-web-1 only, using the already deployed dc8c3f6902fdd88322cb6c27af230b1b56ad6ab8 image. No deployment, database restart, manual data update or local source-code change. Interrupted uncommitted web transactions were rolled back by connection closure.
+- At 09:39, root, signup page, public organization API, JavaScript entry asset and health returned HTTP 200; health reported status=ok, db=true. Anonymous admin API returned expected 401. Direct-origin and public IPv4/IPv6 health checks passed. Query latency on these probes was 70-143 ms.
+- Database blocking transactions and advisory waiters disappeared. Payment worker resumed automatically, became healthy and completed a reconciliation cycle; all other previously healthy workers stayed healthy.
+- Code-level trigger is strongly supported but was not reproduced against production: async checkout synchronously waits on pg_advisory_xact_lock, then awaits an upload while holding the lock; a concurrent checkout can block the sole Uvicorn event loop and prevent the holder from committing. Evidence: app/routes/membership_payments.py (allocation lock and awaited member/upload creation), app/services/card_allocation.py (blocking advisory lock), Dockerfile (single Uvicorn process). The user subsequently requested durable prevention; implementation continues in the plan below.
+- Existing separate issues: payment reconciliation still reports three HTTPException items present before the outage; app startup logs a member-cleanup foreign-key failure, then completes successfully. Neither was manually modified. No real checkout or payment was submitted for verification.
+
+## Plan (Prevent transaction-driven service outage - Oct 4, 2026)
+- [x] Remove synchronous lock waits from the checkout event loop and prevent upload awaits while allocation locks are held.
+- [x] Bound PostgreSQL lock waits and abandoned transactions; add runtime isolation/recovery appropriate to the actual deployment.
+- [x] Reproduce concurrent lock/upload behavior in isolated tests; prove unrelated requests remain responsive and transactions cannot hang indefinitely.
+- [ ] Run targeted regressions and deployment checks; release only incident changes on Main, preserving pre-existing Wallet/UI work.
+- [ ] Verify deployed image, configured limits, public health, worker recovery and resource stability; record final evidence.
+
+### Specification
+- One stalled request must not freeze unrelated requests or hold transaction locks for hours.
+- Preserve payment idempotency, numbering allocation serialization, signup validation and upload behavior.
+- Test with isolated data; do not submit real production checkouts or change customer records manually.
+- Current user instruction authorizes the durable fix and release after verification.
+
+### Verification before release
+- Checkout and multipart signup/continue execute in FastAPI worker threads; uploads use a common synchronous validation/hash/cleanup implementation, with one threadpool handoff for remaining async callers. Concurrent directory creation is safe.
+- PostgreSQL runtime connections enforce lock 5s, statement 30s, idle transaction 60s, connect/pool wait 5s and at most 10 connections per process. Existing URL options are preserved and safeguards restored on pooled connection checkout. Alembic's separate engine is unchanged.
+- Two supervised Uvicorn workers, deployed per-worker event-loop watchdog (45s deadline, 5s polling), actual DB-aware web healthcheck and deployment canary. Watchdog logging is asynchronous so blocked logging cannot prevent recovery. Timeout/deadlock/serialization errors receive redacted 503 with Retry-After; no automatic provider POST replay.
+- Video worker read transaction is committed before renderer build/subprocess, preserving normal long renders with the new idle limit; targeted test asserts no transaction exists during either subprocess stage.
+- Local regression run: 143 passed, 5 optional PostgreSQL checks skipped. Additional startup/schema/runtime/video smoke run: 90 passed. Final affected upload/watchdog/error/signup tests after review fixes: 60 passed. Independent reviews covered checkout ownership/consent/idempotency, lifecycle, pool capacity and deployment readiness; findings fixed. Original async event-loop execution fails the new responsiveness regression, proving the test catches the incident pattern.
+- Isolated PostgreSQL stock_tests run: 22 DB/numbering concurrency tests passed; actual HTTP checkout tests passed in both organization and shared numbering domains. A held allocation lock leaves health/version responsive, aborts checkout after 5s with 503, and retry creates exactly one durable reservation after release. Test setup owns UUID schemas and never initializes the production DB or calls a real provider.
+- Pre-release backup: /opt/assonam/backups/before-outage-prevention-20261004-075056.dump, 187726428 bytes, mode 600, pg_restore catalog valid, SHA256 f2407a13433f2199f1807bb8f6cdbb4dda17591ddab897bd1782bb8072063066. Root disk 41%, no Docker build cache.
+- Actual Linux Uvicorn integration test passed: two initial worker PIDs, survivor serves during deliberate event-loop block, watchdog exits only stalled child, supervisor creates a new responding PID. Test group and disposable container cleaned up. Compose configuration and deployment shell syntax validated on the server.

@@ -16,6 +16,7 @@ from typing import List, Optional, Tuple
 
 import requests
 from fastapi import HTTPException, UploadFile
+from starlette.concurrency import run_in_threadpool
 
 from .config import settings
 from .log_redaction import hash_identifier, redact_for_log
@@ -86,14 +87,29 @@ async def save_upload_file(
     allowed_types: List[str] = ["image/jpeg", "image/png", "application/pdf"],
     sub_directory: str = "",
 ) -> Tuple[str, int, str]:
+    """Save an upload without running filesystem work on the event loop."""
+    return await run_in_threadpool(
+        save_upload_file_sync,
+        upload_file,
+        max_size=max_size,
+        allowed_types=allowed_types,
+        sub_directory=sub_directory,
+    )
+
+
+def save_upload_file_sync(
+    upload_file: UploadFile,
+    max_size: int = 10 * 1024 * 1024,
+    allowed_types: List[str] = ["image/jpeg", "image/png", "application/pdf"],
+    sub_directory: str = "",
+) -> Tuple[str, int, str]:
     """
     Saves an uploaded file to the upload directory with hardening.
     Returns: (relative_path, size_bytes, sha256_hash)
     Raises: HTTPException if validation fails.
     """
     target_dir = os.path.join(settings.UPLOAD_DIR, sub_directory)
-    if not os.path.exists(target_dir):
-        os.makedirs(target_dir)
+    os.makedirs(target_dir, exist_ok=True)
 
     # 1. Validate Extension and MIME
     if upload_file.content_type not in allowed_types:
@@ -128,7 +144,7 @@ async def save_upload_file(
         if upload_file.content_type == "image/svg+xml":
             raw_svg = bytearray()
             while True:
-                chunk = await upload_file.read(64 * 1024)
+                chunk = upload_file.file.read(64 * 1024)
                 if not chunk:
                     break
                 if len(raw_svg) + len(chunk) > max_size:
@@ -149,7 +165,7 @@ async def save_upload_file(
 
         with open(file_path, "wb") as buffer:
             # Read first chunk for magic bytes
-            chunk = await upload_file.read(4096)
+            chunk = upload_file.file.read(4096)
             if not chunk:
                 raise HTTPException(status_code=400, detail="Empty file.")
             if len(chunk) > max_size:
@@ -178,7 +194,7 @@ async def save_upload_file(
 
             # Read rest
             while True:
-                chunk = await upload_file.read(4096)
+                chunk = upload_file.file.read(4096)
                 if not chunk:
                     break
 

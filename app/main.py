@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError, TimeoutError as DatabasePoolTimeout
 from sqlalchemy.orm import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
@@ -24,6 +25,7 @@ from app.middleware import (
     get_request_id,
 )
 from app.public_uploads import PublicUploadsStaticFiles
+from app.runtime_guard import EventLoopWatchdog
 from app.routes import (
     admin,
     affiliate_communications,
@@ -88,7 +90,17 @@ async def lifespan(app: FastAPI):
     if settings.AFFILIAZIONE_ENABLED and not settings.STRIPE_ENABLED:
         logger.warning("Stripe disabled: missing env vars")
 
-    yield
+    watchdog = None
+    if settings.APP_ENV in {"production", "staging"}:
+        watchdog = EventLoopWatchdog()
+        watchdog.start()
+        logger.info("web_event_loop_watchdog_started pid=%s timeout_seconds=45 poll_seconds=5", os.getpid())
+    try:
+        yield
+    finally:
+        if watchdog is not None:
+            watchdog.stop()
+        engine.dispose()
 
 
 app = FastAPI(
@@ -172,6 +184,31 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
             "request_id": get_request_id(request),
         },
         headers=exc.headers,
+    )
+
+
+# Return retryable, redacted responses after request DB dependencies unwind.
+@app.exception_handler(DBAPIError)
+@app.exception_handler(DatabasePoolTimeout)
+async def database_error_handler(request: Request, exc: Exception):
+    sqlstate = getattr(getattr(exc, "orig", None), "pgcode", None)
+    transient = (
+        isinstance(exc, DatabasePoolTimeout)
+        or bool(getattr(exc, "connection_invalidated", False))
+        or sqlstate in {"55P03", "57014", "25P03", "57P01", "57P02", "57P03", "40P01", "40001"}
+        or bool(sqlstate and sqlstate.startswith("08"))
+    )
+    status_code = 503 if transient else 500
+    # SQL and exception text may contain signup data or provider credentials.
+    logger.error(
+        "database_request_failed request_id=%s error_type=%s sqlstate=%s",
+        get_request_id(request), type(exc).__name__, sqlstate,
+    )
+    message = "Servizio temporaneamente occupato. Riprova tra poco." if transient else "Errore server, riprova."
+    return JSONResponse(
+        status_code=status_code,
+        content={"detail": message, "message": message, "request_id": get_request_id(request)},
+        headers={"Retry-After": "5"} if transient else None,
     )
 
 
@@ -299,7 +336,10 @@ def health(db: Session = Depends(get_db)):
         db_ok = True
     except Exception:
         db_ok = False
-    return {"status": "ok" if db_ok else "degraded", "db": db_ok}
+    payload = {"status": "ok" if db_ok else "degraded", "db": db_ok}
+    if not db_ok:
+        return JSONResponse(status_code=503, content=payload)
+    return payload
 
 
 @app.get("/version")
