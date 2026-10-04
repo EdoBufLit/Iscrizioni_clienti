@@ -5939,8 +5939,8 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - [x] Remove synchronous lock waits from the checkout event loop and prevent upload awaits while allocation locks are held.
 - [x] Bound PostgreSQL lock waits and abandoned transactions; add runtime isolation/recovery appropriate to the actual deployment.
 - [x] Reproduce concurrent lock/upload behavior in isolated tests; prove unrelated requests remain responsive and transactions cannot hang indefinitely.
-- [ ] Run targeted regressions and deployment checks; release only incident changes on Main, preserving pre-existing Wallet/UI work.
-- [ ] Verify deployed image, configured limits, public health, worker recovery and resource stability; record final evidence.
+- [x] Run targeted regressions and deployment checks; release only incident changes on Main, preserving pre-existing Wallet/UI work.
+- [x] Verify deployed image, configured limits, public health, worker recovery and resource stability; record final evidence.
 
 ### Specification
 - One stalled request must not freeze unrelated requests or hold transaction locks for hours.
@@ -5957,3 +5957,11 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Isolated PostgreSQL stock_tests run: 22 DB/numbering concurrency tests passed; actual HTTP checkout tests passed in both organization and shared numbering domains. A held allocation lock leaves health/version responsive, aborts checkout after 5s with 503, and retry creates exactly one durable reservation after release. Test setup owns UUID schemas and never initializes the production DB or calls a real provider.
 - Pre-release backup: /opt/assonam/backups/before-outage-prevention-20261004-075056.dump, 187726428 bytes, mode 600, pg_restore catalog valid, SHA256 f2407a13433f2199f1807bb8f6cdbb4dda17591ddab897bd1782bb8072063066. Root disk 41%, no Docker build cache.
 - Actual Linux Uvicorn integration test passed: two initial worker PIDs, survivor serves during deliberate event-loop block, watchdog exits only stalled child, supervisor creates a new responding PID. Test group and disposable container cleaned up. Compose configuration and deployment shell syntax validated on the server.
+
+### Release review
+- Functional commit 2e2160ba183cbd5c9b0fd7d721c7b2583be39ad4 pushed to Main. Deploy to Hetzner workflow 37187571517 completed successfully, including the final stability/health/Alembic canary; verified at 10:11 Europe/Rome on Oct 4.
+- App runtime and affiliation-video-worker both run the new commit-tagged images. Web command has two Uvicorn workers; both log the active 45-second event-loop watchdog. Runtime PostgreSQL SHOW confirms lock_timeout=5s, statement_timeout=30s and idle_in_transaction_session_timeout=1min; pool wait=5s and size=5.
+- Root, signup page, public organization API and health return 200 via public HTTPS; health has status=ok, db=true. Direct-origin HTTPS and public IPv6 health pass; anonymous admin route returns expected 401. A brief 502 during normal web-container replacement cleared after startup.
+- At 10:10, all application workers and web are healthy with zero restarts/OOM, no lock waiters and no abandoned transaction (one normal transaction was only 47ms old). Web memory about 302MiB, host available memory about 13GB, disk 47%, inodes 12%, no Docker build cache. No pruning needed.
+- UUID test schemas are gone from stock_tests, disposable QA container removed, verified private remote QA staging directory removed; original two Docker data volumes preserved. Backup retained. No production checkout/payment was submitted for verification.
+- Pre-existing Wallet/InstallAppPrompt changes, assets, build script and earlier note additions remain untouched and uncommitted. Separate pre-existing reconciliation/cleanup issues remain recorded in the incident review above.
