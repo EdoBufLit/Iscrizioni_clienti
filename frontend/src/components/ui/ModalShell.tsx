@@ -114,7 +114,7 @@ const ModalShell = ({
     >
       <div
         ref={panelRef}
-        className={`modal-panel relative w-full ${sizeClassName} ${contentClassName}`}
+        className={`modal-panel modal-shell-panel relative w-full ${sizeClassName} ${contentClassName}`}
         tabIndex={-1}
       >
         <div className="flex items-start justify-between gap-4">
