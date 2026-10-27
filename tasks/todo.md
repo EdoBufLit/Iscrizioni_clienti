@@ -6202,7 +6202,12 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - [x] Semplificare barra Soci, storico e adattamento mobile/desktop.
 - [x] Limitare solleciti a Quote e rinnovi e bloccare annualita future/pre-2027 anche sul server.
 - [x] Verificare regressioni selezione/anteprima/ripresa e passaggio anno Europe/Rome; test/build e browser chiaro/scuro.
-- [ ] Review del diff, pubblicazione e controllo del sito; registrare risultati e limiti.
+- [x] Review del diff, pubblicazione e controllo del sito; registrare risultati e limiti.
 
 ### Review
-- In corso.
+- Completato e pubblicato su Main: bfa9049. Pipeline 40579910901 build/deploy riuscita, log con Final canary passed. Sette servizi runtime aggiornati e healthy, zero riavvii/OOM; schema invariato, nessuna migrazione nuova.
+- Soci: barra compatta con selezione/conteggio, azioni contestuali export/accesso soltanto dopo la selezione; cronologia espandibile, nessun comando o selettore sollecito. Solleciti storici recuperati da Soci solo consultabili, con link a Quote e rinnovi. Fondi schede mobile allineati ai token del tema.
+- Quote e rinnovi: nessun invio nel 2026 o per annualita future; guard server in preview/execute/retry/manuale, validita precedente ricontrollata e automatici solo dopo scadenza. Annuali 2026 valide per tutto il 1 gennaio 2027: invio dal 2 gennaio se ancora dovuto. Europe/Rome anche al cambio anno.
+- Backend completo 968 passed / 13 skipped; frontend 139 passed / 35 file; build/typecheck/compileall/diff check riusciti. Review indipendente conclusa, corretti i due rilievi su cronologia fuori contesto e breakpoint 640 px.
+- Browser con dati sintetici: desktop 1440/1280, tablet 640, telefono 390/320, chiaro/scuro; selezione tra pagine, globale 32/escluso 31, cambio filtro azzera, anteprima accesso senza invio, Quote 2026 senza checkbox/comandi. Zero email nel database QA. Screenshot e metriche in output/members-toolbar-20261027/.
+- Dopo il deploy: 24 controlli HTTPS riusciti, hash asset corrispondenti e calendario verificato nel runtime reale in sola lettura. Nessun sollecito in coda prima o dopo il rollout. Backup protetto verificato; server QA fermato e browser ripristinato. Rapporto docs/member_actions_release_2026-10-27.md. Limite: viewport Chromium simulati, nessun nuovo invio reale o dispositivo Safari/iOS fisico.

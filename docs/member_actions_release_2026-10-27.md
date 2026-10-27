@@ -35,6 +35,10 @@ Semplificare il blocco delle azioni multiple in Org Admin → Soci e togliere i 
 
 ## Rilascio
 
-Pubblicazione su Main attraverso la pipeline esistente; risultato e identità registrati dopo il canary. Evidenze e screenshot locali in `output/members-toolbar-20261027/`, esclusi da Git.
+Commit applicativo `bfa9049756eec8a55ef019fc4b835194e2a2f915`, pubblicato su Main con la [pipeline 40579910901](https://github.com/EdoBufLit/Iscrizioni_clienti/actions/runs/40579910901). Build e deploy riusciti; canary finale di stabilità superato, verificato anche nei log del job.
+
+Controlli dopo avvio: 24 richieste HTTPS pubbliche riuscite, hash di JS/CSS e chunk Soci/Quote/Bulk uguali alla build locale, sette servizi runtime healthy con zero riavvii/OOM. Regole del calendario importate dall'immagine effettivamente in esecuzione e verificate in sola lettura: 2026 bloccato, annualità pre-2027/future bloccate, confine Europe/Rome corretto. Schema invariato alla head `20261026_06_member_bulk`; 346 job Wallet completati. Nessun sollecito pendente prima o dopo il rollout. Disco 53%, circa 17 GB liberi, permessi checkout deploy:deploy. Server locale QA fermato e browser ripristinato.
+
+Evidenze e screenshot locali in `output/members-toolbar-20261027/`, esclusi da Git.
 
 Limiti: browser Chromium con viewport simulati, senza dispositivi Safari/iOS fisici; nessun nuovo invio email a soci. I messaggi già consegnati prima della correzione non vengono modificati.

@@ -2,6 +2,8 @@
 
 Pubblicati su `Main` e in produzione tutti gli interventi approvati: piano precedente, UI/UX uniforme, riconciliazione incassi, operazioni multiple sui soci e presenze manuali tramite ricerca. Branding delle tessere conservato.
 
+Correzione successiva dello stesso giorno: [barra azioni Soci e calendario dei solleciti](member_actions_release_2026-10-27.md). I solleciti sono stati rimossi da Soci e limitati alle annualità dal 2027 già iniziate, dopo la scadenza della tessera precedente.
+
 ## Identità del rilascio
 
 - `f961b1d723512b48f283b1b686c40453c24e6236`: rilascio completo, 167 file. [Workflow riuscito](https://github.com/EdoBufLit/Iscrizioni_clienti/actions/runs/40560898243).
