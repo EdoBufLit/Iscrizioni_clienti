@@ -348,3 +348,8 @@ Do not interpret "date without slots" as closed when a default booking schedule 
 
 - Se una shell modale blocca lo scroll del body, garantire nella shell stessa un pannello con altezza massima rispetto al viewport e scroll interno. Non demandare questo requisito ai singoli form o a un override mobile.
 - Per moduli lunghi verificare anche portatili bassi, tablet sopra il breakpoint mobile e orientamento orizzontale: provare lo scroll reale fino a Salva, errori di validazione, textarea ingrandita e ripristino dello scroll alla chiusura. Usare dvh con fallback vh per l'altezza disponibile.
+
+## Oct 27, 2026 - Azioni massive contestuali e solleciti soltanto quando dovuti
+
+- Correzione utente: la barra della lista Soci era troppo affollata; non concentrare selezione, spiegazioni, azioni secondarie e storico in un unico blocco sempre espanso. Mostrare le azioni quando esiste una selezione e raccogliere lo storico in un solo accesso.
+- Tenere i solleciti in Quote e rinnovi, senza proporre automaticamente l'anno successivo nella lista Soci. Attivazione dal 2027 e mai prima dell'inizio dell'annualita interessata, usando Europe/Rome e controlli backend anche per anteprime salvate.

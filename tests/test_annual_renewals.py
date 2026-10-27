@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
@@ -31,6 +31,7 @@ from app.services.renewals import (
     promote_renewal_term,
     record_manual_renewal_payment,
     request_renewal,
+    send_manual_quote_reminders,
     send_renewal_reminder,
 )
 from app.utils import hash_token
@@ -246,21 +247,18 @@ def test_renewal_reminders_are_service_messages_and_deduplicated(db):
     expired = send_renewal_reminder(db, source=source, now=datetime(2027, 1, 2))
     db.flush()
 
-    assert first is True
+    assert first is False
     assert second is False
-    assert thirty_days is True
-    assert seven_days is True
+    assert thirty_days is False
+    assert seven_days is False
     assert expired is True
     notifications = db.query(MemberNotification).filter_by(member_id=member.id).all()
-    assert len(notifications) == 4
+    assert len(notifications) == 1
     assert {notification.type for notification in notifications} == {"renewal"}
     outbox = db.query(EmailOutbox).filter_by(to_email=member.email).all()
-    assert len(outbox) == 4
+    assert len(outbox) == 1
     assert {item.email_type for item in outbox} == {"renewal_reminder"}
     assert {item.payload_json["meta"]["reminder_marker"] for item in outbox} == {
-        "60",
-        "30",
-        "7",
         "expired",
     }
     assert all(item.payload_json["meta"]["service_message"] is True for item in outbox)
@@ -268,7 +266,56 @@ def test_renewal_reminders_are_service_messages_and_deduplicated(db):
     stale = send_renewal_reminder(db, source=source, now=datetime(2027, 7, 18))
     db.flush()
     assert stale is False
-    assert db.query(MemberNotification).filter_by(member_id=member.id).count() == 4
+    assert db.query(MemberNotification).filter_by(member_id=member.id).count() == 1
+
+
+@pytest.mark.parametrize("now", [
+    datetime(2026, 12, 1, tzinfo=timezone.utc),
+    datetime(2026, 12, 31, 23, 0, tzinfo=timezone.utc),
+    datetime(2027, 1, 1, 22, 59, tzinfo=timezone.utc),
+])
+def test_manual_and_worker_reminders_wait_until_previous_card_has_expired(db, now):
+    org = _build_org(db, fee=Decimal("10.00"))
+    member, source = _build_member_and_source(db, org=org, year=2026, card_no=43002)
+    assert send_renewal_reminder(db, source=source, now=now, manual=True) is False
+    result = dispatch_due_renewal_reminders(db, now=now)
+    assert result["reminders_queued"] == 0
+    assert db.query(EmailOutbox).filter_by(to_email=member.email).count() == 0
+
+
+def test_manual_reminder_year_guard_and_rome_expiry_boundary(db):
+    from fastapi import HTTPException
+    org = _build_org(db, fee=Decimal("10.00"))
+    member, _source = _build_member_and_source(db, org=org, year=2026, card_no=43003)
+    with pytest.raises(HTTPException) as early:
+        send_manual_quote_reminders(db, org_id=org.id, membership_year=2027,
+            member_ids=[member.id], now=datetime(2026, 12, 31, 22, 59, tzinfo=timezone.utc))
+    assert early.value.status_code == 409
+    with pytest.raises(HTTPException):
+        send_manual_quote_reminders(db, org_id=org.id, membership_year=2028,
+            member_ids=[member.id], now=datetime(2027, 1, 2, tzinfo=timezone.utc))
+    assert send_manual_quote_reminders(db, org_id=org.id, membership_year=2027,
+        member_ids=[member.id], now=datetime(2026, 12, 31, 23, 0, tzinfo=timezone.utc)) == 0
+    assert send_manual_quote_reminders(db, org_id=org.id, membership_year=2027,
+        member_ids=[member.id], now=datetime(2027, 1, 1, 23, 0, tzinfo=timezone.utc)) == 1
+    assert send_manual_quote_reminders(db, org_id=org.id, membership_year=2027,
+        member_ids=[member.id], now=datetime(2027, 1, 1, 23, 0, tzinfo=timezone.utc)) == 0
+    assert db.query(EmailOutbox).filter_by(to_email=member.email).count() == 1
+
+
+def test_quotes_reminder_api_rejects_early_year_without_queueing(client, db, monkeypatch):
+    from app.services import quote_reminders
+    from app.services.annual_memberships import as_rome_datetime
+    monkeypatch.setattr(quote_reminders, "as_rome_datetime",
+        lambda now=None: as_rome_datetime(now or datetime(2026, 10, 27, tzinfo=timezone.utc)))
+    org = _build_org(db, fee=Decimal("10.00"))
+    member, _source = _build_member_and_source(db, org=org, year=2026, card_no=43004)
+    _login_org_admin(client, db, org=org)
+    response = client.post("/api/org-admin/quotes/reminders",
+        json={"membership_year": 2027, "member_ids": [member.id]})
+    assert response.status_code == 409, response.text
+    assert "2027" in response.json()["detail"]
+    assert db.query(EmailOutbox).filter_by(to_email=member.email).count() == 0
 
 
 def test_repeated_renewal_request_reuses_same_target_year(db):

@@ -276,7 +276,7 @@ const MembersTable = memo(function MembersTable({
             return (
               <article
                 key={member.id}
-                className={`p-4 ${isSelected ? "bg-emerald-50/70" : "bg-white/40"}`}
+                className={`p-4 ${isSelected ? "bg-[var(--theme-surface-muted)]" : "bg-[var(--theme-surface-solid)]"}`}
                 onClick={() => onSelectMember?.(member.id)}
               >
                 <div className="flex items-start justify-between gap-3">

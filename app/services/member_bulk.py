@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app import audit
 from app.config import settings
-from app.models import AdminRole, AdminUser, EmailOutbox, Member, MemberNotification, MemberNotificationType, MemberStatus, Organization, Token, TokenType
+from app.models import AdminRole, AdminUser, AnnualMembershipTerm, EmailOutbox, Member, MemberNotification, MemberNotificationType, MemberStatus, Organization, Token, TokenType
 from app.models_member_bulk import MemberBulkItem, MemberBulkRequest, MemberBulkRun
 from app.services.annual_memberships import as_rome_datetime
 from app.services.email_outbox import build_email_payload, enqueue_email
@@ -31,6 +31,7 @@ from app.services.member_filters import build_org_member_query
 from app.services.member_search import iter_member_search_ids, normalize_member_search
 from app.services.member_sessions import issue_member_auth_token
 from app.services.org_admin_sessions import resolve_org_admin_session
+from app.services.quote_reminders import quote_reminder_unavailable_reason, require_quote_reminder_available
 from app.services.system_email_layout import build_system_email_html
 
 
@@ -113,7 +114,7 @@ def _quote_key(org_id: int, member_id: int, year: int, now: datetime) -> str:
 
 def _context(db: Session, members: list[Member], action: str, year: int | None, now: datetime) -> dict:
     ids = [member.id for member in members]
-    context: dict = {"last_access": {}, "balances": {}, "reminded": set()}
+    context: dict = {"last_access": {}, "balances": {}, "reminded": set(), "current_card_valid": set()}
     if action == "send_access" and ids:
         context["last_access"] = dict(
             db.query(Token.member_id, func.max(Token.created_at))
@@ -124,6 +125,15 @@ def _context(db: Session, members: list[Member], action: str, year: int | None, 
         from app.services.member_accounting import member_year_balances
 
         context["balances"] = member_year_balances(db, members=members, year=year)
+        context["current_card_valid"] = {
+            member_id for (member_id,) in db.query(AnnualMembershipTerm.member_id).filter(
+                AnnualMembershipTerm.member_id.in_(ids),
+                AnnualMembershipTerm.membership_year == year - 1,
+                AnnualMembershipTerm.card_no.isnot(None),
+                AnnualMembershipTerm.valid_through >= as_rome_datetime(now).date(),
+                AnnualMembershipTerm.status != "cancelled",
+            ).all()
+        }
         keys = [_quote_key(member.org_id, member.id, year, now) for member in members]
         context["reminded"] = {key for (key,) in db.query(MemberNotification.dedupe_key).filter(MemberNotification.dedupe_key.in_(keys)).all()}
     return context
@@ -140,6 +150,11 @@ def _eligibility(member: Member | None, *, action: str, year: int | None, now: d
         status = getattr(member.status, "value", member.status)
         if status not in {MemberStatus.ACTIVE.value, MemberStatus.EXPIRED.value}:
             return "member_not_approved", "Il socio non è approvato o è stato rifiutato."
+        if member.id in context["current_card_valid"] or (
+            member.card_year is not None and member.card_year < year
+            and is_member_active(member, now=now.replace(tzinfo=None))
+        ):
+            return "current_card_valid", "La tessera dell'annualità precedente è ancora valida."
     if not _valid_email(member):
         return "invalid_email", "Manca un indirizzo email valido."
     if action == "send_access":
@@ -192,6 +207,8 @@ def preview_run(db: Session, *, admin: AdminUser, payload: dict, now: datetime |
     checked_at = _now(now)
     acquire_sqlite_member_action_lock(db)
     _actor(db, admin)
+    if payload["action"] == "quote_reminder":
+        require_quote_reminder_available(payload.get("membership_year"), now=checked_at)
     fingerprint_payload = {key: value for key, value in payload.items() if key != "request_key"}
     fingerprint_payload["selection"] = dict(fingerprint_payload["selection"])
     for field in ("member_ids", "excluded_ids"):
@@ -282,6 +299,7 @@ def serialize_run(db: Session, run: MemberBulkRun, *, offset: int = 0, limit: in
     outbox_ids = [item.outbox_id for item in items if item.outbox_id]
     delivery = dict(db.query(EmailOutbox.id, EmailOutbox.status).filter(EmailOutbox.id.in_(outbox_ids)).all()) if outbox_ids else {}
     status = "expired" if run.status == "preview" and _now(run.expires_at) <= checked_at else run.status
+    unavailable_reason = quote_reminder_unavailable_reason(run.membership_year, now=checked_at) if run.action == "quote_reminder" else None
     return {
         "id": run.id, "action": run.action, "action_label": _ACTION_LABELS[run.action] + (f" {run.membership_year}" if run.action == "quote_reminder" else ""),
         "membership_year": run.membership_year, "selection_mode": run.selection_mode, "status": status,
@@ -296,8 +314,9 @@ def serialize_run(db: Session, run: MemberBulkRun, *, offset: int = 0, limit: in
             "amount_cents": item.preview_outstanding_cents, "currency": "EUR",
         } for item in items],
         "offset": offset, "limit": limit, "total": run.selected_count, "has_more": offset + len(items) < run.selected_count,
-        "can_execute": status in {"preview", "running"} and counts["pending"] > 0,
-        "can_retry_failed": status in {"running", "completed"} and counts["failed"] > 0,
+        "unavailable_reason": unavailable_reason,
+        "can_execute": not unavailable_reason and status in {"preview", "running"} and counts["pending"] > 0,
+        "can_retry_failed": not unavailable_reason and status in {"running", "completed"} and counts["failed"] > 0,
         "can_download": run.action == "export" and status == "completed" and counts["succeeded"] > 0,
     }
 
@@ -350,6 +369,8 @@ def execute_run(db: Session, *, admin: AdminUser, run_id: str, request_key: str,
     checked_at = _now(now)
     acquire_sqlite_member_action_lock(db)
     run = get_run(db, admin=admin, run_id=run_id, lock=True)
+    if run.action == "quote_reminder":
+        require_quote_reminder_available(run.membership_year, now=checked_at)
     if run.status == "expired" or (run.status == "preview" and _now(run.expires_at) <= checked_at):
         run.status = "expired"
         db.commit()
@@ -422,6 +443,8 @@ def execute_run(db: Session, *, admin: AdminUser, run_id: str, request_key: str,
 def retry_failed_run(db: Session, *, admin: AdminUser, run_id: str, request_key: str, now: datetime | None = None) -> MemberBulkRun:
     acquire_sqlite_member_action_lock(db)
     run = get_run(db, admin=admin, run_id=run_id, lock=True)
+    if run.action == "quote_reminder":
+        require_quote_reminder_available(run.membership_year, now=_now(now))
     if run.status not in {"running", "completed"}:
         raise HTTPException(status_code=409, detail="Conferma prima l'operazione.")
     if _request_seen(db, run, request_key=request_key, operation="retry_failed"):

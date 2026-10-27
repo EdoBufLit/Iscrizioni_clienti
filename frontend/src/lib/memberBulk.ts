@@ -17,6 +17,7 @@ export type BulkRun = {
   items: BulkItem[]; offset: number; limit: number; total: number; has_more: boolean;
   can_execute: boolean; can_retry_failed: boolean; can_download: boolean;
   outstanding_total_cents?: number | null; currency?: string;
+  unavailable_reason?: string | null;
 };
 export type RecentBulkRun = Pick<BulkRun, "id" | "action" | "action_label" | "status" | "created_at" | "selected_count" | "counts">;
 

@@ -13,9 +13,7 @@ import {
 import { EmptyState, KpiCard, PageHeader, SectionPanel, StatusChip } from "./components/OrgAdminPrimitives";
 import MemberBulkActions from "./components/MemberBulkActions";
 import { useOrgAdmin } from "./OrgAdminLayout";
-
-const currentYear = new Date().getFullYear();
-const defaultYear = currentYear + 1;
+import { FIRST_QUOTE_REMINDER_YEAR, isQuoteReminderYearAvailable, romeYear } from "../../lib/quoteReminders";
 
 const euro = (value: number, currency = "EUR") =>
   new Intl.NumberFormat("it-IT", { style: "currency", currency }).format(value);
@@ -43,7 +41,9 @@ const renewalTone = (row: QuoteCenterRow): "success" | "warning" | "info" | "mut
 const OrgAdminQuote = () => {
   const navigate = useNavigate();
   const { admin } = useOrgAdmin();
-  const [year, setYear] = useState(defaultYear);
+  const currentYear = romeYear();
+  const [year, setYear] = useState(() => Math.max(FIRST_QUOTE_REMINDER_YEAR, romeYear()));
+  const canRemind = isQuoteReminderYearAvailable(year);
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
   const [data, setData] = useState<QuoteCenterResponse | null>(null);
@@ -190,7 +190,7 @@ const OrgAdminQuote = () => {
               </label>
             </div>
 
-            <MemberBulkActions
+            {canRemind ? <MemberBulkActions
               selection={{ mode: "ids", member_ids: [...selected] }} count={selected.size}
               total={data.total} pageCount={data.items.length} allPageChecked={allVisibleSelected}
               disabled={saving || loading} storageKey={`assonam-member-bulk:${admin?.org_id ?? "org"}:${admin?.id ?? "self"}`}
@@ -201,7 +201,11 @@ const OrgAdminQuote = () => {
                 return next;
               })}
               onClear={() => setSelected(new Set())} onSelectAll={() => {}} onCompleted={() => { void load(); }}
-            />
+            /> : <p className="mb-5 text-sm text-[var(--theme-text-muted)]">
+              {year >= FIRST_QUOTE_REMINDER_YEAR
+                ? `I solleciti per il ${year} saranno disponibili a partire da gennaio ${year}, dopo la scadenza della tessera precedente e solo per le quote ancora dovute.`
+                : "I solleciti sono disponibili per le annualità dal 2027, una volta iniziate."}
+            </p>}
 
             {data.items.length === 0 ? (
               <EmptyState title="Nessun socio in questo elenco" description="Modifica annualità o filtri per vedere altri rinnovi." />
@@ -212,7 +216,7 @@ const OrgAdminQuote = () => {
                     <caption className="sr-only">Soci, scadenze, rinnovi e stato delle quote annuali</caption>
                     <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-[0.13em] text-slate-500">
                       <tr>
-                        <th className="px-4 py-3">
+                        {canRemind && <th className="px-4 py-3">
                           <input
                             type="checkbox"
                             aria-label="Seleziona tutti i soci visibili"
@@ -223,7 +227,7 @@ const OrgAdminQuote = () => {
                               return next;
                             })}
                           />
-                        </th>
+                        </th>}
                         <th className="px-4 py-3">Socio</th>
                         <th className="px-4 py-3">Scadenza</th>
                         <th className="px-4 py-3">Rinnovo</th>
@@ -236,7 +240,7 @@ const OrgAdminQuote = () => {
                     <tbody className="divide-y divide-slate-100">
                       {data.items.map((row) => (
                         <tr key={row.member_id} className="text-sm text-slate-700">
-                          <td className="px-4 py-4">
+                          {canRemind && <td className="px-4 py-4">
                             <input
                               type="checkbox"
                               aria-label={`Seleziona ${row.first_name ?? ""} ${row.last_name ?? ""}`}
@@ -247,7 +251,7 @@ const OrgAdminQuote = () => {
                                 return next;
                               })}
                             />
-                          </td>
+                          </td>}
                           <td className="px-4 py-4"><strong className="block text-slate-950">{row.first_name} {row.last_name}</strong><span className="text-xs text-slate-500">{row.email}</span></td>
                           <td className="px-4 py-4 tabular-nums">{formatDate(row.previous_valid_through)}</td>
                           <td className="px-4 py-4"><StatusChip tone={renewalTone(row)}>{renewalLabel(row)}</StatusChip></td>
@@ -261,7 +265,7 @@ const OrgAdminQuote = () => {
                             <div className="flex justify-end gap-2">
                               {row.payment_state === "partial" ? <Link className="btn-secondary !px-3 !py-2 !text-xs" to={`/org-admin/incassi?member_id=${row.member_id}&year=${year}`}>Completa saldo</Link> : row.payment_state !== "paid" && row.fee_amount > 0 ? <button type="button" className="btn-secondary !px-3 !py-2 !text-xs" onClick={() => setPaymentRow(row)}>Registra pagamento</button> : null}
                               {!row.renewed && row.can_confirm_without_payment && row.payment_state !== "paid" && row.renewal_status !== "approved_waiting_card" ? <button type="button" className="btn-ghost !px-3 !py-2 !text-xs" disabled={saving} onClick={() => void handleConfirm(row)}>Conferma</button> : null}
-                              {row.payment_state !== "paid" && row.fee_amount > 0 ? <button type="button" className="btn-ghost !px-3 !py-2 !text-xs" disabled={saving} onClick={() => setSelected((previous) => new Set([...previous, row.member_id]))}>Seleziona per sollecito</button> : null}
+                              {canRemind && row.payment_state !== "paid" && row.fee_amount > 0 ? <button type="button" className="btn-ghost !px-3 !py-2 !text-xs" disabled={saving} onClick={() => setSelected((previous) => new Set([...previous, row.member_id]))}>Seleziona per sollecito</button> : null}
                             </div>
                           </td>
                         </tr>

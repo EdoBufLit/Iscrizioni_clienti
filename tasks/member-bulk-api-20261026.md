@@ -22,6 +22,8 @@ Prefisso `/api/org-admin/member-bulk`. Tutte le operazioni richiedono sessione O
 
 Azioni: `export`, `send_access`, `quote_reminder`. L'ultima richiede `membership_year` (2000–2200). Export e accesso non accettano un anno. Per `mode: filtered`, usare `filters` con gli stessi valori della lista soci (`q`, `status`, `access`, `source`, `docs`, `order`), nessun `member_ids`, ed eventualmente `excluded_ids`. Gli ID vengono congelati all'anteprima, massimo 10.000; oltre il limite si riceve un errore esplicito e nessun troncamento. Il filtro include gli stessi risultati fuzzy della lista. Cambiare i filtri in UI deve azzerare la selezione.
 
+Dal 27 ottobre: `quote_reminder` disponibile soltanto da Quote e rinnovi. Il server permette annualita dal 2027 e non successive all'anno corrente Europe/Rome; preview/execute/retry anticipati danno409. Soci con tessera dell'annualita precedente ancora valida sono esclusi, anche se lo diventano dopo l'anteprima. Vecchie operazioni restano leggibili, con `unavailable_reason` e pulsanti non eseguibili quando il calendario ne vieta l'invio.
+
 Gli identificativi e l'annualità sono interi stretti: booleani, stringhe numeriche e numeri frazionari vengono rifiutati.
 
 Chiavi di richiesta riutilizzate con un payload diverso danno 409. Una richiesta identica restituisce l'operazione già creata.

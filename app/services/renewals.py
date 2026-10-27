@@ -42,6 +42,7 @@ from app.services.system_email_layout import build_system_email_html
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
 from app.services.member_sessions import resolve_member_session
+from app.services.quote_reminders import quote_reminder_unavailable_reason, require_quote_reminder_available
 from app.services.membership_payments import (
     PAID_MEMBERSHIP_STATUSES,
     create_checkout_reference,
@@ -56,7 +57,6 @@ from app.services.membership_payments import (
 logger = logging.getLogger(__name__)
 
 RENEWAL_WINDOW_DAYS = 60
-REMINDER_PHASES = (60, 30, 7)
 _RENEWED_STATUSES = {
     AnnualMembershipTermStatus.APPROVED_WAITING_CARD.value,
     AnnualMembershipTermStatus.SCHEDULED.value,
@@ -793,14 +793,6 @@ def _reminder_marker(source: AnnualMembershipTerm, today: date) -> str | None:
     days_left = (source.valid_through - today).days
     if days_left == -1:
         return "expired"
-    if days_left < -1:
-        return None
-    if days_left <= 7:
-        return "7"
-    if days_left <= 30:
-        return "30"
-    if days_left <= 60:
-        return "60"
     return None
 
 
@@ -817,16 +809,16 @@ def send_renewal_reminder(
     if _next_term_is_complete(db, source):
         return False
     local_today = as_rome_datetime(now).date()
+    if quote_reminder_unavailable_reason(source.membership_year + 1, now=now):
+        return False
+    if source.valid_through >= local_today:
+        return False
     marker = "manual" if manual else _reminder_marker(source, local_today)
     if marker is None:
         return False
     dedupe_marker = f"{marker}:{local_today.isoformat()}" if manual else marker
     dedupe_key = f"renewal-reminder:{source.id}:{dedupe_marker}"
-    title = (
-        "Tessera scaduta: rinnova ora"
-        if marker == "expired"
-        else f"La tessera scade il {source.valid_through.strftime('%d/%m/%Y')}"
-    )
+    title = "Tessera scaduta: rinnova ora"
     body = (
         f"Accedi alla tua area riservata per rinnovare la tessera "
         f"{source.membership_year + 1}."
@@ -975,7 +967,7 @@ def dispatch_due_renewal_reminders(
         .join(Member, Member.id == AnnualMembershipTerm.member_id)
         .filter(
             AnnualMembershipTerm.valid_through >= local_today - timedelta(days=1),
-            AnnualMembershipTerm.valid_through <= local_today + timedelta(days=RENEWAL_WINDOW_DAYS),
+            AnnualMembershipTerm.valid_through < local_today,
             AnnualMembershipTerm.status.in_(
                 [
                     AnnualMembershipTermStatus.ACTIVE.value,
@@ -1234,6 +1226,7 @@ def send_manual_quote_reminders(
     member_ids: Iterable[int] | None = None,
     now: datetime | None = None,
 ) -> int:
+    require_quote_reminder_available(membership_year, now=now)
     query = db.query(AnnualMembershipTerm).filter(
         AnnualMembershipTerm.org_id == org_id,
         AnnualMembershipTerm.membership_year == membership_year - 1,

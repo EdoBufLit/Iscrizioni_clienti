@@ -6189,3 +6189,20 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Test: 40 backend presenze/manuale/QR/postazioni superati; 129 frontend in34file superati, inclusi11 su ricerca/camera. Build TypeScript/Vite/PWA, compileall Python e diffcheck riusciti. Review indipendente finale senza blocker.
 - Browser sulla build produzione locale con FastAPI e SQLite isolato, senza mock nel percorso riuscito:320x667,390x844,768x1024,1024x768,1280x600,1440x1000, light/dark (12combinazioni). Registrazione reale, una sola presenza dopo nuovo passaggio QR, origine manuale nel registro, nessun prompt camera nel manuale, nessun errore JS/overflow/testo tagliato e controlli raggiungibili. Verificati anche ricerca vuota, tessera scaduta, gia presente e retry dopo503 simulato.
 - Evidenze e screenshot in output/attendance-manual-20261026/, report responsive-report.json, script riproducibili check-responsive.cjs e serve-smoke.py. Solo dati sintetici; nessuna modifica o invio in produzione. Limite: viewport Chromium/Edge simulati, nessuna prova fisica Safari/iOS o fotocamera reale.
+
+## Plan (Semplificare azioni Soci e rinviare solleciti al 2027 - Oct 27, 2026)
+
+### Specifica e verifica del piano
+- Correggere il blocco mostrato dall'utente: una barra compatta con conteggio e selezione pagina; azioni export/accesso solo con soci selezionati; storico raccolto in un solo accesso. Selezione tra pagine e anteprima/conferma conservate.
+- Rimuovere definitivamente i solleciti dalla lista Soci. Mantenerli soltanto in Quote e rinnovi dal 2027, per annualita gia iniziate Europe/Rome, senza default automatico all'anno successivo.
+- Proteggere anche API, vecchie anteprime/riprese e percorso manuale/automatico di rinnovo; nessun nuovo invio, pagamento o modifica di profili reali nel collaudo.
+- Main tracking origin/Main; piano comunicato prima di implementare. Conservare perimetro e branding del rilascio precedente; pubblicare la correzione nell'ambito del rilascio gia autorizzato, dopo i controlli.
+
+### Implementazione e collaudo
+- [x] Semplificare barra Soci, storico e adattamento mobile/desktop.
+- [x] Limitare solleciti a Quote e rinnovi e bloccare annualita future/pre-2027 anche sul server.
+- [x] Verificare regressioni selezione/anteprima/ripresa e passaggio anno Europe/Rome; test/build e browser chiaro/scuro.
+- [ ] Review del diff, pubblicazione e controllo del sito; registrare risultati e limiti.
+
+### Review
+- In corso.

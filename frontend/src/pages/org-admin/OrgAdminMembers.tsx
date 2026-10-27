@@ -451,6 +451,7 @@ const OrgAdminMembers = () => {
           onSelectAll={bulkSelection.selectAllFiltered}
           onClear={bulkSelection.clear}
           onCompleted={() => { void loadMembers(); }}
+          actions={["export", "send_access"]}
         />
       )}
 

@@ -2818,6 +2818,127 @@ body.dashboard-perf-mode .surface-strong:hover {
   }
 }
 
+/* Member selection actions stay compact and separate from operation history. */
+.member-bulk-toolbar {
+  padding: 0.875rem 1rem;
+  color: var(--theme-text);
+}
+
+.member-bulk-toolbar__row,
+.member-bulk-toolbar__selection,
+.member-bulk-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.member-bulk-toolbar__selection {
+  flex: 1 1 auto;
+}
+
+.member-bulk-toolbar__page {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.member-bulk-toolbar__count {
+  border-left: 1px solid var(--theme-border);
+  padding-left: 0.75rem;
+  color: var(--theme-text-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.member-bulk-toolbar__actions,
+.member-bulk-toolbar__history {
+  gap: 0.5rem;
+}
+
+.member-bulk-toolbar__hint,
+.member-bulk-toolbar__scope {
+  margin-top: 0.375rem;
+  color: var(--theme-text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.member-bulk-toolbar__scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 1rem;
+}
+
+.member-bulk-toolbar__all {
+  min-height: 36px;
+  color: var(--theme-brand);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.member-bulk-toolbar__all:focus-visible {
+  outline: 2px solid var(--theme-brand);
+  outline-offset: 3px;
+}
+
+.member-bulk-toolbar__all:disabled {
+  opacity: 0.5;
+}
+
+.member-bulk-toolbar__recent {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  border-top: 1px solid var(--theme-border);
+  padding-top: 0.75rem;
+}
+
+@media (max-width: 639px) {
+  .member-bulk-toolbar__selection {
+    column-gap: 0.75rem;
+    row-gap: 0;
+  }
+
+  .member-bulk-toolbar__row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    gap: 0.5rem;
+  }
+
+  .member-bulk-toolbar__actions {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  }
+
+  .member-bulk-toolbar__actions > button {
+    min-width: 0;
+    padding-inline: 0.625rem;
+  }
+
+  .member-bulk-toolbar__history {
+    grid-column: 2;
+    grid-row: 1;
+    width: 44px;
+    padding-inline: 0;
+    flex-shrink: 0;
+  }
+
+  .member-bulk-toolbar__count {
+    border-left: 0;
+    padding-left: 0;
+  }
+}
+
 /* Public-only redesign */
 
 :root {

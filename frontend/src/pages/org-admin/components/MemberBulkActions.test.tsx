@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BulkRun } from "../../../lib/memberBulk";
 import MemberBulkActions from "./MemberBulkActions";
 
@@ -42,19 +42,20 @@ const props = {
   selection: { mode: "ids" as const, member_ids: [1, 2, 3] }, count: 3, total: 40, pageCount: 3,
   allPageChecked: true, disabled: false, storageKey: "bulk-test", onTogglePage: vi.fn(), onSelectAll: vi.fn(), onClear: vi.fn(),
 };
-function mount() { return render(<MemoryRouter><MemberBulkActions {...props} /></MemoryRouter>); }
+function mount(overrides: Partial<Parameters<typeof MemberBulkActions>[0]> = {}) { return render(<MemoryRouter><MemberBulkActions {...props} {...overrides} /></MemoryRouter>); }
 async function accessPreview() {
   fireEvent.click(screen.getByRole("button", { name: "Invia accesso ai selezionati" }));
   return screen.findByRole("dialog");
 }
 
 describe("explicit member bulk workflows", () => {
+  afterEach(() => vi.useRealTimers());
   beforeEach(() => {
     vi.clearAllMocks(); sessionStorage.clear(); mocks.sequence = 0;
     mocks.preview.mockReset().mockResolvedValue(run());
     mocks.execute.mockReset().mockResolvedValue(completed());
     mocks.read.mockReset().mockResolvedValue(run());
-    mocks.retry.mockReset(); mocks.recent.mockReset(); mocks.download.mockReset();
+    mocks.retry.mockReset(); mocks.recent.mockReset().mockResolvedValue({ items: [], total: 0 }); mocks.download.mockReset();
   });
 
   it("shows eligibility before confirmation and processes distinct chunks without claiming delivery", async () => {
@@ -101,7 +102,8 @@ describe("explicit member bulk workflows", () => {
     sessionStorage.setItem(props.storageKey, "run-a");
     mocks.read.mockResolvedValue(completed({ counts: { pending: 0, succeeded: 1, skipped: 1, failed: 1 }, can_retry_failed: true }));
     mocks.retry.mockResolvedValue(run({ status: "running", started_at: "2026-10-26T10:01:00Z", counts: { pending: 1, succeeded: 1, skipped: 1, failed: 0 } }));
-    mount(); fireEvent.click(screen.getByRole("button", { name: "Riprendi ultima operazione" }));
+    mount(); fireEvent.click(screen.getByRole("button", { name: "Cronologia operazioni" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Riprendi ultima operazione" }));
     fireEvent.click(await screen.findByRole("button", { name: "Riprova solo i 1 falliti" }));
     await waitFor(() => expect(mocks.execute).toHaveBeenCalledTimes(1));
     expect(mocks.retry).toHaveBeenCalledTimes(1);
@@ -112,7 +114,7 @@ describe("explicit member bulk workflows", () => {
     mocks.recent.mockResolvedValue({ items: [{ ...run({ id: "run-b", action: "export", action_label: "Esporta soci" }) }], total: 1 });
     mount(); const dialog = await accessPreview();
     fireEvent.click(within(dialog).getByRole("button", { name: /^Chiudi$/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Operazioni recenti" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cronologia operazioni" }));
     mocks.read.mockRejectedValueOnce(new Error("Operazione non trovata"));
     fireEvent.click(await screen.findByRole("button", { name: /Esporta soci ·/ }));
     await screen.findByText("Operazione non trovata");
@@ -132,5 +134,71 @@ describe("explicit member bulk workflows", () => {
     await screen.findByRole("button", { name: "Scarica Excel selezionati" });
     expect(mocks.download).not.toHaveBeenCalled();
     expect(screen.queryByText(/Le email sono accodate/)).not.toBeInTheDocument();
+  });
+
+  it("keeps the empty toolbar focused on selection and history, without reminders", () => {
+    mount({ count: 0, allPageChecked: false, selection: { mode: "ids", member_ids: [] } });
+    expect(screen.getByRole("checkbox", { name: "Seleziona pagina (3)" })).toBeVisible();
+    expect(screen.getByText("Nessun selezionato")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Esporta selezionati" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Invia accesso ai selezionati" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Sollecita quote|Annualità da sollecitare/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cronologia operazioni" })).toHaveAttribute("aria-expanded", "false");
+    expect(mocks.preview).not.toHaveBeenCalled();
+  });
+
+  it("does not repeat select-all when the whole result already fits on the page", () => {
+    mount({ total: 3 });
+    expect(screen.getByRole("button", { name: "Esporta selezionati" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Seleziona tutti i/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Azzera selezione" }));
+    expect(props.onClear).toHaveBeenCalledOnce();
+  });
+
+  it("keeps selection across pages available without running an action", () => {
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Seleziona tutti i 40 risultati" }));
+    expect(props.onSelectAll).toHaveBeenCalledOnce();
+    expect(mocks.preview).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Sollecita quote|Annualità da sollecitare/)).not.toBeInTheDocument();
+  });
+
+  it("cannot execute a saved future-year reminder, even if an old response permits it", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-27T12:00:00Z"));
+    sessionStorage.setItem(props.storageKey, "run-a");
+    mocks.read.mockResolvedValue(run({ action: "quote_reminder", action_label: "Sollecita quota 2027", membership_year: 2027, can_execute: true, can_retry_failed: true }));
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Cronologia operazioni" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Riprendi ultima operazione" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText("I solleciti sono disponibili dal 2027 e soltanto per annualità già iniziate.")).toBeVisible();
+    expect(within(dialog).queryByRole("button", { name: /Conferma e accoda|Riprendi elaborazione|Riprova solo/ })).not.toBeInTheDocument();
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
+
+  it("uses the current quote year only when explicitly enabled in the quote center", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2027-01-02T12:00:00Z"));
+    mocks.preview.mockResolvedValue(run({ action: "quote_reminder", action_label: "Sollecita quota 2027", membership_year: 2027 }));
+    mount({ actions: ["quote_reminder"], membershipYear: 2027 });
+    fireEvent.click(screen.getByRole("button", { name: "Sollecita quote 2027" }));
+    await screen.findByRole("dialog");
+    expect(mocks.preview).toHaveBeenCalledWith(expect.objectContaining({ action: "quote_reminder", membership_year: 2027 }));
+  });
+
+  it("keeps a saved quote reminder read-only in the members page even after 2027 starts", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2027-06-01T12:00:00Z"));
+    sessionStorage.setItem(props.storageKey, "run-a");
+    mocks.read.mockResolvedValue(run({ action: "quote_reminder", action_label: "Sollecita quota 2027", membership_year: 2027, can_execute: true, can_retry_failed: true }));
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Cronologia operazioni" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Riprendi ultima operazione" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText(/I solleciti si gestiscono da Quote e rinnovi/)).toBeVisible();
+    expect(within(dialog).getByRole("link", { name: "Apri Quote e rinnovi" })).toHaveAttribute("href", "/org-admin/quote");
+    expect(within(dialog).queryByRole("button", { name: /Conferma e accoda|Riprendi elaborazione|Riprova solo/ })).not.toBeInTheDocument();
+    expect(mocks.execute).not.toHaveBeenCalled();
   });
 });

@@ -76,6 +76,11 @@ def execute(client, run, *, key=None):
     return response.json()
 
 
+def freeze_bulk_clock(monkeypatch, now):
+    real_now = member_bulk._now
+    monkeypatch.setattr(member_bulk, "_now", lambda value=None: real_now(value if value is not None else now))
+
+
 def test_preview_freezes_selection_and_chunks_are_idempotent(client, tenant):
     db, org, _admin = tenant
     members = make_members(db, org, 31)
@@ -295,8 +300,9 @@ def test_purged_integer_id_never_targets_replacement_profile(client, tenant, bul
 
 def test_quote_reminders_use_real_balance_and_skip_new_payments(client, tenant, monkeypatch):
     db, org, _admin = tenant
-    due, paid, changed = make_members(db, org, 3)
-    year = datetime.utcnow().year
+    freeze_bulk_clock(monkeypatch, datetime(2027, 2, 1, tzinfo=timezone.utc))
+    year = 2027
+    due, paid, changed = make_members(db, org, 3, card_year=year)
     balances = {due.id: 1800, paid.id: 0, changed.id: 3000}
     import app.services.member_accounting as accounting
 
@@ -319,10 +325,11 @@ def test_quote_reminders_use_real_balance_and_skip_new_payments(client, tenant, 
     assert repeated["reason_counts"] == {"reminder_recently_queued": 1}
 
 
-def test_quote_reminder_reads_accounting_projection_without_fabricating_debt(client, tenant):
+def test_quote_reminder_reads_accounting_projection_without_fabricating_debt(client, tenant, monkeypatch):
     db, org, _admin = tenant
-    due, free = make_members(db, org, 2)
-    year = datetime.utcnow().year + 1
+    freeze_bulk_clock(monkeypatch, datetime(2027, 2, 1, tzinfo=timezone.utc))
+    year = 2027
+    due, free = make_members(db, org, 2, card_year=year)
     db.add_all([AnnualMembershipTerm(member_id=member.id, org_id=org.id, membership_year=year, starts_on=date(year, 1, 1), valid_through=date(year, 12, 31), status="due", fee_amount=fee, currency="EUR") for member, fee in [(due, Decimal("12.50")), (free, Decimal("0.00"))]])
     db.commit()
     run = preview(client, [due, free], action="quote_reminder", year=year)
@@ -331,6 +338,72 @@ def test_quote_reminder_reads_accounting_projection_without_fabricating_debt(cli
     result = execute(client, run)
     assert result["counts"]["succeeded"] == 1
     assert "12,50 EUR" in db.query(EmailOutbox).one().payload_json["text_body"]
+
+
+@pytest.mark.parametrize("now,year", [
+    (datetime(2026, 10, 27, tzinfo=timezone.utc), 2027),
+    (datetime(2026, 12, 31, 22, 59, tzinfo=timezone.utc), 2027),
+    (datetime(2027, 2, 1, tzinfo=timezone.utc), 2028),
+    (datetime(2027, 2, 1, tzinfo=timezone.utc), 2026),
+])
+def test_quote_reminder_preview_rejects_unstarted_or_legacy_years(client, tenant, monkeypatch, now, year):
+    db, org, _admin = tenant
+    freeze_bulk_clock(monkeypatch, now)
+    member = make_members(db, org)[0]
+    response = client.post(f"{PREFIX}/preview", json={"request_key": uuid.uuid4().hex,
+        "action": "quote_reminder", "membership_year": year,
+        "selection": {"mode": "ids", "member_ids": [member.id]}})
+    assert response.status_code == 409, response.text
+    assert db.query(MemberBulkRun).filter_by(org_id=org.id).count() == 0
+    assert db.query(EmailOutbox).filter_by(to_email=member.email).count() == 0
+
+
+@pytest.mark.parametrize("now,year", [
+    (datetime(2026, 10, 27, tzinfo=timezone.utc), 2027),
+    (datetime(2027, 2, 1, tzinfo=timezone.utc), 2028),
+])
+def test_old_reminder_preview_cannot_be_resumed_or_retried_early(client, tenant, monkeypatch, now, year):
+    db, org, _admin = tenant
+    freeze_bulk_clock(monkeypatch, now)
+    member = make_members(db, org)[0]
+    legacy = preview(client, [member], action="export")
+    run = db.get(MemberBulkRun, legacy["id"])
+    run.action, run.membership_year = "quote_reminder", year
+    db.commit()
+    response = client.post(f"{PREFIX}/{run.id}/execute", json={"request_key": uuid.uuid4().hex})
+    assert response.status_code == 409
+    run.status = "completed"
+    item = db.query(MemberBulkItem).filter_by(run_id=run.id).one()
+    item.status = "failed"
+    db.commit()
+    response = client.post(f"{PREFIX}/{run.id}/retry-failed", json={"request_key": uuid.uuid4().hex})
+    assert response.status_code == 409
+    state = client.get(f"{PREFIX}/{run.id}").json()
+    assert state["can_execute"] is False and state["can_retry_failed"] is False
+    assert state["unavailable_reason"]
+    assert db.query(EmailOutbox).filter_by(to_email=member.email).count() == 0
+
+
+def test_quote_reminder_respects_previous_card_validity_on_rome_new_year(client, tenant, monkeypatch):
+    db, org, _admin = tenant
+    member = make_members(db, org, card_year=2026, valid_until=None)[0]
+    db.add(AnnualMembershipTerm(member_id=member.id, org_id=org.id, membership_year=2026,
+        starts_on=date(2026, 1, 1), valid_through=date(2027, 1, 1), card_no=member.card_no,
+        status="active", fee_amount=Decimal("30.00"), currency="EUR"))
+    db.add(AnnualMembershipTerm(member_id=member.id, org_id=org.id, membership_year=2027,
+        starts_on=date(2027, 1, 1), valid_through=date(2028, 1, 1), status="due",
+        fee_amount=Decimal("30.00"), currency="EUR"))
+    db.commit()
+    # UTC is still in 2026, but Rome has entered the new year. The prior card
+    # nevertheless covers the whole of January 1, so no reminder is eligible.
+    freeze_bulk_clock(monkeypatch, datetime(2026, 12, 31, 23, 0, tzinfo=timezone.utc))
+    run = preview(client, [member], action="quote_reminder", year=2027)
+    assert run["eligible_count"] == 0 and run["reason_counts"] == {"current_card_valid": 1}
+    freeze_bulk_clock(monkeypatch, datetime(2027, 1, 1, 23, 0, tzinfo=timezone.utc))
+    run = preview(client, [member], action="quote_reminder", year=2027)
+    assert run["eligible_count"] == 1
+    result = execute(client, run)
+    assert result["counts"]["succeeded"] == 1
 
 
 @pytest.mark.parametrize("member_id", [True, 1.0, "1", 0, -1])
