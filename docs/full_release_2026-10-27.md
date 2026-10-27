@@ -1,32 +1,97 @@
-# Full portal release — 27 October 2026
+# Rilascio completo portale — 27 ottobre 2026
 
-Scope authorized by the owner: publish all previously approved membership/authentication, reliability, temporary membership, Wallet, performance and UI/UX changes, the receipt reconciliation and member bulk features, and manual attendance through member search. Preserve card branding. Main remains the working and release branch.
+Pubblicati su `Main` e in produzione tutti gli interventi approvati: piano precedente, UI/UX uniforme, riconciliazione incassi, operazioni multiple sui soci e presenze manuali tramite ricerca. Branding delle tessere conservato.
 
-## Pre-release verification
+## Identità del rilascio
 
-- Local backend suite: **951 passed, 13 skipped**; frontend: **129 passed in 34 files**. TypeScript/Vite/PWA production build and Python compileall passed.
-- PostgreSQL 16, isolated `stock_tests` database with UUID schemas: **35 passed**, including initial/renewal checkout reservations, shared numbering domains, credential races, temporary purchases, competing receipt allocations, idempotent reconciliation and concurrent bulk preview/execution. A separate purge/bulk lock-order regression passed in both numbering domains (**2 passed**).
-- Full production backup restored into a separate database; all six migrations applied successfully from `9d5e7a31c802` to `20261026_06_member_bulk`. Exact-head startup validation passed; **344 Wallet passes and 344 jobs** backfilled. No test worker sends or real payments occurred.
-- Live provider checks were read-only: Google Wallet credentials/token refresh and existing class read HTTP200; Cloudflare email token active and 254 recent messages with provider IDs; SumUp merchant read succeeded for the configured active association. Another association has SumUp enabled without credentials and is correctly unavailable for online payment; no configuration was invented or changed. One pre-existing failed email remains outside the release verification and was not resent.
-- Cloudflare token validation uses the documented read-only [Verify Token endpoint](https://developers.cloudflare.com/api/resources/user/), without sending an email.
-- Production disk preflight: 43% used, approximately21GB free; services healthy. A fresh protected custom-format database backup is recorded in the private release evidence; pg_restore catalog and restore were verified. Production data and secrets are not included in Git.
-- Final source and staged artifact checks exclude local databases, reports/exports, logs, credentials and other output artifacts. Whitespace and encoding checks passed.
+- `f961b1d723512b48f283b1b686c40453c24e6236`: rilascio completo, 167 file. [Workflow riuscito](https://github.com/EdoBufLit/Iscrizioni_clienti/actions/runs/40560898243).
+- `7000596a3132b1565f59ff5ac17110ea534b44a6`: correzioni emerse dal collaudo. Versione applicativa finale in produzione. [Workflow riuscito e canary finale superato](https://github.com/EdoBufLit/Iscrizioni_clienti/actions/runs/40562329742).
+- Pipeline esistente con immagini immutabili, migrazioni, health check e canary. Il successivo commit di questo rapporto modifica soltanto documentazione.
 
-## Blockers corrected during release review
+## P1 — Sicurezza, correttezza e affidabilità
 
-1. The temporary-membership Alembic revision exceeded PostgreSQL's default32-character version column. Shortened the unpublished revision to `20261017_02_temporary`, updated its successor, and added a revision-length regression.
-2. Detached receipt allocations retained a textual target containing a purged profile ID. Projection reads now require the current member identity too, preventing orphaned money from completing a replacement member's quota after ID reuse. Three regression scenarios cover annual and temporary purchases.
-3. Permanent member purge now takes profile locks in ID order before detaching bulk outcome references, matching bulk execution's profile-before-outcome lock order. The real PostgreSQL regression proves an outcome update can finish while purge waits for its profile.
-4. Docker's PNG exclusion would omit the protected card/Wallet assets. Application/public PNG assets are explicitly included; an actual Docker context COPY check succeeded for both Golden Age files.
+- Reset/cambio password socio con revoca delle sessioni e dei token precedenti; controlli su account e club non più idonei. Attivare MFA invalida le sessioni Org Admin che non l'hanno verificata. I vecchi cookie socio richiedono un nuovo accesso dopo la migrazione.
+- Accesso differito e creazione socio: invii coerenti con l'attivazione, controlli e regressioni sui flussi di emissione, pagamento e rinnovo.
+- Incassi: data effettiva, idempotenza, protezione dai doppi conteggi e incasso consultabile dopo l'emissione. Un tentativo successivo fallito non cancella un versamento completato.
+- Concorrenza verificata anche su PostgreSQL: prenotazioni e numerazione tessere, checkout, credenziali, temporanee, allocazioni e operazioni multiple.
+- Google Wallet: registro persistente, coda e worker dedicato; rinnovi sul pass annuale esistente, identità separate per temporanee, revoca e recupero errori. I/O provider separato dalle transazioni critiche.
 
-## Rollout and rollback
+### Difetti corretti durante il rilascio
 
-Deploy uses the existing Main push workflow, immutable image tags, migration service, health checks and final canary. The new Google Wallet synchronization worker is included in pull/start/health/canary alongside the existing workers.
+1. Revisione Alembic di 33 caratteri oltre i 32 della colonna PostgreSQL: abbreviata prima della pubblicazione, con regressione.
+2. Riuso di un ID socio dopo purga: vecchi abbinamenti contabili potevano contribuire al nuovo saldo. Le proiezioni verificano anche l'identità del socio corrente.
+3. Ordine lock diverso tra purga e bulk: allineato e verificato con una regressione PostgreSQL che prova l'assenza del blocco incrociato.
+4. Esclusione generale PNG dal contesto Docker: asset tessera/Wallet ora inclusi esplicitamente, con prova di un vero contesto Docker.
+5. Apertura diretta di `/associazioni` e `/associazioni/{slug}`: rimosso il reindirizzamento alla stessa pagina, servendo la SPA e conservando i controlli sull'associazione.
+6. Pulizia di un vecchio socio bloccata da riferimenti storici: scollegati i riferimenti nullable di campagne, form e import, conservando lo storico; figli gestiti anche sui vecchi SQLite senza foreign key attive. Prova riuscita sul clone dei dati reali.
 
-Authentication migration intentionally preserves revocation and rejects downgrade. Prefer roll-forward for a code issue. A database restore requires coordinated writer suspension and the verified backup; do not use an automatic Alembic downgrade as rollback.
+## P2 — Funzioni corrette e aggiunte
 
-Release identity, workflow result and post-deploy checks will be recorded after the rollout completes.
+### Tessere temporanee
 
-## Verification limits
+Acquisto dall'area socio per soci già approvati, senza tessera valida e con club abilitato. Metodi del club, una sola richiesta aperta e durata dall'effettiva emissione. Per contanti/bonifico l'Org Admin conferma l'incasso prima dell'emissione. Account e storico conservati.
 
-Read-only checks prove configured provider authentication/access and existing transport operation, not a newly delivered test email or a new financial transaction. Browser QA uses synthetic accounts/data for write scenarios. Physical Safari/iOS and real cameras are not available in this environment. Historical receipts without authoritative links require manual reconciliation. No changes to the excluded WhatsApp/Pienissimo webhook, legacy `/api/join/continue`, CI or general dependency upgrades are part of this release.
+### Incassi, rettifica e riconciliazione
+
+- Nuova pagina **Incassi**: inserimento manuale o CSV con anteprima, validazione e riconoscimento dei duplicati.
+- Abbinamento esplicito a quote iniziali, rinnovi o temporanee, anche per più soci e con acconti. Residuo della quota e dell'incasso distinti; vietata l'allocazione oltre il disponibile.
+- Esempio: bonifico 60 euro per due quote da 30; incasso 10 su quota 30 lascia 20 da saldare. Nessuna attribuzione automatica per sola somiglianza di nomi/importi.
+- Rettifica di importo, data e metodo manuali; storno abbinamenti e annullamento contabile con motivazione e storico prima/dopo. Prima di ridurre sotto il già allocato occorre stornare gli abbinamenti.
+- Fatti provider immutabili. Stornare non esegue rimborsi e non revoca automaticamente tessere già emesse.
+- **Aggiorna pagamenti** allinea lo storico con riferimenti autorevoli, in blocchi e senza duplicazioni. [Contratto API](../tasks/accounting-api-20261026.md).
+
+### Selezione multipla dei soci
+
+- Singoli soci, selezione tra pagine o intero risultato filtrato con esclusioni. Cambio filtro azzera la selezione.
+- Azioni: esportazione Excel, invio accesso e sollecito quota per annualità. Nessuna cancellazione o modifica finanziaria massiva.
+- Anteprima con idonei/esclusi e motivo, conferma esplicita, selezione congelata, nuova verifica per ciascuna riga, blocchi riprendibili ed esiti individuali.
+- Retry dei soli fallimenti; email accodata distinta da consegnata. Nessun invio dalla selezione/anteprima.
+- Isolamento associazione/creatore, scadenza anteprime, idempotenza ed Excel protetto dalle formule. [Contratto API](../tasks/member-bulk-api-20261026.md).
+
+### Presenze manuali
+
+In **Presenze**, **Cerca socio** accanto allo scanner: ricerca per nome/cognome, email o tessera, scelta e conferma esplicita. Stesse regole QR di validità e unicità giornaliera Europe/Rome. Origine **Inserimento manuale** nello storico; stati già presente, vuoto, attesa ed errori. Passare alla ricerca interrompe la camera e ignora risposte obsolete.
+
+## P2 — UI/UX, velocità e reattività
+
+- Source Sans 3, base 16 px, palette petrolio e superfici neutre condivisi tra pubblico, iscrizione, accesso e aree riservate. Stati semantici, focus, controlli, navigazione e modali coerenti in chiaro/scuro.
+- Ridotti gradienti, decorazioni e testi promozionali; migliorati percorsi e validazione. Artwork, loghi, font/colori delle tessere, QR e contenuti personalizzati builder preservati e separati dal tema UI.
+- Modali lunghe scorrevoli su portatili bassi e tablet; presenze e bulk adattati agli schermi piccoli.
+- Letture paginate, aggregati separati dai dettagli, protezioni da risposte fuori ordine e recupero capabilities dopo errori temporanei.
+- Centro Quote: 500 soci in tre query. Form/prenotazioni e messaggi limitati ai dati necessari; saldi bulk in blocco, editor e pagine caricati su richiesta.
+- Precache PWA da circa 7,25 MB/97 risorse a circa 1,08 MB/10 risorse. Verificato l'aggiornamento automatico da una vecchia copia alla nuova UI.
+
+## Prove completate
+
+- Backend finale **956 superati, 13 saltati**; frontend **129 superati in 34 file**. TypeScript, build Vite/PWA, compileall e diff check riusciti.
+- PostgreSQL 16 su database/schemi isolati: **35 test più 2 regressioni lock order superati**. Numerazione condivisa, checkout, credenziali, temporanee, contabilità e bulk concorrenti.
+- Backup completo ripristinato separatamente; tutte **sei migrazioni** da `9d5e7a31c802` a `20261026_06_member_bulk` riuscite. Gate sulla head esatta superato. Backup finale protetto conservato sul server, catalogo pg_restore verificato.
+- Provider in sola lettura: autenticazione e classe Google Wallet HTTP200; token Cloudflare attivo e 254 email recenti con ID provider; merchant SumUp configurato letto con successo. Una precedente email fallita non reinviata.
+- **22 verifiche HTTPS superate**: salute, pagine/API pubbliche, iscrizione, nuovi chunk, PNG Golden Age e nuove API protette con 401 senza sessione. Hash JS/CSS live uguali alla build verificata.
+- Browser pubblico: home desktop/mobile, chiaro/scuro, directory e ricaricamento della pagina associazione, iscrizione con errori obbligatori e recupero password. Ultima prova mobile 390×844, documento 375 px, campi 16 px, Source Sans 3, nessun overflow orizzontale.
+- Browser sull'immagine rilasciata con clone PostgreSQL e dati sintetici: presenza manuale persistita e non duplicata dal QR; incasso 30 euro/allocazione 10/residuo 20; bulk tre soci con un accodamento e due esclusioni motivate. Persistenza riletta dal DB. Nessun worker di consegna attivo nel collaudo.
+- Inclusi i collaudi precedenti di temporanee, rettifica/storno/import CSV, Excel, selezione tra pagine/ripresa e responsive di modali/presenze. Viewport simulati: non equivalgono a dispositivi fisici.
+
+## Stato finale in produzione
+
+- Sette servizi runtime su `7000596`, tutti healthy, zero riavvii e nessun OOM al controllo finale. Worker video healthy sull'immagine del rilascio completo; Evolution healthy.
+- Schema `20261026_06_member_bulk`; **345 job Wallet completati**, nessuno pendente/fallito al controllo.
+- Timeout PostgreSQL: lock 5 s, statement 30 s, transazione inattiva 1 minuto. Checkout Git `deploy:deploy`.
+- Rimossi container QA, clone DB, schemi temporanei, directory privata e tunnel. Volumi originali/backup conservati. Disco 51%, circa 18 GB liberi.
+- `/version` mantiene metadata git/build null preesistenti: identità provata con checkout, immagini immutabili e asset live.
+- Evidenze private in `output/release-complete-20261026/`. Ultimi screenshot e `browser-final-corrected.json` documentano PWA aggiornata e dimensioni mobile effettive. Database/export/credenziali/log fuori Git.
+
+## Cosa serve ancora
+
+Non risultano bloccanti P1 nel perimetro verificato. Rimangono adozione e limiti di collaudo:
+
+1. Riconciliare i vecchi incassi senza riferimenti autorevoli e adattare gli estratti al CSV supportato. Non inclusi collegamento banca, multivaluta o rimborsi automatici.
+2. Provare Safari/iPhone fisici e fotocamere reali. Usati browser Chromium con viewport simulati.
+3. Se desiderato, pianificare una casella e una transazione di prova per consegna/addebito completi: verificati accesso provider, trasporti esistenti e accodamento, senza nuovi invii a soci o pagamenti reali.
+4. Un'associazione ha SumUp abilitato senza credenziali: online correttamente non disponibile fino alla configurazione. Stripe già disabilitato, non configurato dal rilascio.
+
+Esclusi come richiesto: webhook WhatsApp/Pienissimo, vecchio `/api/join/continue`, modifiche CI, aggiornamenti generalizzati dipendenze e pulizia/osservabilità P3.
+
+## Ripristino
+
+Preferire correzioni successive per problemi applicativi. La migrazione credenziali conserva la revoca e non supporta downgrade: non eseguire downgrade Alembic automatici. Ripristinare il DB richiede sospensione coordinata delle scritture e backup verificato.

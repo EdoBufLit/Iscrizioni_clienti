@@ -6152,13 +6152,19 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - [x] Inventario delle modifiche e review dei prerequisiti: Main/origin, workflow, configurazione, schema e worker attuali; registrare baseline e piano di rollback.
 - [x] Completare review indipendente di migrazioni/worker e sicurezza/correttezza; correggere problemi bloccanti emersi.
 - [x] Eseguire suite locali e prove PostgreSQL isolate, migrazioni su schema rappresentativo e controlli provider/configurazione non distruttivi.
-- [ ] Preparare commit completo e verificabile, controllare contenuti e segreti, eseguire push Main e monitorare workflow/deploy.
-- [ ] Verificare backup, migrazioni, immagini/versione, worker, salute, log, spazio disco e permessi checkout dopo rollout.
-- [ ] Verificare sito pubblicato desktop/mobile e temi, iscrizione/auth, aree riservate, incassi/bulk/temporanee/Wallet con fixture isolate; documentare limiti delle prove senza invii o incassi reali.
-- [ ] Riepilogare commit pubblicati, prove svolte e requisiti residui effettivi.
+- [x] Preparare commit completo e verificabile, controllare contenuti e segreti, eseguire push Main e monitorare workflow/deploy.
+- [x] Verificare backup, migrazioni, immagini/versione, worker, salute, log, spazio disco e permessi checkout dopo rollout.
+- [x] Verificare sito pubblicato desktop/mobile e temi, iscrizione/auth, aree riservate, incassi/bulk/temporanee/Wallet con fixture isolate; documentare limiti delle prove senza invii o incassi reali.
+- [x] Riepilogare commit pubblicati, prove svolte e requisiti residui effettivi.
 
 ### Review
-- In corso.
+- Pubblicato tutto su Main e in produzione: f961b1d (167 file, piano/UI/extra/presenze) e 7000596 (deep link associazioni e storico durante pulizia). Workflow 40560898243 e 40562329742 riusciti, canary finale superato. Versione applicativa finale 7000596.
+- Backend finale 956 passed / 13 skipped; frontend 129 / 34 file; build/typecheck/compileall/diffcheck riusciti. PostgreSQL 16 reale isolato: 35 test + 2 regressioni lock order superati. Backup ripristinato, sei migrazioni riuscite, schema produzione 20261026_06_member_bulk.
+- Corretti in review: revisione Alembic oltre 32 caratteri, saldi da allocazioni orfane dopo riuso ID, lock order purge/bulk e PNG esclusi da Docker. Collaudo: corrette rotte pubbliche autoreferenziali e foreign key storiche che bloccavano la pulizia.
+- 22 controlli HTTPS superati e hash asset verificati. Browser pubblico aggiornato desktop/mobile 390x844, chiaro/scuro. PWA aggiornata automaticamente; ultimo controllo registra Source Sans 3, input 16 px, documento 375 px e contrasto coerente. Nessun errore console rilevato.
+- Browser su immagine rilasciata + clone PostgreSQL: presenza persistita/QR senza duplicato, incasso 30 / allocato 10 / residuo 20, bulk 1 accodato + 2 saltati; nessun invio reale. Provider verificati in sola lettura. 345 job Wallet completati, servizi healthy e 0 restart/OOM.
+- Rimossi container/DB/schemi/directory QA propri e tunnel; backup e volumi originali conservati. Disco 51%, circa 18 GB liberi; checkout deploy:deploy. Rapporto docs/full_release_2026-10-27.md; evidenze private fuori Git in output/release-complete-20261026/.
+- Restano adozione della riconciliazione storica, credenziali dell'associazione SumUp non configurata e prove fisiche Safari/iOS/camera o consegna/addebito nuovi se desiderati. Esclusioni rispettate; nessun bloccante P1 rilevato nel perimetro verificato.
 ## Plan (Presenze manuali tramite ricerca socio - Oct 26, 2026)
 
 ### Specifica
@@ -6176,6 +6182,7 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 
 ### Review
 - Implementato su Main in locale, senza commit/push/deploy e preservando le modifiche preesistenti di altri lavori.
+- Aggiornamento 27 ottobre: incluso nel rilascio completo f961b1d e nei collaudi finali sopra; pubblicato con autorizzazione esplicita dell'utente.
 - Presenze offre Scanner QR e Cerca socio. Ricerca per nome/cognome, email o numero tessera (min2, max20 risultati), scelta esplicita e conferma dell'ingresso odierno. Stato tessera, gia presente, caricamento, vuoto, errori e retry visibili; nuovo ingresso subito nel registro con origine Inserimento manuale.
 - API dedicate /api/org-admin/attendances/members e /manual-check-in: tenant e soci eliminati filtrati, autorizzazioni esistenti, POST con member_id intero positivo, validita ricontrollata tramite lo stesso servizio QR, deduplicazione Europe/Rome e audit unico con source manual. Nessuna migrazione.
 - Responsive: campo ricerca48px, nomi/email/messaggi lunghi a capo, registro a schede fino a tablet e tabella da xl. Cambio metodo ferma fotocamera e ignora stream/risultati QR tardivi; richieste ricerca/registro obsolete non sovrascrivono gli esiti aggiornati.
