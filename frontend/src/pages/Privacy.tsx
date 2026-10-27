@@ -194,12 +194,12 @@ const Privacy = () => {
             </div>
 
             <aside className="surface h-full p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-neutral-500">
+              <p className="text-sm font-semibold text-neutral-500">
                 Riferimenti
               </p>
               <dl className="mt-4 space-y-4">
                 <div>
-                  <dt className="text-xs uppercase tracking-[0.16em] text-neutral-400">
+                  <dt className="text-sm font-semibold text-neutral-500">
                     Gestore piattaforma
                   </dt>
                   <dd className="mt-1 text-sm font-medium leading-6 text-neutral-900">
@@ -207,11 +207,11 @@ const Privacy = () => {
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs uppercase tracking-[0.16em] text-neutral-400">Sede</dt>
+                  <dt className="text-sm font-semibold text-neutral-500">Sede</dt>
                   <dd className="mt-1 text-sm leading-6 text-neutral-700">{CONTACT_DETAILS.address}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs uppercase tracking-[0.16em] text-neutral-400">
+                  <dt className="text-sm font-semibold text-neutral-500">
                     Identificativi
                   </dt>
                   <dd className="mt-1 space-y-1 text-sm leading-6 text-neutral-700">
@@ -220,7 +220,7 @@ const Privacy = () => {
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs uppercase tracking-[0.16em] text-neutral-400">Contatti</dt>
+                  <dt className="text-sm font-semibold text-neutral-500">Contatti</dt>
                   <dd className="mt-1 space-y-1 text-sm leading-6 text-neutral-700">
                     <p>{CONTACT_DETAILS.email}</p>
                     <p>{CONTACT_DETAILS.phone}</p>
@@ -233,7 +233,7 @@ const Privacy = () => {
           <div className="mt-8 grid gap-4 md:grid-cols-3" data-reveal="stagger">
             {HIGHLIGHTS.map((item) => (
               <article key={item.label} className="surface p-5" data-reveal-item>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">
+                <p className="text-sm font-semibold text-neutral-500">
                   {item.label}
                 </p>
                 <p className="mt-3 text-sm leading-7 text-neutral-700">{item.value}</p>

@@ -6,8 +6,9 @@ import PublicFaqAccordion, {
 } from "../components/public/PublicFaqAccordion";
 import { trackUiEvent } from "../lib/tracking";
 import { applySeo } from "../lib/seo";
-import { type PlatformStats } from "../lib/api";
+import { fetchPlatformStats, type PlatformStats } from "../lib/api";
 import MemberCardPreview from "../components/cards/MemberCardPreview";
+import ModalShell from "../components/ui/ModalShell";
 import { useStatePlatformCapabilities } from "../hooks/useStatePlatformCapabilities";
 
 const PublicHeroThree = lazy(() => import("../components/public/PublicHeroThree.client"));
@@ -24,24 +25,24 @@ type HeroEntry = {
 const HERO_ENTRIES: HeroEntry[] = [
   {
     id: "association",
-    title: "Sono un'Associazione",
-    cta: "Affilia la tua Associazione",
+    title: "Sono un'associazione",
+    cta: "Affilia la tua associazione",
     microcopy: "Richiede 10 minuti - Documenti - Pagamento",
     to: "/affiliazione",
     recommended: true,
   },
   {
     id: "member",
-    title: "Sono un Socio",
-    cta: "Diventa Socio",
+    title: "Sono un socio",
+    cta: "Diventa socio",
     microcopy: "Iscriviti e ricevi la tessera digitale",
     to: "/associazioni",
   },
   {
     id: "account",
     title: "Ho già un account",
-    cta: "Area Riservata",
-    microcopy: "Accedi come Admin o Socio",
+    cta: "Area riservata",
+    microcopy: "Accedi come amministratore o socio",
     to: "/area-riservata",
   },
 ];
@@ -50,12 +51,6 @@ const EMPTY_PLATFORM_STATS: PlatformStats = {
   organizations: 0,
   members: 0,
   cities: 0,
-};
-
-const SHOWCASE_PLATFORM_STATS: PlatformStats = {
-  organizations: 300,
-  members: 9000,
-  cities: 24,
 };
 
 const AFFILIATION_STEPS = [
@@ -190,8 +185,8 @@ const Home = () => {
   const [lowPowerDevice, setLowPowerDevice] = useState(false);
   const [showStickyAffilia, setShowStickyAffilia] = useState(false);
   const [isDemoModalOpen, setIsDemoModalOpen] = useState(false);
-  const [platformStats] = useState<PlatformStats>(SHOWCASE_PLATFORM_STATS);
-  const [platformStatsLoaded] = useState(true);
+  const [platformStats, setPlatformStats] = useState<PlatformStats>(EMPTY_PLATFORM_STATS);
+  const [platformStatsLoaded, setPlatformStatsLoaded] = useState(false);
   const [animatedStats, setAnimatedStats] = useState<PlatformStats>(EMPTY_PLATFORM_STATS);
   const [shouldAnimateStats, setShouldAnimateStats] = useState(false);
   const heroRef = useRef<HTMLElement>(null);
@@ -262,13 +257,12 @@ const Home = () => {
   }, []);
 
   useEffect(() => {
-    if (typeof document === "undefined" || !isDemoModalOpen) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [isDemoModalOpen]);
+    let cancelled = false;
+    fetchPlatformStats().then(stats => {
+      if (!cancelled) { setPlatformStats(stats); setPlatformStatsLoaded(true); }
+    }).catch(() => { /* Unavailable statistics stay undisplayed. */ });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -420,9 +414,9 @@ const Home = () => {
   };
 
   const platformStatCards = [
-    { key: "organizations", label: "Associazioni Affiliate", value: animatedStats.organizations },
-    { key: "members", label: "Soci Registrati", value: animatedStats.members },
-    { key: "cities", label: "Città Attive", value: animatedStats.cities },
+    { key: "organizations", label: "Associazioni affiliate", value: animatedStats.organizations },
+    { key: "members", label: "Soci registrati", value: animatedStats.members },
+    { key: "cities", label: "Città attive", value: animatedStats.cities },
   ] as const;
   const heroEntries = showAffiliazioneCta
     ? HERO_ENTRIES
@@ -430,13 +424,9 @@ const Home = () => {
 
 
   return (
-    <div className="bg-slate-50/50 font-sans text-slate-900">
-      {/* HERO SECTION - LIGHT PREMIUM */}
-      <section className="relative overflow-hidden pt-20 pb-24 md:pt-32 md:pb-32" id="top" ref={heroRef}>
-        {/* Background Canvas / Elements */}
-        <div className="absolute inset-0 z-0 pointer-events-none bg-slate-50">
-          <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
-          <div className="absolute left-0 right-0 top-0 -z-10 m-auto h-[310px] w-[310px] rounded-full bg-brand opacity-20 blur-[100px]"></div>
+    <div className="public-home text-slate-900">
+      <section className="relative overflow-hidden py-16 md:py-24" id="top" ref={heroRef}>
+        <div className="absolute inset-0 z-0 pointer-events-none" aria-hidden="true">
           {!useWebGLScene ? (
             <div className="absolute inset-0 hidden items-center justify-center opacity-5 mix-blend-multiply md:flex" data-hero-logo>
               <img src={`${import.meta.env.BASE_URL}assonam-logo.svg`} alt="" className="w-2/3 max-w-2xl" />
@@ -467,14 +457,14 @@ const Home = () => {
                 </div>
               ) : null}
               <div className="relative z-10">
-                <p className="inline-flex items-center justify-center px-3 py-1 mb-6 text-xs font-bold uppercase tracking-widest text-brand bg-brand/10 rounded-full" data-hero-eyebrow>
-                  ASSONAM - Accesso Rapido
+                <p className="mb-5 text-sm font-semibold text-brand" data-hero-eyebrow>
+                  ASSONAM · Accesso rapido
                 </p>
-                <h1 data-hero-line className="text-4xl md:text-6xl lg:text-7xl font-extrabold text-slate-900 tracking-tight leading-[1.1]">
-                  La piattaforma digitale per <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand to-brand-light">Associazioni e Soci</span>
+                <h1 data-hero-line className="text-4xl md:text-5xl lg:text-6xl font-bold text-slate-900 leading-[1.12]">
+                  La piattaforma digitale per <span className="text-brand">associazioni e soci</span>
                 </h1>
-                <p className="mt-6 text-lg md:text-xl text-slate-600 max-w-2xl mx-auto font-medium leading-relaxed" data-hero-subtitle>
-                  Tessere, iscrizioni, gestione soci e affiliazione. Tutto in un unico ecosistema semplice, istituzionale e sicuro.
+                <p className="mt-6 text-lg md:text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed" data-hero-subtitle>
+                  Tessere, iscrizioni, gestione soci e affiliazione, in un unico spazio.
                 </p>
               </div>
             </div>
@@ -482,27 +472,27 @@ const Home = () => {
             <div className="mt-10 mx-auto flex max-w-md flex-col items-center justify-center gap-4" data-hero-meta>
               {affiliazioneEnabled ? (
                 <Link
-                  className="btn-primary !h-14 !w-full !rounded-xl !px-8 !text-base"
+                  className="btn-primary w-full px-8"
                   to="/affiliazione"
                   onClick={() => handleAffiliaHeroClick("hero_desktop_primary")}
                 >
-                  Affilia la tua Associazione
+                  Affilia la tua associazione
                 </Link>
               ) : null}
             </div>
             <div className="mt-4" data-hero-meta>
                <Link className="text-sm font-semibold text-slate-500 hover:text-brand underline underline-offset-4" to="/area-riservata">
-                Sei già registrato? Accedi all'Area Riservata
+                Sei già registrato? Accedi all'area riservata
               </Link>
             </div>
 
-            <div className="mt-20 grid grid-cols-1 md:grid-cols-3 gap-6 text-left" role="list" aria-label="Scegli il percorso corretto">
+            <div className={`mt-14 grid grid-cols-1 ${showAffiliazioneCta ? "md:grid-cols-3" : "md:grid-cols-2"} gap-5 text-left`} role="list" aria-label="Scegli il percorso corretto">
               {heroEntries.map((entry) => (
                 <Link
                   to={entry.to}
                   key={entry.id}
                   role="listitem"
-                  className="group relative bg-white rounded-2xl p-6 border border-slate-200 shadow-xl shadow-slate-200/40 hover:shadow-2xl hover:-translate-y-1 hover:border-brand/30 transition-all flex flex-col"
+                  className="surface group p-6 flex flex-col hover:border-brand/50 transition-colors"
                   onClick={
                     entry.id === "association"
                       ? () => handleAffiliaHeroClick("hero_card")
@@ -511,13 +501,13 @@ const Home = () => {
                   data-hero-card
                 >
                   <div className="flex items-center gap-4 mb-4">
-                    <span className="flex items-center justify-center w-12 h-12 rounded-xl bg-slate-50 text-brand group-hover:bg-brand group-hover:text-white transition-colors border border-slate-100">
+                    <span className="flex items-center justify-center w-10 h-10 rounded-lg bg-brand/10 text-brand">
                       <EntryIcon id={entry.id} />
                     </span>
-                    <h2 className="text-lg font-bold text-slate-900">{entry.title}</h2>
+                    <h2 className="text-lg font-semibold text-slate-900">{entry.title}</h2>
                   </div>
-                  <p className="text-sm text-slate-500 font-medium flex-grow leading-relaxed">{entry.microcopy}</p>
-                  <span className="mt-6 text-xs font-bold uppercase tracking-wider text-brand flex items-center gap-1 group-hover:gap-2 transition-all">
+                  <p className="text-base text-slate-600 flex-grow leading-relaxed">{entry.microcopy}</p>
+                  <span className="mt-5 text-base font-semibold text-brand flex items-center gap-2">
                     {entry.cta} <span aria-hidden="true">&rarr;</span>
                   </span>
                 </Link>
@@ -529,25 +519,25 @@ const Home = () => {
 
       {/* STATS SECTION */}
       <section
-        className="py-20 bg-white border-y border-slate-100"
+        className="py-16 border-y border-slate-200"
         data-reveal="fade-up"
         id="platform-social-proof"
         ref={socialProofRef}
       >
         <div className="container-shell">
           <div className="flex flex-col items-center text-center">
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">La Nostra Rete</p>
-            <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4">Migliaia di utenti in tutta Italia</h2>
-            <p className="text-lg text-slate-500 max-w-2xl mb-12 font-medium">
-              Unisciti a una rete in continua crescita. Semplifica la gestione e offri ai tuoi soci un'esperienza digitale all'avanguardia.
+            <p className="text-sm font-semibold text-brand mb-3">La nostra rete</p>
+            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">Associazioni e soci in tutta Italia</h2>
+            <p className="text-lg text-slate-600 max-w-2xl mb-10">
+              Unisciti alla rete ASSONAM e gestisci online le iscrizioni e le tessere dei tuoi soci.
             </p>
             <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-8">
               {platformStatCards.map((card) => (
                 <article key={card.key} className="flex flex-col items-center">
-                  <p className="text-5xl md:text-6xl font-extrabold text-brand tracking-tighter drop-shadow-sm mb-2">
-                    {(platformStatsLoaded ? card.value : 0).toLocaleString("it-IT")}+
+                  <p className="text-4xl md:text-5xl font-bold text-brand mb-2 tabular-nums">
+                    {platformStatsLoaded ? card.value.toLocaleString("it-IT") : "—"}
                   </p>
-                  <p className="text-sm font-bold tracking-widest text-slate-500 uppercase">{card.label}</p>
+                  <p className="text-base text-slate-600">{card.label}</p>
                 </article>
               ))}
             </div>
@@ -556,40 +546,40 @@ const Home = () => {
       </section>
 
       {/* DIGITAL CARD SECTION */}
-      <section className="py-24 bg-slate-50/50" data-reveal="fade-up" id="membership-demo">
+      <section className="py-16 md:py-20" data-reveal="fade-up" id="membership-demo">
         <div className="container-shell">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             
             {/* Left Copy */}
             <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-brand mb-3">Innovazione</p>
-              <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 mb-6 leading-tight">
+              <p className="text-sm font-semibold text-brand mb-3">Tessera digitale</p>
+              <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-6 leading-tight">
                 La tua tessera digitale,<br/>sempre in tasca.
               </h2>
               <p className="text-lg text-slate-600 mb-10 leading-relaxed">
-                Le associazioni affiliate emettono tessere digitali istantanee, pronte per essere salvate nei wallet nativi degli smartphone.
+                Le associazioni affiliate emettono tessere digitali con QR di verifica, disponibili nell'area socio e su Google Wallet.
               </p>
               
               <ul className="space-y-8">
                 <li className="flex gap-5">
-                  <span className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-xl bg-white shadow-sm border border-slate-100 text-brand font-bold text-sm">1</span>
+                  <span className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-lg bg-brand/10 text-brand font-semibold">1</span>
                   <div>
-                    <h3 className="font-bold text-lg text-slate-900">Integrazione Nativa</h3>
-                    <p className="text-slate-500 mt-1.5 leading-relaxed">Aggiungi la tessera ad Apple Wallet e Google Wallet con un solo tap. Nessuna app di terze parti richiesta.</p>
+                    <h3 className="font-semibold text-lg text-slate-900">Google Wallet</h3>
+                    <p className="text-slate-500 mt-1.5 leading-relaxed">Aggiungi la tessera a Google Wallet dalla tua area socio e portala sempre con te.</p>
                   </div>
                 </li>
                 <li className="flex gap-5">
-                  <span className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-xl bg-white shadow-sm border border-slate-100 text-brand font-bold text-sm">2</span>
+                  <span className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-lg bg-brand/10 text-brand font-semibold">2</span>
                   <div>
-                    <h3 className="font-bold text-lg text-slate-900">Verifica QR Sicura</h3>
+                    <h3 className="font-semibold text-lg text-slate-900">Verifica QR</h3>
                     <p className="text-slate-500 mt-1.5 leading-relaxed">Ogni tessera include un QR code univoco per la verifica istantanea dello stato del socio.</p>
                   </div>
                 </li>
                 <li className="flex gap-5">
-                  <span className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-xl bg-white shadow-sm border border-slate-100 text-brand font-bold text-sm">3</span>
+                  <span className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-lg bg-brand/10 text-brand font-semibold">3</span>
                   <div>
-                    <h3 className="font-bold text-lg text-slate-900">Sincronizzazione Cloud</h3>
-                    <p className="text-slate-500 mt-1.5 leading-relaxed">Rinnovi e decadenze si aggiornano in tempo reale direttamente sul telefono del socio.</p>
+                    <h3 className="font-semibold text-lg text-slate-900">Rinnovi e scadenze</h3>
+                    <p className="text-slate-500 mt-1.5 leading-relaxed">Rinnovi e scadenze si aggiornano automaticamente su Google Wallet.</p>
                   </div>
                 </li>
               </ul>
@@ -597,7 +587,7 @@ const Home = () => {
               <div className="mt-10 flex flex-wrap gap-4">
                 <button
                   type="button"
-                  className="inline-flex items-center justify-center h-12 px-8 rounded-xl bg-brand hover:bg-brand-light text-white font-bold shadow-md shadow-brand/20 transition-all"
+                  className="btn-primary px-8"
                   onClick={() => setIsDemoModalOpen(true)}
                 >
                   Vedi una demo
@@ -607,8 +597,7 @@ const Home = () => {
 
             {/* Right Card */}
             <div className="relative flex justify-center lg:justify-end">
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3/4 h-3/4 bg-brand/10 rounded-full blur-3xl pointer-events-none"></div>
-              <div className="w-full max-w-[28rem] drop-shadow-2xl hover:-translate-y-2 transition-transform duration-500 relative z-10">
+              <div className="w-full max-w-[28rem] relative z-10">
                 <MemberCardPreview
                   cardData={{
                     firstName: "Mario",
@@ -618,7 +607,7 @@ const Home = () => {
                     cardNumber: "GA-00123",
                     cardStatus: "active",
                     cardYear: new Date().getFullYear().toString(),
-                    verificationUrl: "https://assonam.it/verify/GA-00123",
+                    verificationUrl: null,
                   }}
                 />
               </div>
@@ -629,26 +618,23 @@ const Home = () => {
       </section>
 
       {/* HOW IT WORKS WIZARD */}
-      <section className="py-24 bg-white" data-reveal="fade-up" id="affiliazione-passaggi">
+      <section className="py-16 md:py-20 border-y border-slate-200" data-reveal="fade-up" id="affiliazione-passaggi">
         <div className="container-shell text-center">
-          <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Onboarding Semplificato</p>
-          <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 mb-6">Affiliazione in 3 passaggi</h2>
-          <p className="text-lg text-slate-500 max-w-2xl mx-auto mb-16 font-medium">
-            Abbiamo eliminato la burocrazia cartacea. Completi il modulo online, alleghi i PDF e invii in pochi minuti.
+          <p className="text-sm font-semibold text-brand mb-3">Come funziona</p>
+          <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-6">Affiliazione in 3 passaggi</h2>
+          <p className="text-lg text-slate-600 max-w-2xl mx-auto mb-10">
+            Compila il modulo online, allega i documenti e invia la richiesta.
           </p>
 
           <div className="grid md:grid-cols-3 gap-8" data-reveal="stagger">
             {AFFILIATION_STEPS.map((step, index) => (
-              <article key={step.title} className="bg-slate-50 rounded-3xl p-8 border border-slate-100 text-left relative overflow-hidden group" data-reveal-item>
-                <div className="absolute top-0 right-0 p-6 text-8xl font-black text-slate-200/50 -mt-10 -mr-6 group-hover:scale-110 transition-transform pointer-events-none select-none">
-                  {index + 1}
-                </div>
-                <div className="relative z-10">
-                  <span className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-white shadow-sm border border-slate-200 text-brand font-bold text-xl mb-6">
+              <article key={step.title} className="surface p-6 md:p-7 text-left" data-reveal-item>
+                <div>
+                  <span className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-brand/10 text-brand font-semibold text-lg mb-5">
                     {index + 1}
                   </span>
-                  <h3 className="text-xl font-bold text-slate-900 mb-3">{step.title}</h3>
-                  <p className="text-slate-500 leading-relaxed font-medium">{step.description}</p>
+                  <h3 className="text-xl font-semibold text-slate-900 mb-3">{step.title}</h3>
+                  <p className="text-slate-600 leading-relaxed">{step.description}</p>
                 </div>
               </article>
             ))}
@@ -657,18 +643,18 @@ const Home = () => {
           <div className="mt-16 flex flex-col sm:flex-row items-center justify-center gap-4">
             {affiliazioneEnabled ? (
               <Link
-                className="btn-primary !h-14 !rounded-xl !px-8"
+                className="btn-primary px-8"
                 to="/affiliazione"
                 onClick={() => handleAffiliaHeroClick("below_fold_section")}
               >
-                Inizia Affiliazione Ora
+                Inizia affiliazione
               </Link>
             ) : (
-              <Link className="btn-primary !h-14 !rounded-xl !px-8" to="/contatti">
+              <Link className="btn-primary px-8" to="/contatti">
                 Contatta ASSONAM
               </Link>
             )}
-            <Link className="btn-ghost !h-14 !rounded-xl !px-8" to="/affiliazione-info">
+            <Link className="btn-secondary px-8" to="/affiliazione-info">
               Scopri i dettagli tecnici
             </Link>
           </div>
@@ -676,72 +662,53 @@ const Home = () => {
       </section>
 
       {/* FAQ SECTION */}
-      <section className="py-24 bg-slate-50/50 border-t border-slate-100" data-reveal="fade-up">
+      <section className="py-16 md:py-20" data-reveal="fade-up">
         <div className="container-shell max-w-4xl">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-extrabold text-slate-900 mb-4">Domande Frequenti</h2>
+            <h2 className="text-3xl font-bold text-slate-900 mb-4">Domande frequenti</h2>
             <p className="text-slate-500 text-lg">Tutto quello che devi sapere prima di iniziare.</p>
           </div>
-          <div className="surface-strong rounded-3xl p-6 md:p-10">
+          <div>
             <PublicFaqAccordion items={FAQ_ITEMS} />
           </div>
         </div>
       </section>
 
       {/* STICKY CTA */}
-      <div className={`fixed bottom-6 left-0 right-0 z-50 flex justify-center transition-all duration-300 pointer-events-none ${showStickyAffilia ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
-        <Link
-          className="btn-primary pointer-events-auto !h-14 !rounded-full !px-10 !text-lg hover:!scale-105"
-          to="/affiliazione"
-          onClick={handleAffiliaStickyClick}
-        >
-          Affilia la tua Associazione
-        </Link>
-      </div>
+      {showAffiliazioneCta && showStickyAffilia ? (
+        <div className="fixed bottom-6 left-4 right-4 z-40 flex justify-center pointer-events-none">
+          <Link
+            className="btn-primary pointer-events-auto px-6"
+            to="/affiliazione"
+            onClick={handleAffiliaStickyClick}
+          >
+            Affilia la tua associazione
+          </Link>
+        </div>
+      ) : null}
 
       {/* MODAL DEMO */}
-      {isDemoModalOpen && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="membership-demo-modal-title"
-          onClick={(event) => {
-            if (event.target === event.currentTarget) setIsDemoModalOpen(false);
-          }}
-        >
-          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center mb-6">
-              <h3 id="membership-demo-modal-title" className="text-2xl font-extrabold text-slate-900">
-                Modalità Demo
-              </h3>
-              <button
-                type="button"
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
-                onClick={() => setIsDemoModalOpen(false)}
-                aria-label="Chiudi"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-            
-            <p className="text-slate-600 mb-8 leading-relaxed">
-              Questa è solo un'anteprima visiva. Le associazioni affiliate ad ASSONAM possono emettere istantaneamente tessere digitali reali per tutti i loro soci tramite l'Area Riservata.
-            </p>
-            
-            <div className="flex flex-col gap-3">
-              {affiliazioneEnabled ? (
-                <Link className="btn-primary !h-12 !w-full !rounded-xl" to="/affiliazione" onClick={() => setIsDemoModalOpen(false)}>
-                  Affilia l'Associazione
-                </Link>
-              ) : null}
-              <Link className="btn-ghost !h-12 !w-full !rounded-xl" to="/affiliazione-info" onClick={() => setIsDemoModalOpen(false)}>
-                Scopri di più sul sistema
-              </Link>
-            </div>
-          </div>
+      <ModalShell
+        open={isDemoModalOpen}
+        onClose={() => setIsDemoModalOpen(false)}
+        title="Anteprima della tessera"
+        sizeClassName="max-w-md"
+        zIndexClassName="z-[100]"
+      >
+        <p className="text-slate-600 mb-8 leading-relaxed">
+          Questa è un'anteprima visiva. Le associazioni affiliate ad ASSONAM gestiscono le tessere digitali dei soci dalla propria area riservata.
+        </p>
+        <div className="flex flex-col gap-3">
+          {affiliazioneEnabled ? (
+            <Link className="btn-primary w-full" to="/affiliazione" onClick={() => setIsDemoModalOpen(false)}>
+              Affilia l'associazione
+            </Link>
+          ) : null}
+          <Link className="btn-secondary w-full" to="/affiliazione-info" onClick={() => setIsDemoModalOpen(false)}>
+            Scopri di più sul sistema
+          </Link>
         </div>
-      )}
+      </ModalShell>
     </div>
   );
 

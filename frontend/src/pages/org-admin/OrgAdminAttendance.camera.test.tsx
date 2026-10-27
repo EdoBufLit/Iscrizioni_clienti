@@ -4,6 +4,7 @@ import OrgAdminAttendancePage from "./OrgAdminAttendance";
 
 const mocks = vi.hoisted(() => ({
   decodeFromStream: vi.fn(),
+  checkIn: vi.fn(),
   fetchAttendances: vi.fn(),
   fetchStations: vi.fn(),
   getUserMedia: vi.fn(),
@@ -12,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../../lib/api", () => ({
-  checkInOrgAdminAttendance: vi.fn(),
+  checkInOrgAdminAttendance: mocks.checkIn,
   fetchOrgAdminAttendances: mocks.fetchAttendances,
   fetchOrgAdminAttendanceStations: mocks.fetchStations,
   createOrgAdminAttendanceStation: vi.fn(),
@@ -39,6 +40,7 @@ function setCameraPolicy(allowsCamera: boolean) {
 describe("OrgAdminAttendance camera startup", () => {
   beforeEach(() => {
     mocks.decodeFromStream.mockReset();
+    mocks.checkIn.mockReset();
     mocks.fetchAttendances.mockReset();
     mocks.fetchStations.mockReset();
     mocks.getUserMedia.mockReset();
@@ -102,6 +104,30 @@ describe("OrgAdminAttendance camera startup", () => {
       ),
     ).toBeInTheDocument();
     expect(mocks.getUserMedia).not.toHaveBeenCalled();
+  });
+
+  it("releases a pending camera request when switching to member search", async () => {
+    let allowCamera!: (stream: unknown) => void;
+    mocks.getUserMedia.mockReturnValue(new Promise(resolve => { allowCamera = resolve; }));
+    render(<OrgAdminAttendancePage />);
+    fireEvent.click(screen.getByRole("button", { name: "Avvia fotocamera" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cerca socio" }));
+    allowCamera({ getTracks: () => [{ stop: mocks.trackStop }] });
+    await waitFor(() => expect(mocks.trackStop).toHaveBeenCalledTimes(1));
+    expect(mocks.decodeFromStream).not.toHaveBeenCalled();
+    expect(screen.getByRole("searchbox", { name: "Cerca un socio da registrare" })).toBeInTheDocument();
+  });
+
+  it("ignores a late QR callback after switching to member search", async () => {
+    render(<OrgAdminAttendancePage />);
+    fireEvent.click(screen.getByRole("button", { name: "Avvia fotocamera" }));
+    await screen.findByRole("button", { name: "Ferma fotocamera" });
+    const decoded = mocks.decodeFromStream.mock.calls[0][2];
+    fireEvent.click(screen.getByRole("button", { name: "Cerca socio" }));
+    decoded({ getText: () => "https://assonam.it/api/cards/verify/abcdefghijklmnopqrstuvwxyz1234567890" });
+    expect(mocks.checkIn).not.toHaveBeenCalled();
+    expect(mocks.scannerStop).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("gives actionable browser and phone guidance when access is not authorized", async () => {

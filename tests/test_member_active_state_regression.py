@@ -113,6 +113,7 @@ def test_deleted_member_is_inactive_everywhere(client, db):
     token_str = f"old-member-token-{suffix}"
     old_magic_link = Token(
         member_id=member.id,
+        auth_version=member.auth_version,
         purpose=TokenType.LOGIN_MAGIC_LINK,
         token_hash=hash_token(token_str),
         expires_at=datetime.utcnow() + timedelta(minutes=15),
@@ -134,8 +135,9 @@ def test_deleted_member_is_inactive_everywhere(client, db):
     assert login_res.json()["status"] == "ok"
 
     verify_magic_link_res = client.get(f"/member/auth?token={token_str}", follow_redirects=False)
-    assert verify_magic_link_res.status_code == 403, verify_magic_link_res.text
-    assert verify_magic_link_res.json()["detail"] == "account non attivo"
+    # Deletion now revokes the proof as well as the member's session epoch.
+    assert verify_magic_link_res.status_code == 307, verify_magic_link_res.text
+    assert verify_magic_link_res.headers["location"] == "/login"
 
     verify_path = urlsplit(issue_data["card_verification_url"]).path
 

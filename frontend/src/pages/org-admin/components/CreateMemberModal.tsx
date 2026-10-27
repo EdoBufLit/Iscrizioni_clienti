@@ -333,11 +333,10 @@ const CreateMemberModal = memo(function CreateMemberModal({
                 className="rounded border-gray-300 text-brand focus:ring-brand"
                 name="send_access_email"
               />
-              Invia accesso via email ora
+              Invia accesso quando il socio sarà attivo
             </label>
             <p className="text-xs text-neutral-500">
-              L'invio dell'accesso richiede un'email valida e genera un magic
-              link.
+              L'accesso verrà inviato una sola volta dopo l'attivazione. È necessaria un'email valida.
             </p>
           </div>
 

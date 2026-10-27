@@ -59,4 +59,14 @@ def validate_schema(engine):
         logger.error(msg)
         raise RuntimeError(msg)
 
+    for table_name in ("members", "tokens"):
+        if table_name not in existing_tables:
+            raise RuntimeError(f"Missing authentication table '{table_name}'. Run alembic upgrade head.")
+        auth_columns = {column["name"] for column in inspector.get_columns(table_name)}
+        if "auth_version" not in auth_columns:
+            raise RuntimeError(
+                f"Missing authentication column '{table_name}.auth_version'. "
+                "Run alembic upgrade head."
+            )
+
     logger.info("Schema validation passed: 'organizations' table has required columns.")

@@ -4,7 +4,7 @@ import json
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request, Query
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
@@ -12,7 +12,7 @@ from app.config import settings
 from app.db import get_db
 from app.log_redaction import hash_identifier
 from app.middleware import get_client_ip
-from app.models import AdminUser, WhatsAppConnection
+from app.models import AdminUser, WhatsAppConnection, WhatsAppMessage
 from app.services.org_admin_sessions import get_current_org_admin_from_request
 from app.services.whatsapp_evolution import EvolutionLiteClient, normalize_phone
 from app.services.whatsapp_provider import (
@@ -35,6 +35,7 @@ from app.services.whatsapp_sync import (
     get_or_create_chat_for_number,
     get_or_create_connection,
     list_chats_for_connection,
+    chats_for_connection_query,
     mark_outbound_message_failed,
     serialize_chat,
     serialize_connection,
@@ -213,6 +214,9 @@ def reset_whatsapp_connection(
 @router.get("/chats")
 def list_whatsapp_chats(
     request: Request,
+    limit: int | None = Query(default=None, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    q: str | None = Query(default=None, max_length=160),
     db: Session = Depends(get_db),
 ):
     _require_whatsapp_feature_enabled()
@@ -222,8 +226,9 @@ def list_whatsapp_chats(
         return {"items": [], "total": 0}
     if cleanup_own_profile_chat_names(db, connection=connection):
         db.commit()
-    items = [serialize_chat(chat) for chat in list_chats_for_connection(db, connection=connection)]
-    return {"items": items, "total": len(items)}
+    items = [serialize_chat(chat) for chat in list_chats_for_connection(db, connection=connection,
+                                                                     search=q, limit=limit, offset=offset)]
+    return {"items": items, "total": chats_for_connection_query(db, connection=connection, search=q).count()}
 
 
 @router.get("/contacts")
@@ -253,6 +258,8 @@ def list_whatsapp_contacts(
 def list_whatsapp_messages(
     chat_id: int,
     request: Request,
+    limit: int | None = Query(default=None, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
     _require_whatsapp_feature_enabled()
@@ -263,12 +270,13 @@ def list_whatsapp_messages(
     chat = get_chat_for_connection(db, connection=connection, chat_id=chat_id)
     if chat is None:
         raise HTTPException(status_code=404, detail="Chat non trovata.")
-    items = [serialize_message(message) for message in get_messages_for_chat(db, chat=chat)]
+    items = [serialize_message(message) for message in get_messages_for_chat(db, chat=chat, limit=limit, offset=offset)]
+    total = db.query(WhatsAppMessage).filter(WhatsAppMessage.chat_id == chat.id).count()
     db.commit()
     return {
         "chat": serialize_chat(chat),
         "items": items,
-        "total": len(items),
+        "total": total,
     }
 
 

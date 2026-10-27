@@ -3,7 +3,7 @@ import hashlib
 import hmac
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Optional, TypedDict
 from urllib.parse import parse_qs, unquote, urlparse
@@ -16,6 +16,7 @@ from app.models import (
     AnnualMembershipTermStatus,
     Member,
     MembershipType,
+    TemporaryMembershipPurchase,
 )
 from app.services.annual_memberships import as_rome_datetime
 from app.services.member_activity import (
@@ -141,7 +142,7 @@ def resolve_card_verification_membership(
     *,
     payload: CardVerificationPayload,
     checked_at: datetime,
-) -> tuple[Member | None, AnnualMembershipTerm | None, str]:
+) -> tuple[Member | None, AnnualMembershipTerm | TemporaryMembershipPurchase | None, str]:
     """Resolve the signed card snapshot using the public verifier semantics."""
 
     member = (
@@ -165,9 +166,36 @@ def resolve_card_verification_membership(
     if member is None or member.deleted_at is not None:
         return member, term, MEMBER_INACTIVE_REASON_DELETED
 
+    temporary = db.query(TemporaryMembershipPurchase).filter(
+        TemporaryMembershipPurchase.member_id == payload["member_id"],
+        TemporaryMembershipPurchase.org_id == payload["org_id"],
+        TemporaryMembershipPurchase.card_no == payload["card_number"],
+        TemporaryMembershipPurchase.card_year == payload["card_year"],
+    ).order_by(TemporaryMembershipPurchase.id.desc()).first()
+    if temporary is not None:
+        checked_utc = checked_at.replace(tzinfo=timezone.utc) if checked_at.tzinfo is None else checked_at.astimezone(timezone.utc)
+        expires = temporary.valid_until
+        if expires is not None:
+            expires = expires.replace(tzinfo=timezone.utc) if expires.tzinfo is None else expires.astimezone(timezone.utc)
+        if temporary.status == "expired" or (expires is not None and expires <= checked_utc):
+            return member, temporary, MEMBER_INACTIVE_REASON_EXPIRED
+        if temporary.status != "active" or (
+            member.card_no != temporary.card_no or member.card_year != temporary.card_year
+        ):
+            return member, temporary, MEMBER_INACTIVE_REASON_NOT_APPROVED
+        return member, temporary, get_member_inactive_reason(member, now=checked_at)
+
     member_inactive_reason = get_member_inactive_reason(member, now=checked_at)
     current_membership_type = resolve_member_membership_type(member)
     if current_membership_type != MembershipType.ANNUAL.value:
+        # Legacy explicit type conversions reused their card number. Before a
+        # purchase ledger exists the current identity remains authoritative.
+        if member.card_no == payload["card_number"] and member.card_year == payload["card_year"]:
+            return member, None, member_inactive_reason
+        if term is not None:
+            if term.status == "expired" or as_rome_datetime(checked_at).date() > term.valid_through:
+                return member, term, MEMBER_INACTIVE_REASON_EXPIRED
+            return member, term, MEMBER_INACTIVE_REASON_NOT_APPROVED
         if member_inactive_reason == "" and (
             member.card_no != payload["card_number"]
             or member.card_year != payload["card_year"]
@@ -202,6 +230,14 @@ def resolve_card_verification_membership(
     ):
         return member, term, MEMBER_INACTIVE_REASON_NOT_APPROVED
     return member, term, ""
+
+
+def card_snapshot_membership_type(snapshot, member: Member | None) -> str:
+    if isinstance(snapshot, TemporaryMembershipPurchase):
+        return MembershipType.TEMPORARY.value
+    if snapshot is not None:
+        return MembershipType.ANNUAL.value
+    return resolve_member_membership_type(member)
 
 
 def to_card_status(

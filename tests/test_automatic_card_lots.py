@@ -129,11 +129,13 @@ def test_unlinked_owned_scope_and_future_reservations_protect_numbers(db):
 
 def test_legacy_domain_protects_other_legacy_associations(db):
     owner, other = org(db), org(db)
-    batch(db, other, 900000, 900100, is_enabled=False)
-    db.add(Member(org_id=other.id, email=f"legacy-{uuid4().hex}@example.test", card_no=900200))
+    # Legacy associations share the global domain, including earlier tests' lots.
+    start = preview_automatic_card_lot(db, org=owner, quantity=1, year=YEAR)["range_start"] + 1000
+    batch(db, other, start, start + 100, is_enabled=False)
+    db.add(Member(org_id=other.id, email=f"legacy-{uuid4().hex}@example.test", card_no=start + 200))
     db.commit()
     preview = preview_automatic_card_lot(db, org=owner, quantity=100, year=YEAR)
-    assert (preview["range_start"], preview["range_end"]) == (900201, 900300)
+    assert (preview["range_start"], preview["range_end"]) == (start + 201, start + 300)
 
 
 @pytest.mark.parametrize("changes", [

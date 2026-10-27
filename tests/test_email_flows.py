@@ -268,6 +268,7 @@ def test_member_password_reset_expired_token_fails(client):
                 member_id=member.id,
                 purpose=TokenType.PASSWORD_RESET,
                 token_hash=hash_token(token_str),
+                auth_version=member.auth_version,
                 expires_at=datetime.utcnow() - timedelta(minutes=1),
             )
         )

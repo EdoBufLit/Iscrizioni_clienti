@@ -203,3 +203,16 @@ def test_reservation_worker_interval_is_carried_in_private_deploy_configuration(
     assert "MEMBERSHIP_PAYMENT_RECONCILE_INTERVAL_SECONDS=30\n" in build_app_env({
         "MEMBERSHIP_PAYMENT_RECONCILE_INTERVAL_SECONDS": "30",
     })
+
+
+def test_wallet_worker_is_started_and_checked_by_standard_rollout() -> None:
+    source = REMOTE_SCRIPT_PATH.read_text(encoding="utf-8")
+    for line in source.splitlines():
+        if ("--profile ops pull web" in line
+                or "${APP_RUNTIME_UP_FLAGS} email-worker" in line
+                or "for required_service in db web" in line):
+            assert "google-wallet-sync-worker" in line
+    assert 'wait_for_service_ready "" google-wallet-sync-worker 120' in source
+    compose = (REPO_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    assert "command: python -m app.workers.google_wallet_sync" in compose
+    assert '"app.workers.google_wallet_sync", "--healthcheck"' in compose

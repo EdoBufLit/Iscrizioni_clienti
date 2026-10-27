@@ -1,0 +1,26 @@
+/* Joyride portals sit outside the role shell, so use the shared root tokens. */
+.react-joyride__tooltip button {
+  font-family: inherit;
+}
+
+.react-joyride__tooltip button:focus-visible,
+.react-joyride__beacon:focus-visible,
+.onboarding-final-dialog button:focus-visible {
+  outline: 2px solid var(--theme-brand);
+  outline-offset: 3px;
+}
+
+.react-joyride__tooltip button[data-action="primary"]:hover {
+  background-color: var(--theme-brand-strong) !important;
+}
+
+.react-joyride__tooltip button[data-action="back"]:hover,
+.react-joyride__tooltip button[data-action="skip"]:hover,
+.react-joyride__tooltip button[data-action="close"]:hover {
+  color: var(--theme-link-hover) !important;
+}
+
+.onboarding-final-dialog {
+  color: var(--theme-text);
+  font-family: var(--font-ui);
+}

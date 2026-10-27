@@ -1576,6 +1576,19 @@ export type OrgAdminWhatsAppAutomation = {
   updated_at: string | null;
 };
 
+export type AssociationFormSummary = Pick<AssociationForm,
+  "id" | "title" | "public_slug" | "public_path" | "form_type" | "is_active" | "booking_enabled" |
+  "created_at" | "updated_at" | "field_count" | "submission_count" | "submission_status_counts" | "booking_count">;
+
+export type FormSubmissionSummary = AssociationForm["submission_status_counts"] & { booking: number };
+export type SurveyStatistic = { key: string; label: string; options: string[]; counts: Record<string, number>; total: number; max: number };
+export type SurveyStatistics = {
+  total: number; ratingAverage: number | null; npsAverage: number | null;
+  scaleStats: SurveyStatistic[]; choiceStats: SurveyStatistic[];
+  comments: Array<{ key: string; label: string; value: string; submittedAt: string | null }>;
+  commentCount: number; responseRateLabel: string;
+};
+
 export type AssociationFormSubmission = {
   id: number;
   form_id: number;
@@ -2073,8 +2086,8 @@ export async function sendOrgAdminCommunicationTestEmail(
   return res.json();
 }
 
-export async function fetchOrgAdminWhatsAppConnection(): Promise<OrgAdminWhatsAppConnection> {
-  const res = await fetch("/api/org-admin/communications/whatsapp/connection");
+export async function fetchOrgAdminWhatsAppConnection(signal?: AbortSignal): Promise<OrgAdminWhatsAppConnection> {
+  const res = await fetch("/api/org-admin/communications/whatsapp/connection", { signal });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento stato WhatsApp"));
   return res.json();
@@ -2092,8 +2105,8 @@ export async function connectOrgAdminWhatsApp(): Promise<{
   return res.json();
 }
 
-export async function fetchOrgAdminWhatsAppQr(): Promise<OrgAdminWhatsAppConnection> {
-  const res = await fetch("/api/org-admin/communications/whatsapp/qr");
+export async function fetchOrgAdminWhatsAppQr(signal?: AbortSignal): Promise<OrgAdminWhatsAppConnection> {
+  const res = await fetch("/api/org-admin/communications/whatsapp/qr", { signal });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento QR WhatsApp"));
   return res.json();
@@ -2111,11 +2124,15 @@ export async function disconnectOrgAdminWhatsApp(): Promise<{
   return res.json();
 }
 
-export async function fetchOrgAdminWhatsAppChats(): Promise<{
+export async function fetchOrgAdminWhatsAppChats(input?: { limit?: number; offset?: number; q?: string; signal?: AbortSignal }): Promise<{
   items: OrgAdminWhatsAppChat[];
   total: number;
 }> {
-  const res = await fetch("/api/org-admin/communications/whatsapp/chats");
+  const params = new URLSearchParams();
+  if (input?.limit != null) params.set("limit", String(input.limit));
+  if (input?.offset != null) params.set("offset", String(input.offset));
+  if (input?.q) params.set("q", input.q);
+  const res = await fetch(`/api/org-admin/communications/whatsapp/chats?${params}`, { signal: input?.signal });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento chat WhatsApp"));
   return res.json();
@@ -2133,12 +2150,16 @@ export async function fetchOrgAdminWhatsAppContacts(): Promise<{
 
 export async function fetchOrgAdminWhatsAppMessages(
   chatId: number,
+  input?: { limit?: number; offset?: number; signal?: AbortSignal },
 ): Promise<{
   chat: OrgAdminWhatsAppChat;
   items: OrgAdminWhatsAppMessage[];
   total: number;
 }> {
-  const res = await fetch(`/api/org-admin/communications/whatsapp/chats/${chatId}/messages`);
+  const params = new URLSearchParams();
+  if (input?.limit != null) params.set("limit", String(input.limit));
+  if (input?.offset != null) params.set("offset", String(input.offset));
+  const res = await fetch(`/api/org-admin/communications/whatsapp/chats/${chatId}/messages?${params}`, { signal: input?.signal });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento messaggi WhatsApp"));
   return res.json();
@@ -2554,6 +2575,23 @@ export async function fetchOrgAdminForms(): Promise<{
   return res.json();
 }
 
+export async function fetchOrgAdminFormSummaries(): Promise<{
+  items: AssociationFormSummary[]; total: number;
+  field_types: AssociationFormFieldType[]; visibility_options: AssociationFormVisibility[];
+}> {
+  const res = await fetch("/api/org-admin/forms/summary");
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento form"));
+  return res.json();
+}
+
+export async function fetchOrgAdminFormStatistics(formId: number, signal?: AbortSignal): Promise<SurveyStatistics> {
+  const res = await fetch(`/api/org-admin/forms/${formId}/statistics`, { signal });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore statistiche sondaggio"));
+  return res.json();
+}
+
 export async function createOrgAdminForm(data: {
   title: string;
   description?: string | null;
@@ -2609,8 +2647,8 @@ export async function createOrgAdminForm(data: {
   return res.json();
 }
 
-export async function fetchOrgAdminForm(formId: number): Promise<{ form: AssociationForm }> {
-  const res = await fetch(`/api/org-admin/forms/${formId}`);
+export async function fetchOrgAdminForm(formId: number, signal?: AbortSignal): Promise<{ form: AssociationForm }> {
+  const res = await fetch(`/api/org-admin/forms/${formId}`, { signal });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento dettaglio form"));
   return res.json();
@@ -2770,8 +2808,13 @@ export async function deleteOrgAdminFormField(
 
 export async function fetchOrgAdminFormSubmissions(
   formId: number,
-): Promise<{ form: AssociationForm; items: AssociationFormSubmission[]; total: number }> {
-  const res = await fetch(`/api/org-admin/forms/${formId}/submissions`);
+  input?: { limit?: number; offset?: number; status?: string; signal?: AbortSignal },
+): Promise<{ form: AssociationForm; items: AssociationFormSubmission[]; total: number; summary: FormSubmissionSummary }> {
+  const params = new URLSearchParams();
+  if (input?.limit != null) params.set("limit", String(input.limit));
+  if (input?.offset != null) params.set("offset", String(input.offset));
+  if (input?.status) params.set("status", input.status);
+  const res = await fetch(`/api/org-admin/forms/${formId}/submissions?${params}`, { signal: input?.signal });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento risposte"));
   return res.json();
@@ -2931,8 +2974,9 @@ export async function fetchOrgAdminBookings(input?: {
 
 export async function fetchOrgAdminBooking(
   bookingId: number,
+  signal?: AbortSignal,
 ): Promise<{ booking: AssociationBooking }> {
-  const res = await fetch(`/api/org-admin/bookings/${bookingId}`);
+  const res = await fetch(`/api/org-admin/bookings/${bookingId}`, { signal });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento dettaglio prenotazione"));
   return res.json();
@@ -3189,6 +3233,7 @@ export async function fetchOrgAdminBookingsAgendaDay(input?: {
   date?: string | null;
   status?: string;
   formId?: number | null;
+  limit?: number; offset?: number; signal?: AbortSignal;
 }): Promise<{
   date: string;
   items: AssociationBooking[];
@@ -3198,9 +3243,24 @@ export async function fetchOrgAdminBookingsAgendaDay(input?: {
   if (input?.date) params.set("date", input.date);
   if (input?.status) params.set("status", input.status);
   if (input?.formId) params.set("form_id", String(input.formId));
-  const res = await fetch(`/api/org-admin/bookings/agenda/day${params.toString() ? `?${params.toString()}` : ""}`);
+  if (input?.limit != null) params.set("limit", String(input.limit));
+  if (input?.offset != null) params.set("offset", String(input.offset));
+  const res = await fetch(`/api/org-admin/bookings/agenda/day${params.toString() ? `?${params.toString()}` : ""}`, { signal: input?.signal });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore agenda giornaliera"));
+  return res.json();
+}
+
+export type BookingDaySummary = { date: string; total: number; pending: number; confirmed: number; completed: number; party_size: number; request_pending: number };
+export async function fetchOrgAdminBookingSummary(input: {
+  dateFrom: string; dateTo: string; status?: string; formId?: number | null; signal?: AbortSignal;
+}): Promise<{ days: BookingDaySummary[] }> {
+  const params = new URLSearchParams({ date_from: input.dateFrom, date_to: input.dateTo });
+  if (input.status) params.set("status", input.status);
+  if (input.formId) params.set("form_id", String(input.formId));
+  const res = await fetch(`/api/org-admin/bookings/agenda/summary?${params}`, { signal: input.signal });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore riepilogo agenda"));
   return res.json();
 }
 
@@ -3700,6 +3760,8 @@ export async function uploadSuperAdminStatute(
 }
 
 export type OrgAdminMetrics = {
+  expiring_members_count?: number;
+  expired_members_count?: number;
   members_count: number;
   active_members_count?: number | null;
   cards_total: number | null;
@@ -3893,7 +3955,7 @@ export type OrgAdminAttendance = {
   membership_type: "annual" | "temporary";
   attendance_date: string;
   checked_in_at: string;
-  source: "qr" | "qr_station";
+  source: "qr" | "qr_station" | "manual";
   scanner_station_id: number | null;
   scanner_station_name: string | null;
 };
@@ -7005,7 +7067,8 @@ export type QuoteCenterRow = {
   fee_amount: number;
   can_confirm_without_payment: boolean;
   currency: string;
-  payment_state: "paid" | "pending" | "unpaid" | "not_required";
+  payment_state: "paid" | "pending" | "partial" | "unpaid" | "not_required";
+  accounting_balance?: { expected_cents: number; paid_cents: number; outstanding_cents: number; currency: string };
   payment: AnnualTermPayment | null;
   new_card_no: number | null;
   new_card_year: number | null;

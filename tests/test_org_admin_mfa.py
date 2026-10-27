@@ -169,6 +169,35 @@ def _begin_mfa_login(client, admin_id: int) -> str:
     return payload["challenge"]
 
 
+def test_enabling_mfa_revokes_other_first_factor_sessions(client):
+    target = _create_org_admin()
+    old_cookie = _login_without_mfa(client, target.id)
+    _secret, _codes = _enable_mfa(client, target.id)
+    assert client.get("/api/org-admin/auth/security").status_code == 200
+    with SessionLocal() as db:
+        old = db.query(OrgAdminSession).filter_by(token_hash=hash_token(old_cookie)).one()
+        assert old.revoked_at is not None
+        assert old.mfa_verified_at is None
+    client.cookies.clear()
+    client.cookies.set("org_admin_session", old_cookie)
+    assert client.get("/api/org-admin/auth/me").status_code == 401
+    assert client.get("/api/org-admin/members").status_code == 401
+
+
+def test_active_factor_rejects_session_created_without_mfa_after_enrollment(client):
+    from app.services.org_admin_sessions import create_org_admin_persistent_session
+    target = _create_org_admin()
+    _enable_mfa(client, target.id)
+    with SessionLocal() as db:
+        admin = db.get(AdminUser, target.id)
+        _session, raw_cookie = create_org_admin_persistent_session(db, admin)
+        db.commit()
+    client.cookies.clear()
+    client.cookies.set("org_admin_session", raw_cookie)
+    assert client.get("/api/org-admin/auth/security").status_code == 401
+    assert client.get("/api/org-admin/members").status_code == 401
+
+
 def test_no_mfa_login_behaviour_and_thirty_day_duration_are_unchanged(client):
     admin = _create_org_admin()
     raw_cookie = _login_without_mfa(client, admin.id)

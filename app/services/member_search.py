@@ -139,25 +139,36 @@ def _candidate_match(search: str):
     return and_(*clauses)
 
 
-def search_member_page(query: Query, search: str, *, limit: int, offset: int) -> tuple[list[Member], int, set[int]]:
-    """Exact results first, then suggestions in the caller's stable order."""
-    if not search:
-        return query.offset(offset).limit(limit).all(), query.order_by(None).count(), set()
-
-    exact = _exact_match(search)
-    exact_query = query.filter(exact)
-    exact_total = exact_query.order_by(None).count()
-    similar_ids = []
+def _iter_similar_member_ids(query: Query, search: str):
     terms = search.split()
     if len(search) <= 254 and len(terms) <= 6 and any(_allows_typo(term) for term in terms):
         candidates = (
-            query.filter(~func.coalesce(exact, False), _candidate_match(search))
+            query.filter(~func.coalesce(_exact_match(search), False), _candidate_match(search))
             .with_entities(Member.id, Member.first_name, Member.last_name, Member.email)
             .yield_per(500)
         )
         for candidate in candidates:
             if is_similar_member(search, candidate.first_name, candidate.last_name, candidate.email):
-                similar_ids.append(candidate.id)
+                yield candidate.id
+
+
+def iter_member_search_ids(query: Query, search: str):
+    """Stream exactly the same selection as the list, without repeated paging."""
+    exact_query = query.filter(_exact_match(search)) if search else query
+    for (member_id,) in exact_query.with_entities(Member.id).yield_per(500):
+        yield member_id
+    if search:
+        yield from _iter_similar_member_ids(query, search)
+
+
+def search_member_page(query: Query, search: str, *, limit: int, offset: int) -> tuple[list[Member], int, set[int]]:
+    """Exact results first, then suggestions in the caller's stable order."""
+    if not search:
+        return query.offset(offset).limit(limit).all(), query.order_by(None).count(), set()
+
+    exact_query = query.filter(_exact_match(search))
+    exact_total = exact_query.order_by(None).count()
+    similar_ids = list(_iter_similar_member_ids(query, search))
 
     members = exact_query.offset(offset).limit(limit).all() if offset < exact_total else []
     similar_offset = max(0, offset - exact_total)

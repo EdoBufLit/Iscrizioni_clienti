@@ -1,5 +1,5 @@
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import ModalShell from "../../components/ui/ModalShell";
 import Skeleton from "../../components/ui/Skeleton";
 import {
@@ -7,11 +7,12 @@ import {
   confirmOrgAdminRenewal,
   fetchOrgAdminQuotes,
   recordOrgAdminRenewalPayment,
-  sendOrgAdminRenewalReminders,
   type QuoteCenterResponse,
   type QuoteCenterRow,
 } from "../../lib/api";
 import { EmptyState, KpiCard, PageHeader, SectionPanel, StatusChip } from "./components/OrgAdminPrimitives";
+import MemberBulkActions from "./components/MemberBulkActions";
+import { useOrgAdmin } from "./OrgAdminLayout";
 
 const currentYear = new Date().getFullYear();
 const defaultYear = currentYear + 1;
@@ -41,6 +42,7 @@ const renewalTone = (row: QuoteCenterRow): "success" | "warning" | "info" | "mut
 
 const OrgAdminQuote = () => {
   const navigate = useNavigate();
+  const { admin } = useOrgAdmin();
   const [year, setYear] = useState(defaultYear);
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
@@ -51,31 +53,37 @@ const OrgAdminQuote = () => {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [paymentRow, setPaymentRow] = useState<QuoteCenterRow | null>(null);
   const [saving, setSaving] = useState(false);
+  const [page, setPage] = useState(0);
+  const requestId = useRef(0);
 
   const load = useCallback(async () => {
+    const generation = ++requestId.current;
     setLoading(true);
     setError("");
     try {
-      setData(await fetchOrgAdminQuotes({ year, status, q: search, limit: 500 }));
+      const next = await fetchOrgAdminQuotes({ year, status, q: search, limit: 25, offset: page * 25 });
+      if (generation === requestId.current) setData(next);
     } catch (reason) {
+      if (generation !== requestId.current) return;
       if (reason instanceof AuthError) {
         navigate("/org-admin/login", { replace: true });
         return;
       }
       setError(reason instanceof Error ? reason.message : "Impossibile caricare il Centro Quote");
     } finally {
-      setLoading(false);
+      if (generation === requestId.current) setLoading(false);
     }
-  }, [navigate, search, status, year]);
+  }, [navigate, search, status, year, page]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => void load(), 250);
-    return () => window.clearTimeout(timeout);
+    return () => { window.clearTimeout(timeout); requestId.current += 1; };
   }, [load]);
 
   useEffect(() => {
     setSelected(new Set());
   }, [year, status, search]);
+  useEffect(() => setPage(0), [year, status, search]);
 
   const allVisibleSelected = useMemo(
     () => Boolean(data?.items.length) && data!.items.every((item) => selected.has(item.member_id)),
@@ -121,19 +129,6 @@ const OrgAdminQuote = () => {
     }
   };
 
-  const handleReminders = async (memberIds?: number[]) => {
-    setSaving(true);
-    setError("");
-    try {
-      const result = await sendOrgAdminRenewalReminders(year, memberIds ?? Array.from(selected));
-      setNotice(`${result.queued_count} promemoria accodati. I duplicati della giornata sono stati ignorati.`);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Impossibile inviare i promemoria");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
     <div className="container-shell org-admin-mobile-page space-y-6 py-10">
       <PageHeader
@@ -141,12 +136,15 @@ const OrgAdminQuote = () => {
         title="Quote e rinnovi"
         subtitle="Scadenze, incassi e nuove tessere riuniti per annualità."
         actions={
+          <div className="flex flex-wrap gap-3">
+          <Link className="btn-secondary" to="/org-admin/incassi">Incassi e riconciliazione</Link>
           <a
             className="btn-secondary"
             href={`/api/org-admin/quotes.csv?year=${year}&status=${encodeURIComponent(status)}&q=${encodeURIComponent(search)}`}
           >
             Esporta CSV
           </a>
+          </div>
         }
       />
 
@@ -190,10 +188,20 @@ const OrgAdminQuote = () => {
                 Cerca socio
                 <input className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Nome, cognome o email" />
               </label>
-              <button type="button" className="btn-primary self-end" disabled={saving} onClick={() => void handleReminders()}>
-                {selected.size ? `Invia a ${selected.size}` : "Ricorda a tutti"}
-              </button>
             </div>
+
+            <MemberBulkActions
+              selection={{ mode: "ids", member_ids: [...selected] }} count={selected.size}
+              total={data.total} pageCount={data.items.length} allPageChecked={allVisibleSelected}
+              disabled={saving || loading} storageKey={`assonam-member-bulk:${admin?.org_id ?? "org"}:${admin?.id ?? "self"}`}
+              actions={["quote_reminder"]} membershipYear={year} showSelectionControls={false}
+              onTogglePage={() => setSelected((previous) => {
+                const next = new Set(previous);
+                for (const item of data.items) { if (allVisibleSelected) next.delete(item.member_id); else next.add(item.member_id); }
+                return next;
+              })}
+              onClear={() => setSelected(new Set())} onSelectAll={() => {}} onCompleted={() => { void load(); }}
+            />
 
             {data.items.length === 0 ? (
               <EmptyState title="Nessun socio in questo elenco" description="Modifica annualità o filtri per vedere altri rinnovi." />
@@ -209,7 +217,11 @@ const OrgAdminQuote = () => {
                             type="checkbox"
                             aria-label="Seleziona tutti i soci visibili"
                             checked={allVisibleSelected}
-                            onChange={(event) => setSelected(event.target.checked ? new Set(data.items.map((item) => item.member_id)) : new Set())}
+                            onChange={(event) => setSelected((previous) => {
+                              const next = new Set(previous);
+                              for (const item of data.items) { if (event.target.checked) next.add(item.member_id); else next.delete(item.member_id); }
+                              return next;
+                            })}
                           />
                         </th>
                         <th className="px-4 py-3">Socio</th>
@@ -240,13 +252,16 @@ const OrgAdminQuote = () => {
                           <td className="px-4 py-4 tabular-nums">{formatDate(row.previous_valid_through)}</td>
                           <td className="px-4 py-4"><StatusChip tone={renewalTone(row)}>{renewalLabel(row)}</StatusChip></td>
                           <td className="px-4 py-4 font-semibold tabular-nums">{euro(row.fee_amount, row.currency)}</td>
-                          <td className="px-4 py-4"><StatusChip tone={row.payment_state === "paid" ? "success" : row.payment_state === "pending" ? "warning" : "muted"}>{row.payment_state === "paid" ? "Pagato" : row.payment_state === "pending" ? "In corso" : row.payment_state === "not_required" ? "Non richiesta" : "Da pagare"}</StatusChip></td>
+                          <td className="px-4 py-4">
+                            <StatusChip tone={row.payment_state === "paid" ? "success" : ["pending", "partial"].includes(row.payment_state) ? "warning" : "muted"}>{row.payment_state === "paid" ? "Pagato" : row.payment_state === "partial" ? "Parzialmente pagato" : row.payment_state === "pending" ? "In corso" : row.payment_state === "not_required" ? "Non richiesta" : "Da pagare"}</StatusChip>
+                            {row.accounting_balance && row.accounting_balance.outstanding_cents > 0 && <p className="mt-1 text-xs">Residuo {euro(row.accounting_balance.outstanding_cents / 100, row.accounting_balance.currency)}</p>}
+                          </td>
                           <td className="px-4 py-4 tabular-nums">{row.new_card_no ?? "-"}</td>
                           <td className="px-4 py-4">
                             <div className="flex justify-end gap-2">
-                              {!row.renewed && row.payment_state !== "paid" && row.fee_amount > 0 ? <button type="button" className="btn-secondary !px-3 !py-2 !text-xs" onClick={() => setPaymentRow(row)}>Registra pagamento</button> : null}
+                              {row.payment_state === "partial" ? <Link className="btn-secondary !px-3 !py-2 !text-xs" to={`/org-admin/incassi?member_id=${row.member_id}&year=${year}`}>Completa saldo</Link> : row.payment_state !== "paid" && row.fee_amount > 0 ? <button type="button" className="btn-secondary !px-3 !py-2 !text-xs" onClick={() => setPaymentRow(row)}>Registra pagamento</button> : null}
                               {!row.renewed && row.can_confirm_without_payment && row.payment_state !== "paid" && row.renewal_status !== "approved_waiting_card" ? <button type="button" className="btn-ghost !px-3 !py-2 !text-xs" disabled={saving} onClick={() => void handleConfirm(row)}>Conferma</button> : null}
-                              {!row.renewed && !["approved_waiting_card", "paid_waiting_card"].includes(row.renewal_status) ? <button type="button" className="btn-ghost !px-3 !py-2 !text-xs" disabled={saving} onClick={() => void handleReminders([row.member_id])}>Promemoria</button> : null}
+                              {row.payment_state !== "paid" && row.fee_amount > 0 ? <button type="button" className="btn-ghost !px-3 !py-2 !text-xs" disabled={saving} onClick={() => setSelected((previous) => new Set([...previous, row.member_id]))}>Seleziona per sollecito</button> : null}
                             </div>
                           </td>
                         </tr>
@@ -256,6 +271,11 @@ const OrgAdminQuote = () => {
                 </div>
               </div>
             )}
+            <nav className="mt-4 flex justify-end gap-3" aria-label="Pagine quote">
+              <button className="btn-secondary" type="button" disabled={loading || page === 0} onClick={() => setPage((value) => value - 1)}>Precedente</button>
+              <span className="self-center text-sm">Pagina {page + 1} di {Math.max(1, Math.ceil(data.total / 25))}</span>
+              <button className="btn-secondary" type="button" disabled={loading || (page + 1) * 25 >= data.total} onClick={() => setPage((value) => value + 1)}>Successiva</button>
+            </nav>
           </SectionPanel>
         </>
       ) : null}

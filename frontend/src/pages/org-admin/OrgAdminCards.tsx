@@ -168,7 +168,6 @@ const OrgAdminCards = () => {
   const [movementsTotal, setMovementsTotal] = useState(0);
   const [movementsYear, setMovementsYear] = useState<number | null>(null);
   const [summaryTotal, setSummaryTotal] = useState(0);
-  const [issuedMembersCount, setIssuedMembersCount] = useState(0);
   const [metrics, setMetrics] = useState<OrgAdminMetrics | null>(null);
   const [membershipSettings, setMembershipSettings] = useState<OrgAdminMembershipSettings | null>(null);
   const [cardStyleDraft, setCardStyleDraft] = useState<OrgAdminCardStyle>(defaultCardStyle);
@@ -215,7 +214,6 @@ const OrgAdminCards = () => {
         setCardStyleDraft(normalizeCardStyle(settingsData.card_style));
         setCardLogoPreviewUrl(settingsData.card_logo_url || null);
         setSummaryTotal(membersData.summary?.total_theoretical_membership_fees ?? 0);
-        setIssuedMembersCount(membersData.summary?.issued_members_count ?? 0);
         setMetrics(metricsData);
       })
       .catch((err) => {
@@ -323,7 +321,6 @@ const OrgAdminCards = () => {
       const membersData = await fetchOrgAdminMembers({ limit: 1, offset: 0 });
       setMembershipSettings(response.settings);
       setSummaryTotal(membersData.summary?.total_theoretical_membership_fees ?? 0);
-      setIssuedMembersCount(membersData.summary?.issued_members_count ?? 0);
       setMembershipSettingsError("");
     } catch (err) {
       setMembershipSettingsError(err instanceof Error ? err.message : "Errore aggiornamento impostazioni tessera.");
@@ -368,7 +365,6 @@ const OrgAdminCards = () => {
     if (!stock?.total) return 0;
     return Math.min(100, Math.round(((stock.used ?? 0) / stock.total) * 100));
   }, [stock]);
-  const pendingWithoutCardCount = Math.max(metrics?.pending_requests_count ?? 0, 0);
   const visibleMovements = useMemo(
     () =>
       movements.filter((movement) => {
@@ -479,17 +475,17 @@ const OrgAdminCards = () => {
       ) : (
         <>
           <div className="org-admin-mobile-stats-strip" aria-label="Riepilogo tessere">
-            <span><strong>{stock?.used ?? issuedMembersCount}</strong> Tessere attive</span>
-            <span><strong>{pendingWithoutCardCount}</strong> In scadenza</span>
-            <span><strong>{metrics?.cards_remaining === 0 && (metrics?.cards_total ?? 0) > 0 ? "Stop" : 0}</strong> Scadute</span>
-            <span><strong>{movementsTotal || 0}</strong> Lotti</span>
+            <span><strong>{metrics?.active_members_count ?? 0}</strong> Tessere attive</span>
+            <span><strong>{metrics?.expiring_members_count ?? 0}</strong> In scadenza</span>
+            <span><strong>{metrics?.expired_members_count ?? 0}</strong> Scadute</span>
+            <span><strong>{movementsTotal || 0}</strong> Movimenti</span>
           </div>
 
           <div className="org-admin-desktop-kpi-grid grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <KpiCard label="Tessere attive" value={stock?.used ?? issuedMembersCount} hint="+12% vs mese scorso" tone="success" />
-            <KpiCard label="In scadenza" value={pendingWithoutCardCount} hint="Richieste senza tessera" tone="warning" />
-            <KpiCard label="Scadute" value={metrics?.cards_remaining === 0 && (metrics?.cards_total ?? 0) > 0 ? "Stock esaurito" : 0} hint="Da rinnovare" tone={(stock?.remaining ?? 0) === 0 && (stock?.total ?? 0) > 0 ? "danger" : "muted"} />
-            <KpiCard label="Lotti disponibili" value={movementsTotal || 0} hint="Con disponibilità" tone="info" />
+            <KpiCard label="Tessere attive" value={metrics?.active_members_count ?? 0} hint="Soci con tessera attiva" tone="success" />
+            <KpiCard label="In scadenza" value={metrics?.expiring_members_count ?? 0} hint="Nei prossimi 30 giorni" tone="warning" />
+            <KpiCard label="Scadute" value={metrics?.expired_members_count ?? 0} hint="Tessere scadute" tone={(stock?.remaining ?? 0) === 0 && (stock?.total ?? 0) > 0 ? "danger" : "muted"} />
+            <KpiCard label="Movimenti" value={movementsTotal || 0} hint="Storico tessere" tone="info" />
           </div>
 
           {(stock?.remaining ?? 0) === 0 && (stock?.total ?? 0) > 0 ? (

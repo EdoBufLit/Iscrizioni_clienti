@@ -144,8 +144,11 @@ def test_all_active_orgs_enforce_their_signup_policy(client, db):
     # Session-scoped TestClient can keep admin cookies from previous tests.
     client.post("/api/org-admin/auth/logout")
     client.post("/api/super-admin/auth/logout")
+    # Manually-installed hostless HTTPX cookies are not removed by a normal
+    # host-scoped Set-Cookie deletion; start this public-policy test cleanly.
+    client.cookies.clear()
 
-    orgs = db.query(Organization).filter(Organization.is_active.is_(True)).all()
+    orgs = db.query(Organization).filter(Organization.is_active.is_(True), Organization.deleted_at.is_(None)).all()
     if not orgs:
         pytest.skip("No active organizations in test DB")
 

@@ -205,7 +205,7 @@ const OrgAdminDashboard = () => {
                 <div>
                   <div
                     className={`flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-300 ${
-                      exhausted ? "bg-red-100 text-red-600" : "bg-brand/5 text-brand group-hover:bg-brand group-hover:text-white"
+                      exhausted ? "bg-red-100 text-red-600" : "bg-brand/5 text-brand group-hover:bg-brand group-hover:text-[var(--theme-on-brand)]"
                     }`}
                   >
                     <svg

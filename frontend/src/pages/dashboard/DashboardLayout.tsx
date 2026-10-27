@@ -171,14 +171,14 @@ const DashboardLayout = () => {
                     </h1>
                     {statusInfo && (
                       <span
-                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider leading-none ${statusInfo.color}`}
+                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-bold tracking-normalr leading-none ${statusInfo.color}`}
                       >
                         {statusInfo.label}
                       </span>
                     )}
                   </div>
                   {orgName && (
-                    <p className="truncate text-[11px] font-medium text-neutral-500 uppercase tracking-wide opacity-80 mt-1 leading-none">
+                    <p className="truncate text-[11px] font-medium text-neutral-500 tracking-normal opacity-80 mt-1 leading-none">
                       {orgName}
                     </p>
                   )}
@@ -211,7 +211,7 @@ const DashboardLayout = () => {
             <div className="app-divider hidden h-4 w-px sm:block" />
             {!loading && user && (
               <button
-                className="btn-ghost !px-4 !py-2 !text-xs font-bold uppercase tracking-wider"
+                className="btn-ghost !px-4 !py-2 !text-xs font-bold tracking-normalr"
                 type="button"
                 onClick={async () => {
                   await apiLogout();
@@ -231,7 +231,7 @@ const DashboardLayout = () => {
           {/* Sidebar — desktop */}
           <aside className="hidden w-60 shrink-0 md:block">
             <div className="surface sticky top-24 p-5">
-              <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400/80 mb-5">
+              <h2 className="text-[10px] font-bold tracking-normal text-neutral-400/80 mb-5">
                 Menu principale
               </h2>
               <nav className="flex flex-col gap-1.5" aria-label="Dashboard navigation">

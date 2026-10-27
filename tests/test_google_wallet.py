@@ -253,11 +253,12 @@ def test_google_wallet_object_payload_uses_assonam_fallback_without_org_branding
     )
 
 
-def test_google_wallet_object_payload_uses_oasi2_branding_fallback(db, monkeypatch):
+@pytest.mark.parametrize("slug", ["oasi-2", "golden-age-club"])
+def test_google_wallet_object_payload_uses_oasi2_branding_fallback(db, monkeypatch, slug):
     member = _create_active_member(db, slug_prefix="wallet-branding-oasi2")
     org = member.organization
     assert org is not None
-    org.slug = "oasi-2"
+    org.slug = slug
     org.wallet_bg_color = None
     org.wallet_logo_url = None
     org.wallet_hero_image_url = None
@@ -272,7 +273,7 @@ def test_google_wallet_object_payload_uses_oasi2_branding_fallback(db, monkeypat
         object_id=f"issuer.oasi2.{member.id}.{member.card_year}",
     )
 
-    assert payload["hexBackgroundColor"] == "#0B3C75"
+    assert payload["hexBackgroundColor"] == "#3A0015"
     assert payload["cardTitle"]["defaultValue"]["value"] == "Golden Age Club - Speakeasy"
-    assert payload["logo"]["sourceUri"]["uri"].endswith("/static/card-logos/golden-age-20260921.png")
-    assert payload["heroImage"]["sourceUri"]["uri"].endswith("/static/wallet-heroes/oasi-2-hero.png")
+    assert payload["logo"]["sourceUri"]["uri"].endswith("/static/card-logos/golden-age-wallet-20260921.png")
+    assert payload["heroImage"]["sourceUri"]["uri"].endswith("/static/wallet-heroes/golden-age-20260921.png")

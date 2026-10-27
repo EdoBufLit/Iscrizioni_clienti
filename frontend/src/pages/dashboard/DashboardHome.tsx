@@ -6,6 +6,8 @@ import {
   type MemberCardPreviewData,
 } from "../../components/cards/MemberCardPreview";
 import Skeleton from "../../components/ui/Skeleton";
+import TemporaryMembershipPanel from "./TemporaryMembershipPanel";
+import { formatTemporaryDate } from "../../lib/temporaryMemberships";
 import type { DashboardContext } from "./DashboardLayout";
 import {
   AuthError,
@@ -166,7 +168,7 @@ const DashboardHome = () => {
   useEffect(() => {
     if (!user) return;
     void Promise.all([loadMembership(), loadNotifications()]);
-  }, [user?.id]);
+  }, [user?.id, user?.card_no, user?.membership_type, user?.status]);
 
   const statusInfo = user
     ? STATUS_STYLE[user.status] ?? { label: user.status, color: "border-neutral-200 bg-neutral-50 text-neutral-600" }
@@ -279,17 +281,17 @@ const DashboardHome = () => {
         </>
       ) : user ? (
         <>
-          {membership?.current ? (
+          {membership?.current && (user.membership_type !== "temporary" || membership.can_renew || membership.renewal) ? (
             <section
               className="surface-strong border border-brand/10 p-6 sm:flex sm:items-center sm:justify-between sm:gap-8"
               aria-labelledby="membership-renewal-title"
             >
               <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-brand">Annualità associativa</p>
+                <p className="text-[10px] font-bold tracking-normal text-brand">Annualità associativa</p>
                 <h2 id="membership-renewal-title" className="mt-2 text-xl font-bold text-neutral-900">
                   {membership.renewal?.card_no != null
                     ? `Rinnovo ${membership.renewal.membership_year} completato`
-                    : `La tessera scade il ${new Date(`${membership.current.valid_through}T12:00:00`).toLocaleDateString("it-IT")}`}
+                    : `${user.membership_type === "temporary" ? "Ultima tessera annuale, scadenza" : user.status === "expired" ? "La tessera è scaduta il" : "La tessera scade il"} ${new Date(`${membership.current.valid_through}T12:00:00`).toLocaleDateString("it-IT")}`}
                 </h2>
                 <p className="mt-2 text-sm font-medium leading-relaxed text-neutral-600">
                   {membership.renewal?.card_no != null
@@ -298,7 +300,9 @@ const DashboardHome = () => {
                       ? "Il rinnovo è in attesa del pagamento."
                       : membership.can_renew
                         ? "Puoi rinnovare ora senza ripetere l'iscrizione."
-                        : `Il rinnovo sarà disponibile dal ${membership.renewal_opens_on ? new Date(`${membership.renewal_opens_on}T12:00:00`).toLocaleDateString("it-IT") : "periodo indicato"}.`}
+                        : membership.renewal_opens_on && new Date(`${membership.renewal_opens_on}T00:00:00`) > new Date()
+                          ? `Il rinnovo sarà disponibile dal ${new Date(`${membership.renewal_opens_on}T12:00:00`).toLocaleDateString("it-IT")}.`
+                          : "Il rinnovo non è disponibile mentre è in corso un'altra richiesta."}
                 </p>
                 {renewalMessage ? <p className="mt-3 text-sm font-semibold text-emerald-700" role="status">{renewalMessage}</p> : null}
                 {renewalError ? <p className="mt-3 text-sm font-semibold text-red-600" role="alert">{renewalError}</p> : null}
@@ -316,11 +320,13 @@ const DashboardHome = () => {
             </section>
           ) : null}
 
+          <TemporaryMembershipPanel onIssued={reloadProfile} />
+
           {notifications.length ? (
             <section className="surface p-6" aria-labelledby="member-notifications-title">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-brand">Area riservata</p>
+                  <p className="text-[10px] font-bold tracking-normal text-brand">Area riservata</p>
                   <h2 id="member-notifications-title" className="mt-2 text-xl font-bold text-neutral-900">Comunicazioni</h2>
                 </div>
                 <span className="text-xs font-semibold text-neutral-500">
@@ -361,7 +367,7 @@ const DashboardHome = () => {
                 data-tour={card.key === "status" ? "member-status" : undefined}
               >
                 <div>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand/5 text-brand group-hover:bg-brand group-hover:text-white transition-all duration-300">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand/5 text-brand group-hover:bg-brand group-hover:text-[var(--theme-on-brand)] transition-all duration-300">
                     <svg
                       className="h-5 w-5"
                       viewBox="0 0 24 24"
@@ -375,7 +381,7 @@ const DashboardHome = () => {
                     </svg>
                   </div>
 
-                  <p className="mt-5 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 group-hover:text-neutral-500 transition-colors">
+                  <p className="mt-5 text-[10px] font-bold tracking-normal text-neutral-400 group-hover:text-neutral-500 transition-colors">
                     {card.label}
                   </p>
 
@@ -386,14 +392,16 @@ const DashboardHome = () => {
                           {statusInfo.label}
                         </p>
                         <span
-                          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${statusInfo.color}`}
+                          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold tracking-normalr ${statusInfo.color}`}
                         >
-                          {user.status === "active" ? "OK" : "IN CORSO"}
+                          {user.status === "active" ? "OK" : user.status === "expired" ? "SCADUTA" : "IN CORSO"}
                         </span>
                       </div>
                       <p className="mt-3 text-sm font-medium leading-relaxed text-neutral-500 opacity-80">
                         {user.status === "active"
                           ? "Iscrizione confermata e tessera abilitata."
+                          : user.status === "expired"
+                            ? "La tessera è scaduta. Scegli una delle opzioni disponibili per rinnovare."
                           : user.status === "pending_cards"
                             ? "Iscrizione approvata, tessera in assegnazione."
                             : "Richiesta in fase di lavorazione."}
@@ -428,17 +436,22 @@ const DashboardHome = () => {
           </div>
 
           <section className="surface-strong relative overflow-hidden p-6 sm:p-8 md:p-10">
-            <div className="relative z-10 grid gap-10 xl:grid-cols-[minmax(34rem,1fr)_minmax(30rem,34rem)] 2xl:grid-cols-[minmax(38rem,1fr)_minmax(34rem,38rem)] xl:items-center xl:gap-12">
+            <div className="relative z-10 grid gap-10 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] 2xl:grid-cols-[minmax(0,1fr)_minmax(0,38rem)] xl:items-center xl:gap-12">
               <div className="min-w-0 max-w-2xl xl:max-w-[42rem] xl:pr-4">
-                <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-accent">
+                <p className="text-[10px] font-bold tracking-normal text-accent">
                   Documento digitale
                 </p>
-                <h2 className="mt-3 text-3xl font-bold tracking-tight text-neutral-900" style={{ fontFamily: "\"Source Serif 4\", serif" }}>
+                <h2 className="mt-3 text-3xl font-bold tracking-tight text-neutral-900">
                   La tua tessera socio
                 </h2>
                 <p className="mt-4 max-w-[36rem] text-base font-medium leading-relaxed text-neutral-600 opacity-90">
                   Questa è la tua tessera digitale ASSO.N.A.M. Clicca sulla card per ruotarla e accedere ai dettagli sul retro o verificare il QR code.
                 </p>
+                {user.membership_type === "temporary" && user.valid_until && (
+                  <p className="mt-3 text-sm font-semibold text-neutral-700">
+                    Scadenza temporanea: {formatTemporaryDate(user.valid_until)} (ora italiana).
+                  </p>
+                )}
 
                 <div className="mt-8 flex flex-wrap items-center gap-4 sm:flex-nowrap">
                   <button
@@ -454,7 +467,7 @@ const DashboardHome = () => {
                     </svg>
                     {walletLoading ? "Generazione..." : "Aggiungi a Google Wallet"}
                   </button>
-                  <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest">
+                  <p className="text-xs font-bold text-neutral-400 tracking-normal">
                     Google Wallet <span className="mx-1.5 opacity-30">•</span> Android
                   </p>
                 </div>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import ConfirmModal from "../../../../components/ui/ConfirmModal";
@@ -21,7 +21,7 @@ import {
   fetchOrgAdminEmailTemplate,
   fetchOrgAdminEmailTemplates,
   fetchOrgAdminEmailTemplateVariables,
-  fetchOrgAdminForms,
+  fetchOrgAdminFormSummaries,
   previewOrgAdminEmailTemplate,
   searchOrgAdminCommunicationMembers,
   sendOrgAdminCommunicationBuilderTestEmail,
@@ -29,7 +29,7 @@ import {
   updateOrgAdminEmailCampaign,
   updateOrgAdminEmailTemplate,
   uploadOrgAdminCommunicationAsset,
-  type AssociationForm,
+  type AssociationFormSummary,
   type OrgAdminCampaignAudienceType,
   type OrgAdminCampaignRecipientMode,
   type OrgAdminEmailBuilderAsset,
@@ -40,7 +40,8 @@ import {
   type OrgAdminEmailTemplateVariable,
   type OrgAdminMember,
 } from "../../../../lib/api";
-import { GrapesEmailBuilder, type GrapesEmailBuilderHandle } from "./GrapesEmailBuilder";
+import type { GrapesEmailBuilderHandle } from "./GrapesEmailBuilder";
+const GrapesEmailBuilder = lazy(() => import("./GrapesEmailBuilder").then((module) => ({ default: module.GrapesEmailBuilder })));
 import { KpiCard, SectionPanel, StatusChip, Stepper } from "../OrgAdminPrimitives";
 import {
   DEFAULT_CAMPAIGN_AUDIENCE,
@@ -342,7 +343,7 @@ function CampaignSummaryPanel({
   draft: CampaignDraft;
   audienceEstimate: number | null;
   selectedTemplateName: string;
-  activeForms: AssociationForm[];
+  activeForms: AssociationFormSummary[];
   onSave: () => void;
   onContinue: () => void;
   busy: string | null;
@@ -602,7 +603,7 @@ export function MessagesHub({
   const [busy, setBusy] = useState<string | null>(null);
   const [templates, setTemplates] = useState<OrgAdminEmailTemplate[]>([]);
   const [campaigns, setCampaigns] = useState<OrgAdminEmailCampaign[]>([]);
-  const [forms, setForms] = useState<AssociationForm[]>([]);
+  const [forms, setForms] = useState<AssociationFormSummary[]>([]);
   const [variables, setVariables] = useState<OrgAdminEmailTemplateVariable[]>([]);
   const [assets, setAssets] = useState<OrgAdminEmailBuilderAsset[]>([]);
   const [templateFilterType, setTemplateFilterType] = useState<OrgAdminEmailTemplateType | "all">("all");
@@ -650,7 +651,7 @@ export function MessagesHub({
       const [templatesRes, campaignsRes, formsRes, variablesRes, assetsRes] = await Promise.all([
         fetchOrgAdminEmailTemplates({ scope: "all", includeInactive: true }),
         fetchOrgAdminEmailCampaigns(),
-        fetchOrgAdminForms(),
+        fetchOrgAdminFormSummaries(),
         fetchOrgAdminEmailTemplateVariables(),
         fetchOrgAdminCommunicationAssets(),
       ]);
@@ -1438,7 +1439,7 @@ export function MessagesHub({
           ) : null}
 
           {templateStep === "editor" ? (
-            <GrapesEmailBuilder
+            <Suspense fallback={<Skeleton className="h-96 w-full" />} ><GrapesEmailBuilder
               ref={templateBuilderRef}
               editorKey={templateDraft.builderKey}
               initialMjmlSource={templateDraft.mjmlSource}
@@ -1449,7 +1450,7 @@ export function MessagesHub({
               onChange={syncTemplateSnapshot}
               onUploadAsset={handleUploadAsset}
               onDeleteAsset={handleDeleteAsset}
-            />
+            /></Suspense>
           ) : null}
 
           {templateStep === "review" ? (
@@ -1715,7 +1716,7 @@ export function MessagesHub({
 
           {campaignStep === "editor" ? (
             <div className="space-y-6">
-              <GrapesEmailBuilder
+              <Suspense fallback={<Skeleton className="h-96 w-full" />} ><GrapesEmailBuilder
                 ref={campaignBuilderRef}
                 editorKey={campaignDraft.builderKey}
                 initialMjmlSource={campaignDraft.mjmlSource}
@@ -1725,7 +1726,7 @@ export function MessagesHub({
                 onChange={syncCampaignSnapshot}
                 onUploadAsset={handleUploadAsset}
                 onDeleteAsset={handleDeleteAsset}
-              />
+              /></Suspense>
               {campaignDraft.recipientMode === "selected_members" ? (
                 <MemberPicker selectedMembers={selectedMembers} results={memberSearchResults} query={memberQuery} onQueryChange={setMemberQuery} onToggle={toggleSelectedMember} />
               ) : null}

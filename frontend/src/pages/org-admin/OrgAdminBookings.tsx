@@ -11,8 +11,10 @@ import {
   deleteOrgAdminRoomTable,
   fetchOrgAdminBookingEventSeries,
   fetchOrgAdminBooking,
-  fetchOrgAdminBookings,
-  fetchOrgAdminForms,
+  fetchOrgAdminBookingsAgendaDay,
+  fetchOrgAdminBookingSummary,
+  type BookingDaySummary,
+  fetchOrgAdminFormSummaries,
   fetchOrgAdminRoomMap,
   fetchOrgAdminRooms,
   fetchOrgAdminRoomTables,
@@ -26,7 +28,7 @@ import {
   updateOrgAdminRoom,
   updateOrgAdminRoomTable,
   type AssociationBooking,
-  type AssociationForm,
+  type AssociationFormSummary,
   type OrgAdminBookingEventSeries,
   type AssociationRoom,
   type AssociationRoomMap,
@@ -468,7 +470,7 @@ export default function OrgAdminBookings() {
   const [statusFilter, setStatusFilter] = useState("");
   const [dayFilter, setDayFilter] = useState<DayStatusFilter>("pending");
   const [formFilter, setFormFilter] = useState<number | "">("");
-  const [forms, setForms] = useState<AssociationForm[]>([]);
+  const [forms, setForms] = useState<AssociationFormSummary[]>([]);
   const [rooms, setRooms] = useState<AssociationRoom[]>([]);
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
   const [roomDraft, setRoomDraft] = useState(emptyRoomDraft());
@@ -480,6 +482,13 @@ export default function OrgAdminBookings() {
   const [eventSeries, setEventSeries] = useState<OrgAdminBookingEventSeries[]>([]);
   const [eventSeriesDraft, setEventSeriesDraft] = useState(emptyEventSeriesDraft());
   const [listItems, setListItems] = useState<AssociationBooking[]>([]);
+  const [periodDays, setPeriodDays] = useState<BookingDaySummary[]>([]);
+  const [dayTotal, setDayTotal] = useState(0);
+  const [dayPage, setDayPage] = useState(0);
+  const [ready, setReady] = useState(false);
+  const bookingsController = useRef<AbortController | null>(null);
+  const roomGeneration = useRef(0);
+  const dailySummary = useMemo(() => new Map(periodDays.map((day) => [day.date, day])), [periodDays]);
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(searchParams.get("date") || todayIso());
   const [selectedBookingId, setSelectedBookingId] = useState<number | null>(queryBookingId);
   const [selectedBooking, setSelectedBooking] = useState<AssociationBooking | null>(null);
@@ -635,8 +644,11 @@ export default function OrgAdminBookings() {
   }, []);
 
   useEffect(() => {
-    if (!locked) void loadBookings();
-  }, [statusFilter, formFilter, locked]);
+    if (ready && !locked) void loadBookings();
+    return () => bookingsController.current?.abort();
+  }, [ready, statusFilter, formFilter, locked, selectedCalendarDate, agendaMonth, dayPage]);
+
+  useEffect(() => { setDayPage(0); }, [selectedCalendarDate, statusFilter, formFilter]);
 
   useEffect(() => {
     if (!locked && selectedRoomId) void loadRoomState(selectedRoomId);
@@ -647,20 +659,24 @@ export default function OrgAdminBookings() {
       setSelectedBooking(null);
       return;
     }
-    fetchOrgAdminBooking(selectedBookingId)
+    const controller = new AbortController();
+    setSelectedBooking(null);
+    fetchOrgAdminBooking(selectedBookingId, controller.signal)
       .then(({ booking }) => {
+        if (controller.signal.aborted) return;
         setSelectedBooking(booking);
         setAssignmentRoomId(booking.room_id ?? "");
         setAssignmentTableId(booking.table_id ?? "");
         syncMapWithBooking(booking);
       })
-      .catch((err) =>
-        showToast({
+      .catch((err) => {
+        if (!controller.signal.aborted) showToast({
           tone: "error",
           title: "Dettaglio non disponibile",
           message: err instanceof Error ? err.message : "Errore caricamento prenotazione.",
-        }),
-      );
+        });
+      });
+    return () => controller.abort();
   }, [selectedBookingId, locked, showToast, syncMapWithBooking]);
 
   useEffect(() => {
@@ -709,19 +725,10 @@ export default function OrgAdminBookings() {
     }
     return map;
   }, [listItems]);
-  const visibleItems = useMemo(
-    () => listItems.filter((booking) => (booking.booking_date || "").startsWith(agendaMonth.slice(0, 7))),
-    [agendaMonth, listItems],
-  );
-  const monthOccupancy = useMemo(
-    () => ({
-      total: visibleItems.length,
-      confirmed: visibleItems.filter((item) => item.status === "confirmed").length,
-      pending: visibleItems.filter((item) => item.status === "pending" || item.status === "new").length,
-      completed: visibleItems.filter((item) => item.status === "completed" || item.status === "seated").length,
-    }),
-    [visibleItems],
-  );
+  const monthOccupancy = useMemo(() => periodDays.filter((day) => day.date.startsWith(agendaMonth.slice(0, 7)))
+    .reduce((result, day) => ({ total: result.total + day.total, confirmed: result.confirmed + day.confirmed,
+      pending: result.pending + day.pending, completed: result.completed + day.completed }),
+      { total: 0, confirmed: 0, pending: 0, completed: 0 }), [periodDays, agendaMonth]);
   const activeDayItems = useMemo(
     () => (selectedCalendarDate ? bookingsByDay.get(selectedCalendarDate) ?? [] : []),
     [bookingsByDay, selectedCalendarDate],
@@ -747,7 +754,7 @@ export default function OrgAdminBookings() {
   }, []);
 
   useEffect(() => {
-    if (!selectedCalendarDate) return;
+    if (!ready || !selectedCalendarDate || queryBookingId === selectedBookingId) return;
     const items = bookingsByDay.get(selectedCalendarDate) ?? [];
     if (items.length === 0) {
       setSelectedBookingId(null);
@@ -756,13 +763,13 @@ export default function OrgAdminBookings() {
     if (selectedBookingId && !items.some((item) => item.id === selectedBookingId)) {
       setSelectedBookingId(null);
     }
-  }, [bookingsByDay, isMobileAgendaViewport, queryBookingId, selectedBookingId, selectedCalendarDate]);
+  }, [bookingsByDay, isMobileAgendaViewport, queryBookingId, selectedBookingId, selectedCalendarDate, ready]);
 
   async function loadInitial() {
     setLoading(true);
     try {
       const [formsResponse, roomsResponse, eventSeriesResponse] = await Promise.all([
-        fetchOrgAdminForms(),
+        fetchOrgAdminFormSummaries(),
         fetchOrgAdminRooms({ includeInactive: true }),
         fetchOrgAdminBookingEventSeries(),
       ]);
@@ -776,7 +783,7 @@ export default function OrgAdminBookings() {
       setRoomDraft(firstRoom ? { id: firstRoom.id, name: firstRoom.name, is_active: firstRoom.is_active } : emptyRoomDraft());
       setTableDraft(emptyTableDraft(firstRoom?.id ?? null));
       setLocked(false);
-      await loadBookings();
+      setReady(true);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Errore caricamento prenotazioni.";
       const isLocked = message.toLowerCase().includes("modulo comunicazioni") || message.toLowerCase().includes("richiedono il modulo");
@@ -790,26 +797,35 @@ export default function OrgAdminBookings() {
   }
 
   async function loadBookings() {
+    bookingsController.current?.abort();
+    const controller = new AbortController();
+    bookingsController.current = controller;
+    const focusDate = selectedCalendarDate || todayIso();
+    const monthStart = firstDayOfMonthIso(focusDate);
+    const nextMonth = new Date(`${monthStart}T12:00:00`);
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+    const monthEnd = addDaysIso(toDateKey(nextMonth), -1);
+    const dateFrom = [monthStart, addDaysIso(focusDate, -2)].sort()[0];
+    const dateTo = [monthEnd, addDaysIso(focusDate, 4)].sort()[1];
     try {
-      const response = await fetchOrgAdminBookings({
-        status: statusFilter || undefined,
-        formId: formFilter || null,
-      });
-      const nextItems = Array.isArray(response.items) ? response.items : [];
-      setListItems(nextItems);
-      if (selectedBookingId && !nextItems.some((item) => item.id === selectedBookingId)) {
-        setSelectedBookingId(null);
-      }
+      const [response, summary] = await Promise.all([
+        fetchOrgAdminBookingsAgendaDay({ date: focusDate, status: statusFilter || undefined, formId: formFilter || null,
+          limit: 100, offset: dayPage * 100, signal: controller.signal }),
+        fetchOrgAdminBookingSummary({ dateFrom, dateTo, status: statusFilter || undefined, formId: formFilter || null, signal: controller.signal }),
+      ]);
+      if (controller.signal.aborted) return;
+      setListItems(Array.isArray(response.items) ? response.items : []);
+      setDayTotal(response.total);
+      setPeriodDays(summary.days);
     } catch (err) {
-      showToast({
-        tone: "error",
-        title: "Agenda non disponibile",
-        message: err instanceof Error ? err.message : "Errore caricamento prenotazioni.",
-      });
+      if (controller.signal.aborted) return;
+      showToast({ tone: "error", title: "Agenda non disponibile",
+        message: err instanceof Error ? err.message : "Errore caricamento prenotazioni." });
     }
   }
 
   async function loadRoomState(roomId: number, focus?: { date?: string | null; time?: string | null }) {
+    const generation = ++roomGeneration.current;
     const focusDate = focus?.date ?? mapDate;
     const focusTime = focus?.time ?? mapTime;
     try {
@@ -817,6 +833,7 @@ export default function OrgAdminBookings() {
         fetchOrgAdminRoomTables(roomId, { includeInactive: true }),
         fetchOrgAdminRoomMap(roomId, { date: focusDate, time: focusTime || null }),
       ]);
+      if (generation !== roomGeneration.current) return;
       const nextRoomTables = Array.isArray(tablesResponse.items) ? tablesResponse.items : [];
       const nextMapTables = Array.isArray(mapResponse.tables) ? mapResponse.tables : [];
       setRoomTables(nextRoomTables);
@@ -824,6 +841,7 @@ export default function OrgAdminBookings() {
       setMapTables(nextMapTables);
       if (nextMapTables[0] && !selectedMapTableId) setSelectedMapTableId(nextMapTables[0].id);
     } catch (err) {
+      if (generation !== roomGeneration.current) return;
       showToast({
         tone: "error",
         title: "Sala non disponibile",
@@ -1485,6 +1503,10 @@ export default function OrgAdminBookings() {
             setFormFilter={setFormFilter}
             forms={forms}
             bookingsByDay={bookingsByDay}
+            dailySummary={dailySummary}
+            dayTotal={dayTotal}
+            dayPage={dayPage}
+            setDayPage={setDayPage}
             selectedCalendarDate={selectedCalendarDate}
             setSelectedCalendarDate={setSelectedCalendarDate}
             activeDayItems={activeDayItems}
@@ -2184,8 +2206,10 @@ function AgendaSection(props: {
   setDayFilter: (value: DayStatusFilter) => void;
   formFilter: number | "";
   setFormFilter: (value: number | "") => void;
-  forms: AssociationForm[];
+  forms: AssociationFormSummary[];
   bookingsByDay: Map<string, AssociationBooking[]>;
+  dailySummary: Map<string, BookingDaySummary>;
+  dayTotal: number; dayPage: number; setDayPage: (page: number) => void;
   selectedCalendarDate: string | null;
   setSelectedCalendarDate: (value: string | null) => void;
   activeDayItems: AssociationBooking[];
@@ -2211,14 +2235,15 @@ function AgendaSection(props: {
 }) {
   const activeDayIsToday = props.selectedCalendarDate === todayIso();
   const mobileActionDayItems = props.activeDayItems;
-  const dayPending = props.activeDayItems.filter(isPendingBookingRequest).length;
-  const dayCovers = props.activeDayItems.reduce((total, item) => total + (item.party_size || 0), 0);
+  const selectedSummary = props.dailySummary.get(props.selectedCalendarDate || todayIso());
+  const dayPending = selectedSummary?.request_pending ?? 0;
+  const dayCovers = selectedSummary?.party_size ?? 0;
   const filteredDayItems = mobileActionDayItems.filter((booking) => matchesDayStatusFilter(booking, props.dayFilter));
   const selectedDateKey = props.selectedCalendarDate || todayIso();
   const dayRail = useMemo(() => buildDayRail(selectedDateKey), [selectedDateKey]);
-  const selectedDayItems = props.bookingsByDay.get(selectedDateKey) ?? [];
-  const selectedDayPending = selectedDayItems.filter(isPendingBookingRequest).length;
-  const selectedDayConfirmed = selectedDayItems.filter((item) => item.status === "confirmed").length;
+  const selectedDayTotal = selectedSummary?.total ?? 0;
+  const selectedDayPending = selectedSummary?.request_pending ?? 0;
+  const selectedDayConfirmed = selectedSummary?.confirmed ?? 0;
   const [detailSheetOpen, setDetailSheetOpen] = useState(false);
 
   const selectDay = (dateKey: string, expandFirstBooking = false) => {
@@ -2253,7 +2278,7 @@ function AgendaSection(props: {
         <div className="booking-request-workbench">
           <div className="booking-day-rail" aria-label="Giorni agenda">
             {dayRail.map(({ dateKey, date }) => {
-              const items = props.bookingsByDay.get(dateKey) ?? [];
+              const count = props.dailySummary.get(dateKey)?.total ?? 0;
               const isSelected = dateKey === selectedDateKey;
               const isToday = dateKey === todayIso();
               return (
@@ -2267,7 +2292,7 @@ function AgendaSection(props: {
                   <strong>{date.getDate()}</strong>
                   <small>{date.toLocaleDateString("it-IT", { month: "short" }).replace(".", "")}</small>
                   {isToday ? <em>Oggi</em> : null}
-                  {items.length > 0 ? <b>{items.length}</b> : null}
+                  {count > 0 ? <b>{count}</b> : null}
                 </button>
               );
             })}
@@ -2276,13 +2301,13 @@ function AgendaSection(props: {
             <div>
               <p>Richieste prenotazione</p>
               <strong>
-                {selectedDayPending}/{selectedDayItems.length || 0}
+                {selectedDayPending}/{selectedDayTotal}
               </strong>
             </div>
             <div className="booking-request-strip__rooms">
               <span>{selectedDayConfirmed} confermate</span>
               <span>{selectedDayPending} in attesa</span>
-              <span>{selectedDayItems.reduce((total, item) => total + (item.party_size || 0), 0)} persone</span>
+              <span>{dayCovers} persone</span>
             </div>
           </div>
         </div>
@@ -2335,7 +2360,7 @@ function AgendaSection(props: {
               </div>
               <div className="booking-mobile-day-rail" aria-label="Giorni agenda">
                 {dayRail.map(({ dateKey, date }) => {
-                  const items = props.bookingsByDay.get(dateKey) ?? [];
+                  const count = props.dailySummary.get(dateKey)?.total ?? 0;
                   const isSelected = dateKey === selectedDateKey;
                   const isToday = dateKey === todayIso();
                   return (
@@ -2349,7 +2374,7 @@ function AgendaSection(props: {
                       <strong>{date.getDate()}</strong>
                       <small>{date.toLocaleDateString("it-IT", { month: "short" }).replace(".", "")}</small>
                       {isToday ? <em>Oggi</em> : null}
-                      {items.length > 0 ? <b>{items.length}</b> : null}
+                      {count > 0 ? <b>{count}</b> : null}
                     </button>
                   );
                 })}
@@ -2368,12 +2393,17 @@ function AgendaSection(props: {
             </header>
 
             <div className="booking-day-panel__stats">
-              <span>{props.activeDayItems.length} totali</span>
+              <span>{props.dayTotal} totali</span>
               <span>{dayPending} da confermare</span>
               <span>{dayCovers} coperti</span>
             </div>
 
-              <div className="booking-day-panel__filters" role="tablist" aria-label="Filtra prenotazioni del giorno">
+              {props.dayTotal > 100 ? <nav className="flex items-center gap-3 px-4 py-3" aria-label="Pagine prenotazioni">
+              <button type="button" className="btn-secondary" disabled={props.dayPage === 0} onClick={() => props.setDayPage(props.dayPage - 1)}>Precedente</button>
+              <span>Pagina {props.dayPage + 1} di {Math.ceil(props.dayTotal / 100)}</span>
+              <button type="button" className="btn-secondary" disabled={(props.dayPage + 1) * 100 >= props.dayTotal} onClick={() => props.setDayPage(props.dayPage + 1)}>Successiva</button>
+            </nav> : null}
+            <div className="booking-day-panel__filters" role="tablist" aria-label="Filtra prenotazioni del giorno">
                 {dayStatusFilters.map((filter) => (
                   <button
                     key={filter.key}

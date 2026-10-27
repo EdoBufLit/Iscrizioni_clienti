@@ -1,0 +1,46 @@
+.install-app-prompt {
+  background: var(--theme-surface-elevated);
+  border-color: var(--theme-border-strong);
+  color: var(--theme-text);
+  box-shadow: var(--theme-shadow-lg);
+}
+
+.install-app-prompt__title {
+  color: var(--theme-text);
+}
+
+.install-app-prompt__copy,
+.install-app-prompt__close {
+  color: var(--theme-text-muted);
+}
+
+.install-app-prompt__badge {
+  background: var(--theme-badge-bg);
+  color: var(--theme-brand);
+}
+
+.install-app-prompt__install {
+  background: var(--theme-text);
+  color: var(--theme-surface-solid);
+}
+
+.install-app-prompt__install:hover {
+  background: var(--theme-text-muted);
+}
+
+.install-app-prompt__dismiss {
+  background: var(--theme-surface-solid);
+  border-color: var(--theme-border-strong);
+  color: var(--theme-text);
+}
+
+.install-app-prompt__dismiss:hover,
+.install-app-prompt__close:hover {
+  background: var(--theme-hover-strong);
+  color: var(--theme-text);
+}
+
+.install-app-prompt button:focus-visible {
+  outline: 2px solid var(--theme-brand);
+  outline-offset: 3px;
+}

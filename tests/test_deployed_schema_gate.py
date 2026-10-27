@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 import pytest
 from sqlalchemy import create_engine, text
 
@@ -30,6 +34,15 @@ def test_code_has_exactly_one_alembic_head():
 
     assert head
     assert isinstance(head, str)
+
+
+def test_revision_ids_fit_postgresql_alembic_version_column():
+    root = Path(__file__).resolve().parents[1]
+    scripts = ScriptDirectory.from_config(Config(str(root / "alembic.ini")))
+    # PostgreSQL enforces the default Alembic VARCHAR(32); SQLite does not.
+    oversized = [revision.revision for revision in scripts.walk_revisions()
+                 if len(revision.revision) > 32]
+    assert not oversized, f"Revision IDs exceed alembic_version.version_num: {oversized}"
 
 
 def test_deployed_schema_gate_rejects_missing_version_table(tmp_path):

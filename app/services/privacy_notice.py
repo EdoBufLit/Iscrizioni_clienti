@@ -11,8 +11,11 @@ from app.models import Member
 # The repository test makes any unnoticed text change fail until legal/technical
 # reviewers intentionally publish a new version and digest.
 PRIVACY_NOTICE_VERSION = "2026-07-15.2"
+# The shared UI restyling changes class names only, not the notice text or its
+# effective version. New acknowledgements bind the current rendered source;
+# existing acknowledgements retain their previously recorded artifact digest.
 PRIVACY_NOTICE_SHA256 = (
-    "a003fa011da6c0a13adc3a52e1eed1444c9f5d3b613234db43c2ed25a057a553"
+    "b11457af6e24ed0fcdf673577b2f7995de89c38eccdbabaf69dbdad8b6786d7f"
 )
 
 

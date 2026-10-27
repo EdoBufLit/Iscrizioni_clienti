@@ -58,7 +58,7 @@ const Contatti = () => {
             <div className="mt-10 grid gap-6 md:grid-cols-2" data-reveal="stagger">
               {CONTACT_BLOCKS.map((block) => (
                 <article key={block.label} className="surface p-6" data-reveal-item>
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-neutral-500">
+                  <p className="text-sm font-semibold text-neutral-500">
                     {block.label}
                   </p>
                   <p className="mt-3 text-base font-semibold text-neutral-900">{block.value}</p>

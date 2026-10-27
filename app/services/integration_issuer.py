@@ -21,7 +21,6 @@ from app.models import (
     MemberStatus,
     Organization,
     SignupSource,
-    Token,
     TokenType,
 )
 from app.services.card_allocation import allocate_next_card, release_card_number
@@ -32,6 +31,7 @@ from app.services.annual_memberships import (
 from app.services.card_verification import build_card_verification_token
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
+from app.services.member_sessions import issue_member_auth_token, replace_member_password
 from app.services.member_membership import (
     membership_type_label,
     resolve_member_membership_type,
@@ -44,7 +44,6 @@ from app.services.org_branding import (
     resolve_card_logo_url,
     resolve_club_display_name,
 )
-from app.utils import generate_token, hash_token
 
 
 logger = logging.getLogger(__name__)
@@ -144,15 +143,14 @@ def _resolve_active_organization(db: Session, org_id: int) -> Organization:
 
 
 def _build_magic_link(db: Session, member_id: int, frontend_base: str) -> str:
-    token_str = generate_token()
-    token = Token(
-        member_id=member_id,
+    member = db.query(Member).filter(Member.id == member_id).one()
+    token_str, _token = issue_member_auth_token(
+        db,
+        member=member,
         purpose=TokenType.LOGIN_MAGIC_LINK,
-        token_hash=hash_token(token_str),
         expires_at=datetime.utcnow()
         + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES),
     )
-    db.add(token)
     db.flush()
     return f"{frontend_base}/auth/verify?token={token_str}&role=member"
 
@@ -228,6 +226,12 @@ def _cleanup_deleted_conflicts(
         return 0
 
     for member in deleted_members:
+        replace_member_password(
+            db,
+            member_id=member.id,
+            expected_version=member.auth_version,
+            password_hash=None,
+        )
         cancel_current_annual_membership_term(db, member)
         release_card_number(
             db,

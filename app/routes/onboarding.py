@@ -12,11 +12,11 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import (
-    Member,
     MemberStatus,
     OnboardingTour,
 )
 from app.services.org_admin_sessions import get_current_org_admin_from_request
+from app.services.member_sessions import resolve_member_session
 
 router = APIRouter(prefix="/api/me/onboarding", tags=["onboarding"])
 
@@ -37,19 +37,9 @@ def _get_user_context(request: Request, db: Session):
         return admin.id, "org_admin", "org_admin_dashboard_v1"
 
     # Check member
-    member_id = request.session.get("member_id")
-    if member_id:
-        member = (
-            db.query(Member)
-            .filter(
-                Member.id == member_id,
-                Member.deleted_at.is_(None),
-                Member.status != MemberStatus.REJECTED,
-            )
-            .first()
-        )
-        if member:
-            return member.id, "member", "member_dashboard_v1"
+    member = resolve_member_session(request, db)
+    if member is not None and member.status != MemberStatus.REJECTED:
+        return member.id, "member", "member_dashboard_v1"
 
     return None, None, None
 

@@ -15,6 +15,7 @@ import {
 } from "../../lib/api";
 import { MemberCardPreview } from "../../components/cards/MemberCardPreview";
 import ManualPaymentForm, { type ManualPaymentPayload } from "./components/ManualPaymentForm";
+import TemporaryPurchasesPanel from "./components/TemporaryPurchasesPanel";
 import MemberDecisionPanel from "./components/MemberDecisionPanel";
 import RejectDocumentModal from "./components/RejectDocumentModal";
 import EditMemberProfileModal from "./components/EditMemberProfileModal";
@@ -648,7 +649,11 @@ export default function OrgAdminMemberDetail() {
   const paymentStatusLabel =
     member.card_is_paid || member.payment_status === "completed" || member.payment_status === "manual_completed"
       ? "Pagata"
-      : member.payment_required
+      : member.payment_status === "manual_partial"
+        ? "Parzialmente pagata"
+        : member.payment_status === "manual_reversed"
+          ? "Incasso stornato"
+          : member.payment_required
         ? "Pagamento non registrato"
         : "Non richiesta";
   const paymentStatusTone =
@@ -970,7 +975,7 @@ export default function OrgAdminMemberDetail() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">Scadenza reale</p>
                 <p className="mt-1 font-medium text-neutral-900">
-                  {member.valid_until ? new Date(member.valid_until).toLocaleString("it-IT") : "-"}
+                  {member.valid_until ? new Date(member.valid_until).toLocaleString("it-IT", { timeZone: "Europe/Rome" }) : "-"}
                 </p>
               </div>
             </div>
@@ -1059,7 +1064,7 @@ export default function OrgAdminMemberDetail() {
                         </p>
                       </div>
                       <span className="rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-neutral-700">
-                        {payment.status}
+                        {payment.status === "manual_partial" ? "Parzialmente pagato" : payment.status === "manual_reversed" ? "Stornato contabilmente" : payment.status}
                       </span>
                     </div>
                     <div className="mt-3 grid gap-2 text-xs text-neutral-500">
@@ -1081,11 +1086,21 @@ export default function OrgAdminMemberDetail() {
         </div>
       </div>
 
-      <ManualPaymentForm
+      <TemporaryPurchasesPanel memberId={member.id} onChanged={async () => { setMember(await fetchOrgAdminMemberDetail(member.id)); }} />
+
+      <section className="surface flex flex-wrap items-center justify-between gap-4 p-5">
+        <div>
+          <h2 className="text-lg font-semibold text-[var(--theme-text)]">Saldo e storico incassi</h2>
+          <p className="mt-1 text-sm text-[var(--theme-text-muted)]">Consulta le ricevute, gli abbinamenti e le rettifiche senza perdere lo storico originale.</p>
+        </div>
+        <Link className="btn-secondary px-4" to={`/org-admin/incassi?member_id=${member.id}`}>Apri incassi del socio</Link>
+      </section>
+
+      {member.payment_status === "manual_partial" ? <p className="surface p-5 text-sm text-[var(--theme-text-muted)]">La quota è parzialmente riconciliata. Completa il saldo da Incassi e riconciliazione per evitare una seconda registrazione dell'intera quota.</p> : <ManualPaymentForm
         payments={member.payments}
         paymentMethodLabel={paymentMethodLabel}
         onSubmit={handleManualPayment}
-      />
+      />}
 
       <EditMemberProfileModal
         open={editModalOpen}

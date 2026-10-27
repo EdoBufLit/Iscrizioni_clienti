@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Form, Body, Head
 from fastapi.responses import StreamingResponse, FileResponse, Response
 from sqlalchemy import func, or_, case, and_, select, cast, String
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from datetime import datetime, timedelta, date
 from decimal import Decimal
 from typing import Literal, Optional
@@ -36,6 +36,7 @@ from app.models import (
     Organization,
     MemberDocument,
     MembershipPayment,
+    MembershipPaymentSource,
     DocStatus,
     MemberPayment,
     OperationLog,
@@ -81,6 +82,7 @@ from app.services.email_sender import (
     resolve_email_sender,
     sanitize_email_local_part,
 )
+from app.services.member_sessions import issue_member_auth_token, replace_member_password
 from app.services.email_campaigns import (
     ALLOWED_AUDIENCE_TYPES,
     ALLOWED_RECIPIENT_MODES,
@@ -144,7 +146,10 @@ from app.services.forms import (
     serialize_form,
     serialize_form_field,
     serialize_submission,
+    load_form_counts,
+    serialize_form_summary,
 )
+from app.services.form_statistics import survey_statistics
 from app.services.whatsapp_automation import (
     maybe_send_form_submission_decision_whatsapp_automations,
 )
@@ -161,6 +166,7 @@ from app.services.whatsapp_evolution import normalize_phone
 from app.services.bookings import (
     agenda_day_payload,
     agenda_week_payload,
+    agenda_period_summary,
     list_bookings,
     serialize_booking,
     update_booking_status,
@@ -229,6 +235,7 @@ from app.services.member_activity import (
     member_active_filters,
 )
 from app.services.member_membership import (
+    membership_datetime_iso,
     MEMBERSHIP_TYPE_ANNUAL,
     MEMBERSHIP_TYPE_TEMPORARY,
     apply_membership_defaults,
@@ -1592,15 +1599,13 @@ def _send_member_magic_link(
     if not is_member_active(member, now=datetime.utcnow()):
         raise HTTPException(status_code=403, detail="account non attivo")
 
-    token_str = generate_token()
-    token = Token(
-        member_id=member.id,
+    token_str, token = issue_member_auth_token(
+        db,
+        member=member,
         purpose=TokenType.LOGIN_MAGIC_LINK,
-        token_hash=hash_token(token_str),
         expires_at=datetime.utcnow()
         + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES),
     )
-    db.add(token)
     db.flush()
 
     frontend_base = settings.FRONTEND_URL.rstrip("/")
@@ -1817,12 +1822,12 @@ def _build_org_member_detail_payload(
             resolve_member_membership_type(member)
         ),
         "valid_from": (
-            resolve_member_valid_from(member).isoformat()
+            membership_datetime_iso(resolve_member_valid_from(member))
             if resolve_member_valid_from(member)
             else None
         ),
         "valid_until": (
-            resolve_member_valid_until(member).isoformat()
+            membership_datetime_iso(resolve_member_valid_until(member))
             if resolve_member_valid_until(member)
             else None
         ),
@@ -2551,6 +2556,15 @@ def confirm_org_admin_mfa_setup(
     factor.updated_at = now
     authenticated.session.mfa_verified_at = now
     authenticated.session.mfa_setup_authorized_at = None
+    (
+        db.query(OrgAdminSession)
+        .filter(
+            OrgAdminSession.admin_id == authenticated.admin.id,
+            OrgAdminSession.id != authenticated.session.id,
+            OrgAdminSession.revoked_at.is_(None),
+        )
+        .update({OrgAdminSession.revoked_at: now}, synchronize_session=False)
+    )
     recovery_codes = generate_recovery_codes(db, authenticated.admin.id)
     audit.log_operation(
         db,
@@ -5305,6 +5319,20 @@ def org_metrics(request: Request, db: Session = Depends(get_db)):
         or 0
     )
     members_count = active_members_count + pending_requests_count
+    from datetime import timezone
+    from app.services.annual_memberships import annual_membership_expiry_datetime, as_rome_datetime
+    soon = current_time + timedelta(days=30)
+    local_year = as_rome_datetime(current_time).year
+    legacy_years = [year for year in (local_year - 1, local_year)
+                    if current_time <= annual_membership_expiry_datetime(year).astimezone(timezone.utc).replace(tzinfo=None) <= soon]
+    expiring_members_count = int(db.query(func.count(Member.id)).filter(
+        Member.org_id == org_id, *member_active_filters(now=current_time),
+        or_(and_(Member.valid_until.isnot(None), Member.valid_until <= soon),
+            and_(Member.valid_until.is_(None), Member.card_year.in_(legacy_years))),
+    ).scalar() or 0)
+    expired_members_count = int(db.query(func.count(Member.id)).filter(
+        Member.org_id == org_id, *member_expired_filters(now=current_time),
+    ).scalar() or 0)
 
     # Query 2: Document counts with conditional aggregation (combines 2 queries into 1)
     doc_stats = (
@@ -5350,6 +5378,8 @@ def org_metrics(request: Request, db: Session = Depends(get_db)):
         "pending_requests_count": pending_requests_count,
         "documents_pending_review": documents_pending_review,
         "documents_rejected": documents_rejected,
+        "expiring_members_count": expiring_members_count,
+        "expired_members_count": expired_members_count,
     }
 
 
@@ -6027,126 +6057,17 @@ def list_org_members(
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
+    from app.services.member_filters import build_org_member_query
+
     current_time = datetime.utcnow()
-    status_filter = (status or "").strip().lower()
-
-    query = db.query(Member).filter(
-        Member.org_id == admin.org_id,
+    query = build_org_member_query(
+        db, org_id=admin.org_id, status=status, access=access, source=source,
+        docs=docs, order=order, now=current_time,
     )
-
-    if status_filter == "deleted":
-        query = query.filter(Member.deleted_at.isnot(None))
-    elif status_filter != "all":
-        query = query.filter(Member.deleted_at.is_(None))
-
-    exclude_rejected = (
-        status_filter in {"", "active", "pending"}
-        and status_filter != "all"
-        and status_filter != "deleted"
-    )
-    if exclude_rejected:
-        query = query.filter(
-            Member.status.notin_([MemberStatus.REJECTED, MemberStatus.EXPIRED])
-        )
-
-    if status_filter:
-        if status_filter == "active":
-            query = query.filter(*member_active_filters(now=current_time))
-        elif status_filter == "pending":
-            query = query.filter(
-                Member.status.in_(
-                    [
-                        MemberStatus.PENDING_VERIFICATION,
-                        MemberStatus.PENDING_DOCS,
-                        MemberStatus.PENDING_CARDS,
-                    ]
-                )
-            )
-        elif status_filter in {"suspended", "rejected"}:
-            query = query.filter(Member.status == MemberStatus.REJECTED)
-        elif status_filter == "expired":
-            query = query.filter(*member_expired_filters(now=current_time))
-        elif status_filter != "all":
-            query = query.filter(Member.status == status)
-
-    if access in {"with", "without"}:
-        if access == "with":
-            query = query.filter(Member.password_hash.isnot(None))
-        else:
-            query = query.filter(Member.password_hash.is_(None))
-
-    if source in {"manual", "online"}:
-        if source == "manual":
-            query = query.filter(Member.is_manual.is_(True))
-        else:
-            query = query.filter(
-                or_(Member.is_manual.is_(False), Member.is_manual.is_(None))
-            )
-
-    if docs in {"pending", "rejected", "approved"}:
-        pending_statuses = [DocStatus.PENDING.value, DocStatus.UPLOADED.value]
-        if docs == "pending":
-            query = query.filter(
-                db.query(MemberDocument.id)
-                .filter(
-                    MemberDocument.member_id == Member.id,
-                    MemberDocument.status.in_(pending_statuses),
-                )
-                .exists()
-            )
-        elif docs == "rejected":
-            query = query.filter(
-                db.query(MemberDocument.id)
-                .filter(
-                    MemberDocument.member_id == Member.id,
-                    MemberDocument.status == DocStatus.REJECTED.value,
-                )
-                .exists()
-            )
-        else:
-            has_docs = (
-                db.query(MemberDocument.id)
-                .filter(MemberDocument.member_id == Member.id)
-                .exists()
-            )
-            has_bad = (
-                db.query(MemberDocument.id)
-                .filter(
-                    MemberDocument.member_id == Member.id,
-                    MemberDocument.status.in_(
-                        pending_statuses + [DocStatus.REJECTED.value]
-                    ),
-                )
-                .exists()
-            )
-            query = query.filter(has_docs, ~has_bad)
-
-    status_rank = case(
-        (Member.status == MemberStatus.ACTIVE, 1),
-        (Member.status == MemberStatus.PENDING_VERIFICATION, 2),
-        (Member.status == MemberStatus.PENDING_DOCS, 3),
-        (Member.status == MemberStatus.PENDING_CARDS, 4),
-        (Member.status == MemberStatus.REJECTED, 5),
-        else_=9,
-    )
-
-    order_key = (order or "joined_at_desc").lower()
-    if order_key == "joined_at_asc":
-        query = query.order_by(Member.joined_at.is_(None), Member.joined_at.asc())
-    elif order_key == "last_name_asc":
-        query = query.order_by(Member.last_name.asc(), Member.first_name.asc())
-    elif order_key == "last_name_desc":
-        query = query.order_by(Member.last_name.desc(), Member.first_name.desc())
-    elif order_key == "status_asc":
-        query = query.order_by(status_rank.asc(), Member.last_name.asc())
-    elif order_key == "status_desc":
-        query = query.order_by(status_rank.desc(), Member.last_name.asc())
-    else:
-        query = query.order_by(Member.joined_at.is_(None), Member.joined_at.desc())
 
     normalized_query = normalize_member_search(q)
     members, total, similar_member_ids = search_member_page(
-        query.order_by(Member.id.asc()),
+        query,
         normalized_query,
         limit=max(1, min(limit, 100)),
         offset=max(0, offset),
@@ -6181,7 +6102,7 @@ def list_org_members(
     if member_ids:
         pay_rows = (
             db.query(MemberPayment.member_id, func.max(MemberPayment.paid_at))
-            .filter(MemberPayment.member_id.in_(member_ids))
+            .filter(MemberPayment.member_id.in_(member_ids), MemberPayment.amount_cents > 0)
             .group_by(MemberPayment.member_id)
             .all()
         )
@@ -6251,12 +6172,12 @@ def list_org_members(
                     resolve_member_membership_type(m)
                 ),
                 "valid_from": (
-                    resolve_member_valid_from(m).isoformat()
+                    membership_datetime_iso(resolve_member_valid_from(m))
                     if resolve_member_valid_from(m)
                     else None
                 ),
                 "valid_until": (
-                    resolve_member_valid_until(m).isoformat()
+                    membership_datetime_iso(resolve_member_valid_until(m))
                     if resolve_member_valid_until(m)
                     else None
                 ),
@@ -6270,7 +6191,9 @@ def list_org_members(
                 "docs_count": docs_counts.get(m.id, 0),
                 "document_status": docs_statuses.get(m.id, "not_provided"),
                 "is_paid": bool(
-                    payment_status_is_paid(m.payment_status) or m.id in payments_latest
+                    payment_status_is_paid(m.payment_status) or (
+                        m.id in payments_latest and m.payment_status not in {"manual_partial", "manual_reversed"}
+                    )
                 ),
                 "last_payment_at": (
                     membership_latest.get(m.id)
@@ -6374,6 +6297,7 @@ def create_org_member(
         payment_method=payment_method,
         status=MemberStatus.PENDING_DOCS,
         joined_at=joined_at,
+        access_email_requested=bool(body.send_access_email),
         member_type=member_type,
         internal_notes=internal_notes,
         is_manual=body.is_manual,
@@ -6393,12 +6317,8 @@ def create_org_member(
     )
 
     email_sent = False
-    email_status = "not_requested"
+    email_status = "deferred" if body.send_access_email else "not_requested"
     access_email_sent_at = None
-    if body.send_access_email and email:
-        _outbox_id, access_email_sent_at = _send_member_magic_link(db, request, member)
-        email_status = "queued"
-
     audit.log_operation(
         db,
         action="member.manual_create",
@@ -6433,12 +6353,12 @@ def create_org_member(
             resolve_member_membership_type(member)
         ),
         "valid_from": (
-            resolve_member_valid_from(member).isoformat()
+            membership_datetime_iso(resolve_member_valid_from(member))
             if resolve_member_valid_from(member)
             else None
         ),
         "valid_until": (
-            resolve_member_valid_until(member).isoformat()
+            membership_datetime_iso(resolve_member_valid_until(member))
             if resolve_member_valid_until(member)
             else None
         ),
@@ -6813,6 +6733,9 @@ def send_member_access(
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
+    from app.services.member_bulk import acquire_sqlite_member_action_lock
+
+    acquire_sqlite_member_action_lock(db)
     member = (
         db.query(Member)
         .filter(
@@ -6820,6 +6743,8 @@ def send_member_access(
             Member.org_id == admin.org_id,
             Member.deleted_at.is_(None),
         )
+        .populate_existing()
+        .with_for_update()
         .first()
     )
     if not member:
@@ -6983,7 +6908,9 @@ def create_manual_payment(
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    member = db.query(Member).filter(Member.id == member_id).first()
+    from app.services.card_allocation import lock_card_allocation
+    lock_card_allocation(db, admin.org_id, datetime.utcnow().year)
+    member = db.query(Member).filter(Member.id == member_id).with_for_update().populate_existing().first()
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
 
@@ -7022,15 +6949,6 @@ def create_manual_payment(
         member.decision_by_admin_id = admin.id
         if not member.decision_notes:
             member.decision_notes = "Pagamento manuale"
-    legacy_payment = create_legacy_manual_member_payment(
-        db=db,
-        member=member,
-        org=org,
-        admin_id=admin.id,
-        amount=amount_decimal,
-        method=method,
-        notes=notes,
-    )
     membership_payment, fulfillment, _created = apply_manual_membership_payment(
         db=db,
         member=member,
@@ -7041,6 +6959,20 @@ def create_manual_payment(
         reason=normalize_membership_payment_reason(org) if org else "Quota associativa",
         notes=notes,
         request=None,
+        paid_at=paid_at,
+    )
+    if not _created and membership_payment.source != MembershipPaymentSource.MANUAL.value:
+        raise HTTPException(status_code=409, detail="La quota risulta già pagata online.")
+    if not _created and (
+        membership_payment.amount != amount_decimal.quantize(Decimal("0.01"))
+        or (membership_payment.confirmed_at and membership_payment.confirmed_at.date() != body.paid_at)
+    ):
+        raise HTTPException(status_code=409, detail="La quota è già registrata con dati diversi. Verifica il pagamento esistente.")
+    legacy_payment = create_legacy_manual_member_payment(
+        db=db, member=member, org=org, admin_id=admin.id,
+        amount=membership_payment.amount,
+        method=method, notes=membership_payment.notes,
+        paid_at=membership_payment.confirmed_at, membership_payment=membership_payment,
     )
     if not member.decision_at and member.status != MemberStatus.REJECTED:
         member.decision_at = datetime.utcnow()
@@ -7151,6 +7083,12 @@ def delete_member(
     released_card_no = member.card_no
     released_card_year = member.card_year
     released_batch_id = member.batch_id
+    member = replace_member_password(
+        db,
+        member_id=member.id,
+        expected_version=member.auth_version,
+        password_hash=None,
+    )
     cancel_current_annual_membership_term(db, member, now=now)
     release_card_number(
         db,
@@ -7661,6 +7599,20 @@ def create_card_replenishment(
     }
 
 
+@router.get("/forms/summary")
+def list_association_form_summaries(request: Request, db: Session = Depends(get_db)):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    forms = db.query(AssociationForm).options(joinedload(AssociationForm.organization)).filter(
+        AssociationForm.association_id == admin.org_id
+    ).order_by(AssociationForm.updated_at.desc(), AssociationForm.id.desc()).all()
+    counts = load_form_counts(db, [form.id for form in forms])
+    return {"items": [serialize_form_summary(form, counts[form.id]) for form in forms], "total": len(forms),
+            "field_types": sorted(ALLOWED_FORM_FIELD_TYPES), "visibility_options": sorted(ALLOWED_FORM_VISIBILITY)}
+
+
 @router.get("/forms")
 def list_association_forms(
     request: Request,
@@ -7674,18 +7626,19 @@ def list_association_forms(
     forms = (
         db.query(AssociationForm)
         .options(
-            joinedload(AssociationForm.fields),
-            joinedload(AssociationForm.submissions),
+            selectinload(AssociationForm.fields),
+            selectinload(AssociationForm.whatsapp_automations),
+            joinedload(AssociationForm.organization),
             joinedload(AssociationForm.admin_notification_template),
             joinedload(AssociationForm.user_confirmation_template),
-            joinedload(AssociationForm.bookings),
         )
         .filter(AssociationForm.association_id == admin.org_id)
         .order_by(AssociationForm.updated_at.desc(), AssociationForm.id.desc())
         .all()
     )
+    counts = load_form_counts(db, [form.id for form in forms])
     return {
-        "items": [serialize_form(form) for form in forms],
+        "items": [serialize_form(form, counts=counts[form.id]) for form in forms],
         "total": len(forms),
         "field_types": sorted(ALLOWED_FORM_FIELD_TYPES),
         "visibility_options": sorted(ALLOWED_FORM_VISIBILITY),
@@ -8079,38 +8032,45 @@ def delete_association_form_field(
 def list_association_form_submissions(
     form_id: int,
     request: Request,
+    limit: int | None = Query(default=None, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    status: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     admin = _get_current_org_admin(request, db)
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
     ensure_forms_module_enabled(admin.organization)
-    form = (
-        db.query(AssociationForm)
-        .options(
-            joinedload(AssociationForm.fields),
-            joinedload(AssociationForm.submissions).joinedload(FormSubmission.member),
-            joinedload(AssociationForm.submissions).joinedload(FormSubmission.bookings),
-            joinedload(AssociationForm.submissions).joinedload(FormSubmission.reviewed_by_admin),
-            joinedload(AssociationForm.admin_notification_template),
-            joinedload(AssociationForm.user_confirmation_template),
-            joinedload(AssociationForm.bookings),
-        )
-        .filter(AssociationForm.id == form_id, AssociationForm.association_id == admin.org_id)
-        .first()
-    )
-    if form is None:
-        raise HTTPException(status_code=404, detail="Form non trovato.")
-    submissions = sorted(
-        list(form.submissions or []),
-        key=lambda item: (item.submitted_at or datetime.min, int(item.id or 0)),
-        reverse=True,
-    )
+    form = get_form_for_org_admin(db, association_id=admin.org_id, form_id=form_id)
+    query = db.query(FormSubmission).filter(FormSubmission.form_id == form_id)
+    if status:
+        normalized = normalize_submission_status(status)
+        query = query.filter(FormSubmission.status.in_(["new", "pending"]) if normalized == "pending"
+                             else FormSubmission.status == normalized)
+    total = query.count()
+    query = query.options(joinedload(FormSubmission.member), joinedload(FormSubmission.reviewed_by_admin),
+                          selectinload(FormSubmission.bookings)).order_by(
+                              FormSubmission.submitted_at.desc(), FormSubmission.id.desc()).offset(offset)
+    if limit is not None:
+        query = query.limit(limit)
+    submissions = query.all()
+    counts = load_form_counts(db, [form_id])[form_id]
     return {
-        "form": serialize_form(form),
+        "form": serialize_form(form, counts=counts),
         "items": [serialize_submission(item) for item in submissions],
-        "total": len(submissions),
+        "total": total,
+        "summary": {**counts["statuses"], "booking": counts["booking_submissions"]},
     }
+
+
+@router.get("/forms/{form_id}/statistics")
+def association_form_statistics(form_id: int, request: Request, db: Session = Depends(get_db)):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    form = get_form_for_org_admin(db, association_id=admin.org_id, form_id=form_id)
+    return survey_statistics(db, form)
 
 
 @router.get("/forms/{form_id}/submissions/export.csv")
@@ -8126,11 +8086,11 @@ def export_association_form_submissions_csv(
     form = (
         db.query(AssociationForm)
         .options(
-            joinedload(AssociationForm.fields),
-            joinedload(AssociationForm.submissions),
+            selectinload(AssociationForm.fields),
+            selectinload(AssociationForm.submissions),
             joinedload(AssociationForm.admin_notification_template),
             joinedload(AssociationForm.user_confirmation_template),
-            joinedload(AssociationForm.bookings),
+            selectinload(AssociationForm.bookings),
         )
         .filter(AssociationForm.id == form_id, AssociationForm.association_id == admin.org_id)
         .first()
@@ -8766,6 +8726,8 @@ def org_admin_bookings_agenda_day(
     date_value: Optional[date] = Query(default=None, alias="date"),
     status: Optional[str] = Query(default=None),
     form_id: Optional[int] = Query(default=None),
+    limit: int | None = Query(default=None, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
     admin = _get_current_org_admin(request, db)
@@ -8779,6 +8741,8 @@ def org_admin_bookings_agenda_day(
         agenda_date=agenda_date,
         status=status,
         form_id=form_id,
+        limit=limit,
+        offset=offset,
     )
 
 
@@ -8802,6 +8766,18 @@ def org_admin_bookings_agenda_week(
         status=status,
         form_id=form_id,
     )
+
+
+@router.get("/bookings/agenda/summary")
+def org_admin_bookings_period_summary(request: Request, date_from: date, date_to: date,
+                                     status: str | None = None, form_id: int | None = None,
+                                     db: Session = Depends(get_db)):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    ensure_forms_module_enabled(admin.organization)
+    return agenda_period_summary(db, association_id=admin.org_id, date_from=date_from, date_to=date_to,
+                                 status=status, form_id=form_id)
 
 
 @router.get("/bookings/{booking_id}")

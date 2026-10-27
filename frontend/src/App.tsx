@@ -66,6 +66,7 @@ const OrgAdminMemberDetail = lazy(() => import("./pages/org-admin/OrgAdminMember
 const OrgAdminAttendance = lazy(() => import("./pages/org-admin/OrgAdminAttendance"));
 const OrgAdminCards = lazy(() => import("./pages/org-admin/OrgAdminCards"));
 const OrgAdminQuote = lazy(() => import("./pages/org-admin/OrgAdminQuote"));
+const OrgAdminIncassi = lazy(() => import("./pages/org-admin/OrgAdminIncassi"));
 const OrgAdminCommunications = lazy(() => import("./pages/org-admin/OrgAdminCommunications"));
 const OrgAdminCentralCommunications = lazy(() => import("./pages/org-admin/OrgAdminCentralCommunications"));
 const OrgAdminBookings = lazy(() => import("./pages/org-admin/OrgAdminBookings"));
@@ -85,13 +86,17 @@ const Loading = () => (
 );
 
 const App = () => {
-  const { capabilities, loading: capabilitiesLoading } = useStatePlatformCapabilities();
+  const { capabilities, loading: capabilitiesLoading, error: capabilitiesError, refresh } = useStatePlatformCapabilities();
   const affiliazioneEnabled = capabilities?.affiliazioneEnabled === true;
 
   return (
     <ErrorBoundary>
       <ToastProvider>
         <UnsavedChangesProvider>
+          {capabilitiesError ? <div role="alert" className="surface mx-auto max-w-3xl p-4 text-sm">
+            Connessione temporaneamente non disponibile. Alcune funzioni non sono ancora state caricate.
+            <button type="button" className="btn-secondary ml-3" onClick={() => void refresh()}>Riprova</button>
+          </div> : null}
           <Suspense fallback={<Loading />}>
             <Routes>
               <Route
@@ -104,7 +109,7 @@ const App = () => {
               <Route
                 path="affiliazione"
                 element={
-                  capabilitiesLoading ? (
+                  capabilitiesLoading || capabilitiesError ? (
                     <Loading />
                   ) : affiliazioneEnabled ? (
                     <Affiliazione />
@@ -116,7 +121,7 @@ const App = () => {
               <Route
                 path="invito/:slug"
                 element={
-                  capabilitiesLoading ? (
+                  capabilitiesLoading || capabilitiesError ? (
                     <Loading />
                   ) : affiliazioneEnabled ? (
                     <InvitoAffiliazioneRedirect />
@@ -181,6 +186,7 @@ const App = () => {
                 <Route path="presenze" element={<OrgAdminAttendance />} />
                 <Route path="tessere" element={<OrgAdminCards />} />
                 <Route path="quote" element={<OrgAdminQuote />} />
+                <Route path="incassi" element={<OrgAdminIncassi />} />
                 <Route path="prenotazioni" element={<OrgAdminBookings />} />
                 <Route path="documenti" element={<OrgAdminSharedDocuments />} />
                 <Route path="comunicazioni" element={<OrgAdminCommunications />} />

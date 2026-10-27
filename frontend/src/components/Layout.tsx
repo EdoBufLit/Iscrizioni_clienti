@@ -44,6 +44,7 @@ const Layout = () => {
   const logoRef = useRef<HTMLImageElement>(null);
   const payoffRef = useRef<HTMLParagraphElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const headerShrinkRef = useRef(false);
 
   const isDashboardRoute = useMemo(
@@ -72,6 +73,17 @@ const Layout = () => {
   useEffect(() => {
     setMenuOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setMenuOpen(false);
+      mobileMenuButtonRef.current?.focus();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [menuOpen]);
 
   useEffect(() => {
     if (isDashboardRoute) return;
@@ -108,8 +120,8 @@ const Layout = () => {
       const borderColor = rootStyles.getPropertyValue("--theme-border").trim() || "rgba(17,39,41,0.12)";
       const compactShadow =
         resolvedTheme === "dark"
-          ? "0 14px 36px rgba(0, 0, 0, 0.38)"
-          : "0 12px 35px rgba(15, 35, 38, 0.14)";
+          ? "0 2px 8px rgba(0, 0, 0, 0.16)"
+          : "0 2px 8px rgba(15, 35, 38, 0.05)";
 
       gsap.to(headerElement, {
         backgroundColor: shrink ? solidSurfaceColor : surfaceColor,
@@ -206,7 +218,7 @@ const Layout = () => {
     publicAuth.authenticated && publicAuth.redirect_to
       ? publicAuth.redirect_to
       : "/area-riservata";
-  const publicAccessLabel = publicAuth.authenticated ? "Dashboard" : "Login";
+  const publicAccessLabel = publicAuth.authenticated ? "Dashboard" : "Area riservata";
 
   return (
     <MotionProvider>
@@ -217,12 +229,11 @@ const Layout = () => {
       >
         {isDashboardRoute ? (
           <div
-            className="h-0.5 bg-gradient-to-r from-accent via-brand to-ember"
+            className="h-0.5 bg-brand"
             aria-hidden="true"
           />
         ) : showPublicChrome ? (
           <>
-            <div className="public-site-glow" aria-hidden="true" />
             <header className="public-header fixed top-0 left-0 right-0 z-50 transition-all" ref={publicHeaderRef}>
               <div className="container-shell public-header-inner">
                 <NavLink className="public-brand" to="/" onClick={close}>
@@ -258,7 +269,7 @@ const Layout = () => {
                   </nav>
                   <div className="ml-6 flex shrink-0 items-center gap-3 2xl:gap-4">
                     <NavLink
-                      className="text-sm font-bold text-slate-500 transition-colors hover:text-brand"
+                      className="btn-ghost text-sm"
                       to={publicAccessTarget}
                       onMouseEnter={!publicAuth.authenticated ? prefetchDashboard : undefined}
                       onFocus={!publicAuth.authenticated ? prefetchDashboard : undefined}
@@ -272,6 +283,7 @@ const Layout = () => {
                 <div className="ml-auto flex items-center gap-2 xl:hidden">
                   <ThemeToggle />
                   <button
+                    ref={mobileMenuButtonRef}
                     className={`public-menu-toggle${menuOpen ? " is-open" : ""}`}
                     type="button"
                     aria-expanded={menuOpen}
@@ -294,13 +306,14 @@ const Layout = () => {
                 id="mobile-nav-public"
                 className="public-mobile-panel xl:hidden"
                 style={{ display: "none" }}
+                aria-hidden={!menuOpen}
               >
                 <nav className="container-shell py-4" aria-label="Navigazione principale mobile">
                   <div className="public-mobile-links flex flex-col gap-3 px-6 pb-6 pt-2">
                     {NAV_ITEMS.map((item) => (
                       <NavLink
                         key={item.label}
-                        className="public-mobile-link py-2 text-lg font-bold"
+                        className="public-mobile-link py-2 text-lg font-semibold"
                         to={item.to}
                         end={item.to === "/"}
                         onClick={close}
@@ -312,7 +325,7 @@ const Layout = () => {
                     <div className="public-mobile-divider my-2"></div>
                     
                     <NavLink
-                      className="public-mobile-access py-2 font-bold"
+                      className="public-mobile-access py-2 font-semibold"
                       to={publicAccessTarget}
                       onClick={close}
                     >
@@ -355,7 +368,7 @@ const Layout = () => {
         </main>
 
         {isDashboardRoute ? (
-          <footer className="border-t border-white/70 bg-white/70 py-10 backdrop-blur-sm">
+          <footer className="border-t border-[var(--theme-border)] bg-[var(--theme-surface-solid)] py-8">
             <div className="container-shell flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <p className="text-sm font-semibold text-neutral-700">ASSO.N.A.M.</p>

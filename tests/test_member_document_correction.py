@@ -346,6 +346,7 @@ def test_existing_active_member_resubmit_flow_remains_available(
             member_id=member.id,
             purpose=TokenType.LOGIN_MAGIC_LINK,
             token_hash=hash_token(raw_login_token),
+            auth_version=member.auth_version,
             expires_at=datetime.utcnow() + timedelta(minutes=15),
         )
     )

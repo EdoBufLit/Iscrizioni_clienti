@@ -1,80 +1,50 @@
-import { useCallback, useEffect, useState } from "react";
-import {
-  fetchPlatformCapabilities,
-  type PlatformCapabilities,
-} from "../lib/api";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { fetchPlatformCapabilities, type PlatformCapabilities } from "../lib/api";
 
-const DEFAULT_CAPABILITIES: PlatformCapabilities = {
-  affiliazioneEnabled: false,
-  stripeEnabled: false,
-  stripeConnectDemoEnabled: false,
-  affiliationVideoEnabled: false,
-  videoWorkerEnabled: false,
-};
+type Snapshot = { capabilities: PlatformCapabilities | null; loading: boolean; error: boolean };
+let snapshot: Snapshot = { capabilities: null, loading: true, error: false };
+let inflight: Promise<PlatformCapabilities | null> | null = null;
+const listeners = new Set<() => void>();
+const publish = (next: Snapshot) => { snapshot = next; listeners.forEach((listener) => listener()); };
+const subscribe = (listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener); };
+const getSnapshot = () => snapshot;
 
-let cachedCapabilities: PlatformCapabilities | null = null;
-let inflightCapabilitiesRequest: Promise<PlatformCapabilities> | null = null;
-
-const normalizeCapabilities = (payload: PlatformCapabilities): PlatformCapabilities => ({
-  affiliazioneEnabled: payload.affiliazioneEnabled === true,
-  stripeEnabled: payload.stripeEnabled === true,
-  stripeConnectDemoEnabled: payload.stripeConnectDemoEnabled === true,
-  affiliationVideoEnabled: payload.affiliationVideoEnabled === true,
-  videoWorkerEnabled: payload.videoWorkerEnabled === true,
-});
-
-const loadCapabilities = async (): Promise<PlatformCapabilities> => {
-  if (cachedCapabilities) {
-    return cachedCapabilities;
-  }
-  if (inflightCapabilitiesRequest) {
-    return inflightCapabilitiesRequest;
-  }
-
-  inflightCapabilitiesRequest = fetchPlatformCapabilities()
-    .then((payload) => {
-      cachedCapabilities = normalizeCapabilities(payload);
-      return cachedCapabilities;
-    })
-    .catch(() => {
-      cachedCapabilities = DEFAULT_CAPABILITIES;
-      return cachedCapabilities;
-    })
-    .finally(() => {
-      inflightCapabilitiesRequest = null;
-    });
-
-  return inflightCapabilitiesRequest;
-};
+async function loadCapabilities(force = false): Promise<PlatformCapabilities | null> {
+  if (inflight) return inflight;
+  if (snapshot.capabilities && !force) return snapshot.capabilities;
+  publish({ ...snapshot, loading: true, error: false });
+  inflight = (async () => {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const payload = await fetchPlatformCapabilities();
+        const capabilities = {
+          affiliazioneEnabled: payload.affiliazioneEnabled === true,
+          stripeEnabled: payload.stripeEnabled === true,
+          stripeConnectDemoEnabled: payload.stripeConnectDemoEnabled === true,
+          affiliationVideoEnabled: payload.affiliationVideoEnabled === true,
+          videoWorkerEnabled: payload.videoWorkerEnabled === true,
+        };
+        publish({ capabilities, loading: false, error: false });
+        return capabilities;
+      } catch {
+        if (attempt < 2) await new Promise((resolve) => window.setTimeout(resolve, 300 * (attempt + 1)));
+      }
+    }
+    // A network error is not evidence that a feature is disabled.
+    publish({ ...snapshot, loading: false, error: true });
+    return null;
+  })().finally(() => { inflight = null; });
+  return inflight;
+}
 
 export function useStatePlatformCapabilities() {
-  const [capabilities, setCapabilities] = useState<PlatformCapabilities | null>(cachedCapabilities);
-  const [loading, setLoading] = useState<boolean>(!cachedCapabilities);
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    cachedCapabilities = null;
-    const nextCapabilities = await loadCapabilities();
-    setCapabilities(nextCapabilities);
-    setLoading(false);
-    return nextCapabilities;
-  }, []);
-
+  const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const refresh = useCallback(() => loadCapabilities(true), []);
   useEffect(() => {
-    let cancelled = false;
-
-    const resolveCapabilities = async () => {
-      const nextCapabilities = await loadCapabilities();
-      if (cancelled) return;
-      setCapabilities(nextCapabilities);
-      setLoading(false);
-    };
-
-    void resolveCapabilities();
-    return () => {
-      cancelled = true;
-    };
+    void loadCapabilities();
+    const retry = () => { if (snapshot.error) void loadCapabilities(true); };
+    window.addEventListener("online", retry);
+    return () => window.removeEventListener("online", retry);
   }, []);
-
-  return { capabilities, loading, refresh };
+  return { ...state, refresh };
 }

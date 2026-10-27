@@ -9,7 +9,8 @@ from typing import Any
 
 from fastapi import HTTPException
 from pydantic import EmailStr, TypeAdapter
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func
+from sqlalchemy.orm import Session, joinedload, selectinload, object_session
 
 from app.models import (
     AdminRole,
@@ -389,11 +390,11 @@ def get_form_for_org_admin(db: Session, *, association_id: int, form_id: int) ->
     form = (
         db.query(Form)
         .options(
-            joinedload(Form.fields),
-            joinedload(Form.submissions),
+            selectinload(Form.fields),
+            selectinload(Form.whatsapp_automations),
+            joinedload(Form.organization),
             joinedload(Form.admin_notification_template),
             joinedload(Form.user_confirmation_template),
-            joinedload(Form.bookings),
         )
         .filter(Form.id == form_id, Form.association_id == association_id)
         .first()
@@ -407,11 +408,10 @@ def get_form_by_slug_for_public(db: Session, *, slug: str) -> Form:
     form = (
         db.query(Form)
         .options(
-            joinedload(Form.fields),
+            selectinload(Form.fields),
             joinedload(Form.organization),
             joinedload(Form.admin_notification_template),
             joinedload(Form.user_confirmation_template),
-            joinedload(Form.bookings),
         )
         .filter(Form.public_slug == normalize_form_slug(slug))
         .first()
@@ -434,11 +434,10 @@ def get_form_by_org_slug_and_form_slug_for_public(
     form = (
         db.query(Form)
         .options(
-            joinedload(Form.fields),
+            selectinload(Form.fields),
             joinedload(Form.organization),
             joinedload(Form.admin_notification_template),
             joinedload(Form.user_confirmation_template),
-            joinedload(Form.bookings),
         )
         .join(Organization, Organization.id == Form.association_id)
         .filter(
@@ -492,13 +491,57 @@ def _build_submission_status_counts(submissions: list[FormSubmission]) -> dict[s
     return counts
 
 
-def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]:
+def load_form_counts(db: Session, form_ids: list[int]) -> dict[int, dict[str, Any]]:
+    """Compute metadata without materializing response or booking collections."""
+    result = {form_id: {"fields": 0, "bookings": 0, "booking_submissions": 0,
+                        "statuses": {"pending": 0, "confirmed": 0, "rejected": 0, "total": 0}}
+              for form_id in form_ids}
+    if not form_ids:
+        return result
+    for form_id, count in db.query(FormField.form_id, func.count(FormField.id)).filter(
+        FormField.form_id.in_(form_ids)
+    ).group_by(FormField.form_id):
+        result[form_id]["fields"] = count
+    for form_id, status, count in db.query(
+        FormSubmission.form_id, FormSubmission.status, func.count(FormSubmission.id)
+    ).filter(FormSubmission.form_id.in_(form_ids)).group_by(FormSubmission.form_id, FormSubmission.status):
+        counts = result[form_id]["statuses"]
+        normalized = normalize_submission_status(status)
+        counts[normalized] = counts.get(normalized, 0) + count
+        counts["total"] += count
+    for form_id, count, submission_count in db.query(
+        Booking.form_id, func.count(Booking.id), func.count(func.distinct(Booking.submission_id))
+    ).filter(Booking.form_id.in_(form_ids)).group_by(Booking.form_id):
+        result[form_id]["bookings"] = count
+        result[form_id]["booking_submissions"] = submission_count
+    return result
+
+
+def serialize_form_summary(form: Form, counts: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": form.id, "title": form.title, "public_slug": form.public_slug,
+        "public_path": f"/forms/{form.organization.slug}/{form.public_slug}",
+        "form_type": normalize_form_type(form.form_type, booking_enabled=bool(form.booking_enabled)),
+        "is_active": bool(form.is_active), "booking_enabled": bool(form.booking_enabled or form.create_booking),
+        "created_at": form.created_at.isoformat() if form.created_at else None,
+        "updated_at": form.updated_at.isoformat() if form.updated_at else None,
+        "field_count": counts["fields"], "submission_count": counts["statuses"]["total"],
+        "submission_status_counts": counts["statuses"], "booking_count": counts["bookings"],
+    }
+
+
+def serialize_form(form: Form, *, include_fields: bool = True, counts: dict[str, Any] | None = None) -> dict[str, Any]:
     items = sorted(
         list(form.fields or []),
         key=lambda field: (int(field.sort_order or 0), int(field.id or 0)),
     )
-    submissions = list(form.submissions or [])
-    submission_status_counts = _build_submission_status_counts(submissions)
+    session = object_session(form)
+    if counts is None and session is not None:
+        counts = load_form_counts(session, [form.id])[form.id]
+    if counts is None:
+        counts = {"statuses": _build_submission_status_counts(list(form.submissions or [])),
+                  "bookings": len(form.bookings or [])}
+    submission_status_counts = counts["statuses"]
     whatsapp_automations = sorted(
         list(getattr(form, "whatsapp_automations", []) or []),
         key=lambda automation: (
@@ -578,9 +621,9 @@ def serialize_form(form: Form, *, include_fields: bool = True) -> dict[str, Any]
         "created_at": form.created_at.isoformat() if form.created_at else None,
         "updated_at": form.updated_at.isoformat() if form.updated_at else None,
         "field_count": len(items),
-        "submission_count": len(submissions),
+        "submission_count": submission_status_counts["total"],
         "submission_status_counts": submission_status_counts,
-        "booking_count": len(form.bookings or []),
+        "booking_count": counts["bookings"],
         "fields": [serialize_form_field(field) for field in items] if include_fields else [],
         "whatsapp_automations": [
             serialize_whatsapp_automation(automation) for automation in whatsapp_automations

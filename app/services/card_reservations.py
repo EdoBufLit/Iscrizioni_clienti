@@ -134,7 +134,7 @@ def settle_paid_reservation_for_existing_card(db: Session, payment: MembershipPa
     card and release only the unused hold belonging to that paid membership.
     This is fulfillment reconciliation, never expiration of a paid checkout.
     """
-    from app.models import AnnualMembershipTerm, Member
+    from app.models import AnnualMembershipTerm, Member, TemporaryMembershipPurchase
 
     payment = _lock_payment(db, payment)
     if payment.status not in PAID_STATUSES or payment.reservation_state != "held":
@@ -143,6 +143,8 @@ def settle_paid_reservation_for_existing_card(db: Session, payment: MembershipPa
         identity_matches = payment.payment_kind == "initial" and payment.socio_id == owner.id
     elif isinstance(owner, AnnualMembershipTerm):
         identity_matches = payment.payment_kind == "renewal" and payment.annual_term_id == owner.id
+    elif isinstance(owner, TemporaryMembershipPurchase):
+        identity_matches = payment.payment_kind == "temporary" and payment.temporary_purchase_id == owner.id
     else:
         return False
     if (
@@ -250,6 +252,9 @@ def reconcile_payment_reservation(db: Session, payment: MembershipPayment, org: 
         if payment.payment_kind == "renewal":
             from app.services.renewals import complete_renewal_payment
             complete_renewal_payment(db, payment=payment, now=now)
+        elif payment.payment_kind == "temporary" and payment.temporary_purchase_id is not None:
+            from app.services.temporary_memberships import fulfill_purchase
+            fulfill_purchase(db, purchase=payment.temporary_purchase, payment=payment, now=now)
         elif payment.member is not None:
             from app.services.membership_payments import maybe_fulfill_member_card
             maybe_fulfill_member_card(db=db, member=payment.member, org=org, payment=payment, request=request)

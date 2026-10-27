@@ -12,15 +12,18 @@ from app.db import get_db
 from app.middleware import get_client_ip, get_request_id
 from app.models import (
     AdminRole,
+    AdminUser,
     Member,
     MemberAttendance,
 )
 from app.services.annual_memberships import as_rome_datetime
 from app.services.attendance import (
+    AttendanceCheckInResult,
     check_in_member_from_qr,
     serialize_attendance,
     serialize_utc,
 )
+from app.services.attendance_manual import check_in_member_manually, search_attendance_members
 from app.services.org_admin_sessions import get_current_org_admin_from_request
 
 
@@ -31,6 +34,12 @@ class AttendanceCheckInBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     qr_value: str = Field(..., min_length=20, max_length=2048)
+
+
+class AttendanceManualCheckInBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    member_id: int = Field(..., gt=0, strict=True)
 
 
 def _current_admin(request: Request, db: Session):
@@ -54,6 +63,16 @@ def check_in_member(
         source="qr",
         checked_in_by_admin_id=admin.id,
     )
+    return _check_in_response(db, admin=admin, result=result, request=request)
+
+
+def _check_in_response(
+    db: Session,
+    *,
+    admin: AdminUser,
+    result: AttendanceCheckInResult,
+    request: Request,
+):
     attendance = result.item
     if not result.created:
         return {"created": False, "item": serialize_attendance(attendance)}
@@ -75,12 +94,39 @@ def check_in_member(
             "card_no": attendance.card_no,
             "card_year": attendance.card_year,
             "membership_type": attendance.membership_type,
+            "source": attendance.source,
         },
         ip=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
     db.commit()
     return {"created": True, "item": serialize_attendance(attendance)}
+
+
+@router.get("/members")
+def find_attendance_members(
+    request: Request,
+    q: str = Query(..., min_length=2, max_length=120),
+    db: Session = Depends(get_db),
+):
+    admin = _current_admin(request, db)
+    return search_attendance_members(db, org_id=admin.org_id, search=q)
+
+
+@router.post("/manual-check-in")
+def manual_check_in_member(
+    body: AttendanceManualCheckInBody,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _current_admin(request, db)
+    result = check_in_member_manually(
+        db,
+        org_id=admin.org_id,
+        member_id=body.member_id,
+        checked_in_by_admin_id=admin.id,
+    )
+    return _check_in_response(db, admin=admin, result=result, request=request)
 
 
 @router.get("")

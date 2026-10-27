@@ -196,6 +196,23 @@ services:
     mem_limit: ${LOW_CARDS_WORKER_MEM_LIMIT:-512m}
     restart: always
 
+  google-wallet-sync-worker:
+    image: ${APP_RUNTIME_IMAGE:-assonam/app-runtime:local}
+    depends_on:
+      - db
+    command: python -m app.workers.google_wallet_sync
+    volumes:
+      - ./data:/app/data
+    environment: *app-env
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.workers.google_wallet_sync", "--healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 120s
+      retries: 3
+    mem_limit: ${GOOGLE_WALLET_SYNC_WORKER_MEM_LIMIT:-256m}
+    restart: always
+
   file-deletion-worker:
     image: ${APP_RUNTIME_IMAGE:-assonam/app-runtime:local}
     depends_on:

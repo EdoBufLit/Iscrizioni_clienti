@@ -11,10 +11,11 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.email_templates.member_card_email import build_member_card_email
-from app.models import DocStatus, Member, MemberDocument, Organization, Token, TokenType
+from app.models import DocStatus, Member, MemberDocument, Organization, TokenType
 from app.services.card_verification import build_card_verification_token
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
+from app.services.member_sessions import issue_member_auth_token
 from app.services.member_activity import is_member_active
 from app.services.member_membership import (
     membership_type_label,
@@ -28,7 +29,7 @@ from app.services.org_branding import (
     resolve_club_display_name,
 )
 from app.services.qr_code import generate_qr_png_bytes
-from app.utils import generate_token, hash_token
+from app.utils import generate_token
 
 logger = logging.getLogger(__name__)
 
@@ -139,14 +140,13 @@ def build_member_card_access_payload(
 
 
 def _build_member_magic_link(db: Session, member_id: int, frontend_base_url: str) -> str:
-    token_str = generate_token()
-    token = Token(
-        member_id=member_id,
+    member = db.query(Member).filter(Member.id == member_id).one()
+    token_str, _token = issue_member_auth_token(
+        db,
+        member=member,
         purpose=TokenType.LOGIN_MAGIC_LINK,
-        token_hash=hash_token(token_str),
         expires_at=datetime.utcnow() + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES),
     )
-    db.add(token)
     db.flush()
     return f"{frontend_base_url.rstrip('/')}/auth/verify?token={token_str}&role=member"
 

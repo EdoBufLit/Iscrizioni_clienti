@@ -1,105 +1,119 @@
 :root,
 :root[data-theme="light"] {
   --theme-mode: light;
-  --theme-bg: #f7f5ef;
-  --theme-bg-soft: #fcfbf8;
-  --theme-page-bg: #f4f1ea;
-  --theme-app-bg: #f1ede6;
-  --theme-surface: rgba(255, 255, 255, 0.88);
+  --theme-bg: #f5f7f6;
+  --theme-bg-soft: #f8faf9;
+  --theme-page-bg: #f5f7f6;
+  --theme-app-bg: #f5f7f6;
+  --theme-surface: #ffffff;
   --theme-surface-solid: #ffffff;
-  --theme-surface-muted: #f6f3ee;
+  --theme-surface-muted: #eef3f1;
   --theme-surface-elevated: #ffffff;
-  --theme-surface-1: rgba(255, 255, 255, 0.96);
-  --theme-surface-2: #f8f4ee;
-  --theme-card-bg: rgba(255, 255, 255, 0.98);
-  --theme-panel-bg: rgba(255, 255, 255, 0.95);
-  --theme-panel-muted: #f3efe8;
-  --theme-text: #1b1a16;
-  --theme-text-muted: #5c564c;
-  --theme-text-soft: #7b7265;
-  --theme-link: #1e6f67;
-  --theme-link-hover: #0f3d3a;
-  --theme-border: rgba(25, 22, 18, 0.12);
-  --theme-border-strong: rgba(25, 22, 18, 0.18);
+  --theme-surface-1: #ffffff;
+  --theme-surface-2: #eef3f1;
+  --theme-card-bg: #ffffff;
+  --theme-panel-bg: #ffffff;
+  --theme-panel-muted: #eef3f1;
+  --theme-text: #182c2b;
+  --theme-text-muted: #4b605f;
+  --theme-text-soft: #607471;
+  --theme-link: #0f3d3a;
+  --theme-link-hover: #0a2a27;
+  --theme-border: #d4dfdc;
+  --theme-border-strong: #bccdc8;
   --theme-brand: #0f3d3a;
-  --theme-brand-strong: #1e6f67;
-  --theme-accent: #c6a04f;
-  --theme-danger: #d2705a;
-  --theme-success: #1f8a68;
-  --theme-warning: #c68a21;
-  --theme-focus: rgba(30, 111, 103, 0.22);
+  --theme-brand-strong: #0a2a27;
+  --theme-accent: #456e66;
+  --theme-danger: #b4233b;
+  --theme-success: #16714e;
+  --theme-warning: #86570d;
+  --theme-focus: rgba(15,61,58,0.2);
   --theme-overlay: rgba(10, 17, 23, 0.58);
   --theme-hero-overlay:
     linear-gradient(180deg, rgba(7, 18, 25, 0.12), rgba(7, 18, 25, 0.42)),
     linear-gradient(160deg, rgba(9, 45, 60, 0.82), rgba(19, 81, 89, 0.6) 52%, rgba(10, 22, 31, 0.86));
-  --theme-shadow-sm: 0 10px 28px -18px rgba(15, 23, 42, 0.25);
-  --theme-shadow-lg: 0 22px 50px -28px rgba(15, 23, 42, 0.32);
-  --theme-input-bg: rgba(255, 255, 255, 0.96);
-  --theme-table-bg: rgba(255, 255, 255, 0.98);
-  --theme-table-row: rgba(255, 255, 255, 0.96);
-  --theme-table-row-hover: rgba(15, 61, 58, 0.055);
-  --theme-hover: rgba(15, 61, 58, 0.06);
-  --theme-hover-strong: rgba(15, 61, 58, 0.11);
-  --theme-table-stripe: rgba(15, 61, 58, 0.025);
-  --theme-badge-bg: rgba(15, 61, 58, 0.08);
-  --theme-modal-bg: rgba(255, 255, 255, 0.96);
-  --theme-drawer-bg: rgba(255, 255, 255, 0.96);
+  --theme-shadow-sm: 0 1px 3px rgba(15,35,30,0.05);
+  --theme-shadow-lg: 0 8px 24px rgba(15,35,30,0.1);
+  --theme-input-bg: #ffffff;
+  --theme-table-bg: #ffffff;
+  --theme-table-row: #ffffff;
+  --theme-table-row-hover: #eef3f1;
+  --theme-hover: #eef3f1;
+  --theme-hover-strong: #e2ece8;
+  --theme-table-stripe: #f8faf9;
+  --theme-badge-bg: #e2ece8;
+  --theme-modal-bg: #ffffff;
+  --theme-drawer-bg: #ffffff;
   --public-bg: var(--theme-page-bg);
   --public-bg-soft: color-mix(in srgb, var(--theme-surface-2) 92%, var(--theme-page-bg));
   --public-ink: var(--theme-text);
   --public-muted: var(--theme-text-muted);
   --public-line: var(--theme-border);
-  --public-brand: #1f5e63;
-  --public-brand-strong: #18484b;
-  --public-accent: #d2b071;
+  --public-brand: var(--theme-brand);
+  --public-brand-strong: var(--theme-brand-strong);
+  --public-accent: var(--theme-accent);
   --public-card: color-mix(in srgb, var(--theme-surface-1) 94%, transparent);
+  --font-ui: "Source Sans 3", system-ui, sans-serif;
+  --color-brand: 15 61 58;
+  --color-brand-light: 30 111 103;
+  --color-brand-dark: 10 42 39;
+  --color-accent: 69 110 102;
+  --theme-on-brand: #ffffff;
+  --theme-chrome: #0f3d3a;
+  --theme-chrome-strong: #0a2a27;
+  --theme-on-chrome: #ffffff;
+  --theme-info: #245c8c;
 }
 
 :root[data-theme="dark"] {
   --theme-mode: dark;
-  --theme-bg: #0d141c;
-  --theme-bg-soft: #111b25;
-  --theme-page-bg: #101922;
-  --theme-app-bg: #0f1720;
-  --theme-surface: rgba(18, 28, 39, 0.88);
-  --theme-surface-solid: #15212d;
-  --theme-surface-muted: #101923;
-  --theme-surface-elevated: #1a2735;
-  --theme-surface-1: rgba(22, 33, 45, 0.98);
-  --theme-surface-2: rgba(15, 24, 34, 0.98);
-  --theme-card-bg: rgba(23, 35, 48, 0.98);
-  --theme-panel-bg: rgba(20, 31, 43, 0.98);
-  --theme-panel-muted: rgba(16, 25, 35, 0.98);
-  --theme-text: #edf3f7;
-  --theme-text-muted: #d1dbe4;
-  --theme-text-soft: #a3b2c0;
-  --theme-link: #8edfd2;
-  --theme-link-hover: #b5efe6;
-  --theme-border: rgba(200, 211, 220, 0.16);
-  --theme-border-strong: rgba(200, 211, 220, 0.26);
-  --theme-brand: #78d1c2;
-  --theme-brand-strong: #9de6da;
-  --theme-accent: #ddbb74;
-  --theme-danger: #f08d76;
-  --theme-success: #4dcc9d;
-  --theme-warning: #f3c25b;
-  --theme-focus: rgba(120, 209, 194, 0.25);
+  --color-brand: 138 217 204;
+  --color-brand-light: 177 235 223;
+  --color-brand-dark: 177 235 223;
+  --color-accent: 155 200 188;
+  --theme-bg: #101a1c;
+  --theme-bg-soft: #152225;
+  --theme-page-bg: #101a1c;
+  --theme-app-bg: #101a1c;
+  --theme-surface: #172729;
+  --theme-surface-solid: #172729;
+  --theme-surface-muted: #132123;
+  --theme-surface-elevated: #1d3032;
+  --theme-surface-1: #172729;
+  --theme-surface-2: #132123;
+  --theme-card-bg: #172729;
+  --theme-panel-bg: #172729;
+  --theme-panel-muted: #132123;
+  --theme-text: #edf4f2;
+  --theme-text-muted: #c1d0cc;
+  --theme-text-soft: #a5b9b4;
+  --theme-link: #8ad9cc;
+  --theme-link-hover: #b1ebdf;
+  --theme-border: #344b47;
+  --theme-border-strong: #526b65;
+  --theme-brand: #8ad9cc;
+  --theme-brand-strong: #b1ebdf;
+  --theme-accent: #9bc8bc;
+  --theme-danger: #ffacb9;
+  --theme-success: #7bdcb1;
+  --theme-warning: #f4ce83;
+  --theme-focus: rgba(138,217,204,0.25);
   --theme-overlay: rgba(3, 7, 12, 0.72);
   --theme-hero-overlay:
     linear-gradient(180deg, rgba(3, 8, 12, 0.22), rgba(3, 8, 12, 0.58)),
     linear-gradient(160deg, rgba(4, 22, 30, 0.92), rgba(11, 43, 54, 0.76) 52%, rgba(3, 8, 12, 0.94));
-  --theme-shadow-sm: 0 14px 36px -22px rgba(0, 0, 0, 0.75);
-  --theme-shadow-lg: 0 28px 60px -32px rgba(0, 0, 0, 0.82);
-  --theme-input-bg: rgba(20, 32, 45, 0.96);
-  --theme-table-bg: rgba(17, 27, 37, 0.98);
-  --theme-table-row: rgba(21, 33, 45, 0.98);
-  --theme-table-row-hover: rgba(120, 209, 194, 0.1);
-  --theme-hover: rgba(120, 209, 194, 0.08);
-  --theme-hover-strong: rgba(120, 209, 194, 0.16);
-  --theme-table-stripe: rgba(255, 255, 255, 0.018);
-  --theme-badge-bg: rgba(120, 209, 194, 0.12);
-  --theme-modal-bg: rgba(20, 31, 43, 0.98);
-  --theme-drawer-bg: rgba(17, 26, 36, 0.98);
+  --theme-shadow-sm: 0 1px 3px rgba(0,0,0,0.12);
+  --theme-shadow-lg: 0 8px 24px rgba(0,0,0,0.2);
+  --theme-input-bg: #172729;
+  --theme-table-bg: #172729;
+  --theme-table-row: #172729;
+  --theme-table-row-hover: #203835;
+  --theme-hover: #203835;
+  --theme-hover-strong: #294b45;
+  --theme-table-stripe: #192d2e;
+  --theme-badge-bg: #203835;
+  --theme-modal-bg: #172729;
+  --theme-drawer-bg: #172729;
   --public-bg: var(--theme-page-bg);
   --public-bg-soft: color-mix(in srgb, var(--theme-surface-2) 86%, var(--theme-app-bg));
   --public-ink: var(--theme-text);
@@ -109,6 +123,11 @@
   --public-brand-strong: var(--theme-brand-strong);
   --public-accent: var(--theme-accent);
   --public-card: color-mix(in srgb, var(--theme-panel-bg) 92%, transparent);
+  --theme-on-brand: #0d211e;
+  --theme-chrome: #152b2b;
+  --theme-chrome-strong: #132a2a;
+  --theme-on-chrome: #edf4f2;
+  --theme-info: #9ac8f5;
 }
 
 html,
@@ -126,28 +145,29 @@ body {
   transition:
     background-color 180ms ease,
     color 180ms ease;
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  line-height: 1.6;
 }
 
 body::before {
   transition: opacity 180ms ease, background 180ms ease;
+  display: none;
 }
 
 :root[data-theme="dark"] body::before {
   background:
-    radial-gradient(circle at 15% 10%, rgba(221, 187, 116, 0.08), transparent 38%),
-    radial-gradient(circle at 90% 16%, rgba(120, 209, 194, 0.14), transparent 42%),
-    radial-gradient(circle at 50% 86%, rgba(240, 141, 118, 0.08), transparent 45%);
+    var(--theme-page-bg);
   opacity: 0.42;
 }
 
 :root[data-theme="dark"] ::selection {
-  background: rgba(221, 187, 116, 0.28);
-  color: #071017;
+  background: var(--theme-brand);
+  color: var(--theme-on-brand);
 }
 
 .app-shell {
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--theme-page-bg) 96%, transparent), var(--theme-app-bg)),
     var(--theme-page-bg);
   color: var(--theme-text);
 }
@@ -160,7 +180,6 @@ body::before {
 
 .public-shell {
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--theme-page-bg) 94%, transparent), var(--theme-app-bg)),
     var(--theme-page-bg);
 }
 
@@ -169,6 +188,7 @@ body::before {
     radial-gradient(circle at 6% 8%, color-mix(in srgb, var(--theme-accent) 18%, transparent), transparent 36%),
     radial-gradient(circle at 92% 12%, color-mix(in srgb, var(--theme-brand) 16%, transparent), transparent 40%),
     linear-gradient(165deg, var(--theme-page-bg) 0%, color-mix(in srgb, var(--theme-bg-soft) 72%, var(--theme-page-bg)) 45%, var(--theme-app-bg) 100%);
+  display: none;
 }
 
 .public-site-glow {
@@ -196,13 +216,11 @@ body::before {
 .public-shell .surface-strong {
   border-color: var(--theme-border);
   background:
-    linear-gradient(
-      162deg,
-      color-mix(in srgb, var(--theme-surface-1) 98%, transparent) 0%,
-      color-mix(in srgb, var(--theme-panel-bg) 96%, transparent) 62%,
-      color-mix(in srgb, var(--theme-surface-2) 98%, transparent) 100%
-    );
-  box-shadow: var(--theme-shadow-lg);
+    var(--theme-surface-solid);
+  box-shadow: var(--theme-shadow-sm);
+  transform: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .public-shell .btn-ghost {
@@ -217,11 +235,7 @@ body::before {
 .public-footer {
   border-top-color: var(--theme-border);
   background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--theme-surface-2) 86%, transparent) 0%,
-      color-mix(in srgb, var(--theme-panel-bg) 96%, transparent) 100%
-    );
+    var(--theme-surface-solid);
 }
 
 .public-footer-brand {
@@ -278,15 +292,6 @@ body::before {
 
 .link-muted {
   transition: color 140ms ease;
-}
-
-.link-muted:hover,
-a:not(.btn-primary):not(.btn-ghost):not(.theme-toggle) {
-  color: var(--theme-link);
-}
-
-a:not(.btn-primary):not(.btn-ghost):not(.theme-toggle):hover {
-  color: var(--theme-link-hover);
 }
 
 .app-header {
@@ -388,7 +393,7 @@ select:focus {
   width: 100%;
   overflow: hidden;
   border-radius: inherit;
-  background: linear-gradient(135deg, color-mix(in srgb, var(--theme-brand) 10%, transparent), color-mix(in srgb, var(--theme-accent) 12%, transparent));
+  background: var(--theme-surface-solid);
 }
 
 .theme-toggle__thumb {
@@ -430,12 +435,12 @@ select:focus {
 
 .theme-toggle__glyph--sun {
   left: 0.55rem;
-  color: #d38b18;
+  color: var(--theme-brand);
 }
 
 .theme-toggle__glyph--moon {
   right: 0.55rem;
-  color: #486a8c;
+  color: var(--theme-text-soft);
 }
 
 .theme-toggle.is-dark .theme-toggle__glyph--moon {
@@ -459,7 +464,6 @@ select:focus {
   min-height: calc(100dvh - 10rem);
   padding: 7rem 0 2.5rem;
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--theme-page-bg) 94%, transparent), color-mix(in srgb, var(--theme-app-bg) 96%, transparent)),
     var(--theme-page-bg);
 }
 
@@ -478,6 +482,7 @@ select:focus {
     radial-gradient(circle at 88% 12%, color-mix(in srgb, var(--theme-brand) 16%, transparent), transparent 38%),
     radial-gradient(circle at 50% 88%, color-mix(in srgb, var(--theme-danger) 10%, transparent), transparent 34%);
   opacity: 0.72;
+  display: none;
 }
 
 .auth-shell {
@@ -485,12 +490,7 @@ select:focus {
   overflow: hidden;
   border: 1px solid var(--theme-border);
   background:
-    linear-gradient(
-      160deg,
-      color-mix(in srgb, var(--theme-surface-solid) 97%, transparent) 0%,
-      color-mix(in srgb, var(--theme-surface) 94%, transparent) 52%,
-      color-mix(in srgb, var(--theme-surface-muted) 96%, transparent) 100%
-    );
+    var(--theme-surface-solid);
   box-shadow: var(--theme-shadow-lg);
   color: var(--theme-text);
 }
@@ -501,6 +501,7 @@ select:focus {
   inset: 0;
   pointer-events: none;
   background: linear-gradient(145deg, color-mix(in srgb, var(--theme-accent) 9%, transparent), transparent 48%);
+  display: none;
 }
 
 .auth-panel {
@@ -635,12 +636,7 @@ select:focus {
 
 :root[data-theme="dark"] .auth-shell {
   background:
-    linear-gradient(
-      165deg,
-      color-mix(in srgb, var(--theme-surface-solid) 96%, transparent) 0%,
-      color-mix(in srgb, var(--theme-surface-muted) 96%, transparent) 56%,
-      color-mix(in srgb, #081019 60%, var(--theme-surface-solid)) 100%
-    );
+    var(--theme-surface-solid);
 }
 
 :root[data-theme="dark"] .auth-panel {
@@ -657,7 +653,6 @@ select:focus {
 
 :root[data-theme="dark"] .public-shell {
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--theme-page-bg) 96%, transparent), var(--theme-app-bg)),
     var(--theme-page-bg);
 }
 
@@ -666,6 +661,7 @@ select:focus {
     radial-gradient(circle at 6% 8%, rgba(221, 187, 116, 0.1), transparent 36%),
     radial-gradient(circle at 92% 12%, rgba(120, 209, 194, 0.12), transparent 40%),
     linear-gradient(165deg, var(--theme-page-bg) 0%, #101a24 48%, var(--theme-app-bg) 100%);
+  display: none;
 }
 
 :root[data-theme="dark"] .public-header,
@@ -745,34 +741,43 @@ select:focus {
 .surface {
   border-color: var(--theme-border);
   background:
-    linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--theme-surface-1) 98%, transparent) 0%,
-      color-mix(in srgb, var(--theme-surface-solid) 94%, transparent) 45%,
-      color-mix(in srgb, var(--theme-surface-2) 98%, transparent) 100%
-    );
+    var(--theme-surface-solid);
   box-shadow: var(--theme-shadow-sm);
+  transform: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .surface::after {
   background: radial-gradient(circle at top left, color-mix(in srgb, var(--theme-accent) 14%, transparent), transparent 45%);
+  display: none;
 }
 
 .surface:hover {
-  border-color: color-mix(in srgb, var(--theme-accent) 34%, var(--theme-border));
-  background: color-mix(in srgb, var(--theme-surface-1) 98%, transparent);
-  box-shadow: var(--theme-shadow-lg);
+  border-color: var(--theme-border);
+  background: var(--theme-surface-solid);
+  box-shadow: var(--theme-shadow-sm);
+  transform: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .surface-strong {
   border-color: var(--theme-border);
-  background: var(--theme-card-bg);
+  background: var(--theme-surface-solid);
   box-shadow: var(--theme-shadow-sm);
+  transform: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .surface-strong:hover {
-  border-color: color-mix(in srgb, var(--theme-accent) 36%, var(--theme-border));
-  box-shadow: var(--theme-shadow-lg);
+  border-color: var(--theme-border);
+  box-shadow: var(--theme-shadow-sm);
+  background: var(--theme-surface-solid);
+  transform: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 :root[data-theme] .surface {
@@ -782,9 +787,9 @@ select:focus {
 }
 
 :root[data-theme] .surface:hover {
-  border-color: color-mix(in srgb, var(--theme-accent) 34%, var(--theme-border)) !important;
+  border-color: var(--theme-border-strong) !important;
   background: color-mix(in srgb, var(--theme-surface-1) 98%, transparent) !important;
-  box-shadow: var(--theme-shadow-lg) !important;
+  box-shadow: var(--theme-shadow-sm) !important;
 }
 
 :root[data-theme] .surface-strong {
@@ -794,8 +799,8 @@ select:focus {
 }
 
 :root[data-theme] .surface-strong:hover {
-  border-color: color-mix(in srgb, var(--theme-accent) 36%, var(--theme-border)) !important;
-  box-shadow: var(--theme-shadow-lg) !important;
+  border-color: var(--theme-border-strong) !important;
+  box-shadow: var(--theme-shadow-sm) !important;
 }
 
 :root[data-theme] .modal-panel {
@@ -869,10 +874,14 @@ select:focus {
 
 .mobile-dashboard-nav__shell,
 .mobile-dashboard-sheet__panel {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--theme-surface-1) 98%, transparent), color-mix(in srgb, var(--theme-surface-2) 99%, transparent)),
-    radial-gradient(circle at top, color-mix(in srgb, var(--theme-accent) 14%, transparent), transparent 48%);
+  background: var(--theme-surface-solid);
   box-shadow: var(--theme-shadow-lg);
+}
+
+.mobile-dashboard-nav__icon {
+  background: var(--theme-surface-muted);
+  color: inherit;
+  box-shadow: none;
 }
 
 .mobile-dashboard-nav__item {
@@ -881,8 +890,16 @@ select:focus {
 
 .mobile-dashboard-nav__item--active {
   color: var(--theme-brand);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--theme-brand) 16%, transparent), color-mix(in srgb, var(--theme-brand) 8%, transparent));
+  background: var(--theme-hover);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--theme-brand) 18%, transparent);
+}
+
+.mobile-dashboard-nav__item--active .mobile-dashboard-nav__icon {
+  background: var(--theme-badge-bg);
+}
+
+.mobile-dashboard-nav__item--danger {
+  color: var(--theme-danger);
 }
 
 .mobile-dashboard-sheet__backdrop {
@@ -917,7 +934,7 @@ select:focus {
 
 .public-header {
   border-color: var(--theme-border);
-  background: color-mix(in srgb, var(--theme-surface) 84%, transparent);
+  background: var(--theme-surface-solid);
   box-shadow: var(--theme-shadow-sm);
 }
 
@@ -966,12 +983,7 @@ select:focus {
 }
 
 .public-menu-toggle::before {
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, white 90%, var(--theme-surface) 10%),
-      color-mix(in srgb, white 74%, var(--theme-surface) 26%)
-    );
+  background: var(--theme-surface-solid);
 }
 
 .public-menu-toggle:hover {
@@ -1005,12 +1017,7 @@ select:focus {
 }
 
 :root[data-theme="dark"] .public-menu-toggle::before {
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--theme-panel-muted) 72%, rgba(255, 255, 255, 0.05)),
-      color-mix(in srgb, var(--theme-panel-bg) 92%, rgba(255, 255, 255, 0.02))
-    );
+  background: var(--theme-surface-solid);
 }
 
 :root[data-theme="dark"] .public-menu-toggle:hover {
@@ -1042,76 +1049,76 @@ select:focus {
 }
 
 :root[data-theme="dark"] .signup-wizard-shell {
-  --signup-shell-glow-top: rgba(99, 102, 241, 0.18);
-  --signup-shell-glow-left: rgba(51, 65, 85, 0.42);
-  --signup-shell-glow-right: rgba(79, 70, 229, 0.18);
-  --signup-card-border: color-mix(in srgb, var(--theme-border-strong) 78%, transparent);
-  --signup-card-bg-top: color-mix(in srgb, var(--theme-panel-bg) 92%, rgba(255, 255, 255, 0.02));
-  --signup-card-bg-bottom: color-mix(in srgb, var(--theme-panel-muted) 84%, rgba(2, 6, 23, 0.86));
-  --signup-card-shadow-primary: rgba(37, 99, 235, 0.18);
-  --signup-card-shadow-secondary: rgba(2, 6, 23, 0.78);
-  --signup-card-sheen: linear-gradient(145deg, rgba(255, 255, 255, 0.08), transparent 34%);
+  --signup-shell-glow-top: transparent;
+  --signup-shell-glow-left: transparent;
+  --signup-shell-glow-right: transparent;
+  --signup-card-border: var(--theme-border);
+  --signup-card-bg-top: var(--theme-surface-solid);
+  --signup-card-bg-bottom: var(--theme-surface-solid);
+  --signup-card-shadow-primary: transparent;
+  --signup-card-shadow-secondary: transparent;
+  --signup-card-sheen: none;
   --signup-secondary-text: var(--theme-text);
-  --signup-secondary-border: color-mix(in srgb, var(--theme-border-strong) 72%, transparent);
-  --signup-secondary-bg: color-mix(in srgb, var(--theme-panel-bg) 82%, transparent);
-  --signup-secondary-shadow: rgba(2, 6, 23, 0.82);
-  --signup-secondary-hover-border: color-mix(in srgb, var(--theme-brand) 38%, var(--theme-border-strong));
-  --signup-secondary-hover-bg: color-mix(in srgb, var(--theme-brand) 10%, var(--theme-panel-bg));
-  --signup-secondary-hover-text: color-mix(in srgb, var(--theme-brand) 76%, white);
-  --signup-focus-ring: color-mix(in srgb, var(--theme-brand) 16%, transparent);
-  --signup-focus-outline: color-mix(in srgb, var(--theme-brand) 26%, transparent);
+  --signup-secondary-border: var(--theme-border);
+  --signup-secondary-bg: var(--theme-surface-solid);
+  --signup-secondary-shadow: transparent;
+  --signup-secondary-hover-border: var(--theme-border-strong);
+  --signup-secondary-hover-bg: var(--theme-hover);
+  --signup-secondary-hover-text: var(--theme-text);
+  --signup-focus-ring: var(--theme-focus);
+  --signup-focus-outline: var(--theme-brand);
 }
 
-:root[data-theme="dark"] .signup-wizard-shell .bg-indigo-50,
-:root[data-theme="dark"] .signup-wizard-shell .bg-indigo-100,
-:root[data-theme="dark"] .signup-wizard-shell .bg-indigo-50\/40,
-:root[data-theme="dark"] .signup-wizard-shell .bg-indigo-50\/50 {
+:root[data-theme="dark"] .signup-wizard-shell .bg-indigo-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .signup-wizard-shell .bg-indigo-100:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .signup-wizard-shell .bg-indigo-50\/40:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .signup-wizard-shell .bg-indigo-50\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   background-color: color-mix(in srgb, var(--theme-brand) 16%, var(--theme-surface-2)) !important;
 }
 
-:root[data-theme="dark"] .signup-wizard-shell .bg-amber-50\/70 {
+:root[data-theme="dark"] .signup-wizard-shell .bg-amber-50\/70:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   background-color: color-mix(in srgb, #f59e0b 14%, var(--theme-surface-2)) !important;
 }
 
-:root[data-theme="dark"] .signup-wizard-shell .bg-rose-50,
-:root[data-theme="dark"] .signup-wizard-shell .bg-rose-50\/40,
-:root[data-theme="dark"] .signup-wizard-shell .bg-rose-50\/70 {
+:root[data-theme="dark"] .signup-wizard-shell .bg-rose-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .signup-wizard-shell .bg-rose-50\/40:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .signup-wizard-shell .bg-rose-50\/70:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   background-color: color-mix(in srgb, #f43f5e 12%, var(--theme-surface-2)) !important;
 }
 
-:root[data-theme="dark"] .signup-wizard-shell .border-indigo-200 {
+:root[data-theme="dark"] .signup-wizard-shell .border-indigo-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   border-color: color-mix(in srgb, var(--theme-brand) 34%, var(--theme-border)) !important;
 }
 
-:root[data-theme="dark"] .signup-wizard-shell .border-indigo-300 {
+:root[data-theme="dark"] .signup-wizard-shell .border-indigo-300:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   border-color: color-mix(in srgb, var(--theme-brand) 42%, var(--theme-border)) !important;
 }
 
-:root[data-theme="dark"] .signup-wizard-shell .border-amber-200 {
+:root[data-theme="dark"] .signup-wizard-shell .border-amber-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   border-color: color-mix(in srgb, #f59e0b 32%, var(--theme-border)) !important;
 }
 
-:root[data-theme="dark"] .signup-wizard-shell .border-rose-200,
-:root[data-theme="dark"] .signup-wizard-shell .border-rose-300 {
+:root[data-theme="dark"] .signup-wizard-shell .border-rose-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .signup-wizard-shell .border-rose-300:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   border-color: color-mix(in srgb, #f43f5e 34%, var(--theme-border)) !important;
 }
 
-:root[data-theme="dark"] .signup-wizard-shell .text-indigo-500,
-:root[data-theme="dark"] .signup-wizard-shell .text-indigo-600 {
+:root[data-theme="dark"] .signup-wizard-shell .text-indigo-500:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .signup-wizard-shell .text-indigo-600:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: color-mix(in srgb, var(--theme-brand) 78%, white) !important;
 }
 
-:root[data-theme="dark"] .signup-wizard-shell .text-amber-800 {
+:root[data-theme="dark"] .signup-wizard-shell .text-amber-800:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: color-mix(in srgb, #fbbf24 82%, white) !important;
 }
 
-:root[data-theme="dark"] .signup-wizard-shell .text-rose-700,
-:root[data-theme="dark"] .signup-wizard-shell .text-rose-600 {
+:root[data-theme="dark"] .signup-wizard-shell .text-rose-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .signup-wizard-shell .text-rose-600:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: color-mix(in srgb, #fb7185 84%, white) !important;
 }
 
-:root[data-theme="dark"] .signup-wizard-shell .hover\:bg-indigo-50\/40:hover,
-:root[data-theme="dark"] .signup-wizard-shell .hover\:bg-indigo-100:hover {
+:root[data-theme="dark"] .signup-wizard-shell .hover\:bg-indigo-50\/40:hover:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .signup-wizard-shell .hover\:bg-indigo-100:hover:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   background-color: color-mix(in srgb, var(--theme-brand) 18%, var(--theme-surface-2)) !important;
 }
 
@@ -1124,171 +1131,171 @@ select:focus {
   --tw-ring-color: color-mix(in srgb, #f43f5e 18%, transparent) !important;
 }
 
-:root[data-theme="dark"] .signup-wizard-shell .ring-white {
+:root[data-theme="dark"] .signup-wizard-shell .ring-white:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   --tw-ring-color: rgba(15, 23, 42, 0.42) !important;
 }
 
-:root[data-theme="dark"] .bg-white,
-:root[data-theme="dark"] .bg-white\/30,
-:root[data-theme="dark"] .bg-white\/40,
-:root[data-theme="dark"] .bg-white\/50,
-:root[data-theme="dark"] .bg-white\/60,
-:root[data-theme="dark"] .bg-white\/70,
-:root[data-theme="dark"] .bg-white\/75,
-:root[data-theme="dark"] .bg-white\/80,
-:root[data-theme="dark"] .bg-white\/85,
-:root[data-theme="dark"] .bg-white\/90,
-:root[data-theme="dark"] .bg-white\/95,
-:root[data-theme="dark"] .bg-neutral-25 {
+:root[data-theme="dark"] .bg-white:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-white\/30:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-white\/40:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-white\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-white\/60:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-white\/70:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-white\/75:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-white\/80:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-white\/85:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-white\/90:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-white\/95:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-neutral-25:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   background-color: var(--theme-surface-1) !important;
 }
 
-:root[data-theme="dark"] .bg-\[\#f8f9fa\],
-:root[data-theme="dark"] .bg-neutral-50,
-:root[data-theme="dark"] .bg-neutral-50\/20,
-:root[data-theme="dark"] .bg-neutral-50\/30,
-:root[data-theme="dark"] .bg-neutral-50\/40,
-:root[data-theme="dark"] .bg-neutral-50\/50,
-:root[data-theme="dark"] .bg-neutral-50\/60,
-:root[data-theme="dark"] .bg-neutral-50\/70,
-:root[data-theme="dark"] .bg-neutral-50\/75,
-:root[data-theme="dark"] .bg-neutral-50\/80,
-:root[data-theme="dark"] .bg-neutral-50\/90,
-:root[data-theme="dark"] .bg-neutral-100,
-:root[data-theme="dark"] .bg-neutral-100\/30,
-:root[data-theme="dark"] .bg-neutral-100\/40,
-:root[data-theme="dark"] .bg-neutral-100\/50,
-:root[data-theme="dark"] .bg-neutral-100\/60,
-:root[data-theme="dark"] .bg-neutral-100\/70,
-:root[data-theme="dark"] .bg-neutral-100\/80,
-:root[data-theme="dark"] .bg-neutral-100\/90,
-:root[data-theme="dark"] .bg-slate-50,
-:root[data-theme="dark"] .bg-slate-50\/50,
-:root[data-theme="dark"] .bg-slate-50\/70,
-:root[data-theme="dark"] .bg-slate-50\/80,
-:root[data-theme="dark"] .bg-slate-50\/90,
-:root[data-theme="dark"] .bg-slate-100,
-:root[data-theme="dark"] .bg-slate-100\/50,
-:root[data-theme="dark"] .bg-slate-100\/70,
-:root[data-theme="dark"] .bg-slate-100\/80,
-:root[data-theme="dark"] .bg-slate-100\/90,
-:root[data-theme="dark"] .bg-slate-200,
-:root[data-theme="dark"] .bg-slate-200\/70,
-:root[data-theme="dark"] .bg-\[\#f8f9fa\]\/50 {
+:root[data-theme="dark"] .bg-\[\#f8f9fa\]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-neutral-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-neutral-50\/20:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-neutral-50\/30:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-neutral-50\/40:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-neutral-50\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-neutral-50\/60:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-neutral-50\/70:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-neutral-50\/75:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-neutral-50\/80:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-neutral-50\/90:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-neutral-100:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-neutral-100\/30:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-neutral-100\/40:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-neutral-100\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-neutral-100\/60:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-neutral-100\/70:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-neutral-100\/80:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-neutral-100\/90:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-slate-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-slate-50\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-slate-50\/70:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-slate-50\/80:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-slate-50\/90:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-slate-100:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-slate-100\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-slate-100\/70:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-slate-100\/80:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-slate-100\/90:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-slate-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-slate-200\/70:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-\[\#f8f9fa\]\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   background-color: var(--theme-surface-2) !important;
 }
 
-:root[data-theme="dark"] .bg-slate-900,
-:root[data-theme="dark"] .bg-slate-950 {
+:root[data-theme="dark"] .bg-slate-900:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-slate-950:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   background-color: color-mix(in srgb, var(--theme-panel-muted) 88%, black) !important;
 }
 
-:root[data-theme="dark"] .border-neutral-100,
-:root[data-theme="dark"] .border-neutral-100\/50,
-:root[data-theme="dark"] .border-neutral-100\/60,
-:root[data-theme="dark"] .border-neutral-100\/70,
-:root[data-theme="dark"] .border-neutral-100\/80,
-:root[data-theme="dark"] .border-neutral-200,
-:root[data-theme="dark"] .border-neutral-200\/50,
-:root[data-theme="dark"] .border-neutral-200\/60,
-:root[data-theme="dark"] .border-neutral-200\/70,
-:root[data-theme="dark"] .border-neutral-200\/80,
-:root[data-theme="dark"] .border-neutral-300,
-:root[data-theme="dark"] .border-slate-200,
-:root[data-theme="dark"] .border-slate-200\/50,
-:root[data-theme="dark"] .border-slate-200\/60,
-:root[data-theme="dark"] .border-slate-200\/70,
-:root[data-theme="dark"] .border-slate-200\/80,
-:root[data-theme="dark"] .border-slate-300,
-:root[data-theme="dark"] .border-slate-300\/70,
-:root[data-theme="dark"] .border-slate-400,
-:root[data-theme="dark"] .border-slate-950\/10,
-:root[data-theme="dark"] .border-slate-950\/20,
-:root[data-theme="dark"] .border-slate-950\/30,
-:root[data-theme="dark"] .border-black\/5,
-:root[data-theme="dark"] .border-black\/10,
-:root[data-theme="dark"] .border-white\/50,
-:root[data-theme="dark"] .border-white\/60,
-:root[data-theme="dark"] .border-white\/70 {
+:root[data-theme="dark"] .border-neutral-100:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-neutral-100\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-neutral-100\/60:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-neutral-100\/70:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-neutral-100\/80:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-neutral-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-neutral-200\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-neutral-200\/60:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-neutral-200\/70:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-neutral-200\/80:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-neutral-300:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-slate-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-slate-200\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-slate-200\/60:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-slate-200\/70:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-slate-200\/80:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-slate-300:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-slate-300\/70:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-slate-400:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-slate-950\/10:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-slate-950\/20:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-slate-950\/30:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-black\/5:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-black\/10:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-white\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-white\/60:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-white\/70:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   border-color: var(--theme-border) !important;
 }
 
-:root[data-theme="dark"] .divide-neutral-50 > :not([hidden]) ~ :not([hidden]),
-:root[data-theme="dark"] .divide-neutral-100 > :not([hidden]) ~ :not([hidden]),
-:root[data-theme="dark"] .divide-neutral-200 > :not([hidden]) ~ :not([hidden]),
-:root[data-theme="dark"] .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
-:root[data-theme="dark"] .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+:root[data-theme="dark"] .divide-neutral-50 > :not([hidden]) ~ :not([hidden]):not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .divide-neutral-100 > :not([hidden]) ~ :not([hidden]):not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .divide-neutral-200 > :not([hidden]) ~ :not([hidden]):not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .divide-slate-100 > :not([hidden]) ~ :not([hidden]):not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .divide-slate-200 > :not([hidden]) ~ :not([hidden]):not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   border-color: var(--theme-border) !important;
 }
 
-:root[data-theme="dark"] .ring-neutral-100,
-:root[data-theme="dark"] .ring-neutral-200,
-:root[data-theme="dark"] .ring-neutral-200\/50,
-:root[data-theme="dark"] .ring-neutral-200\/60,
-:root[data-theme="dark"] .ring-neutral-300,
-:root[data-theme="dark"] .ring-slate-200 {
+:root[data-theme="dark"] .ring-neutral-100:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .ring-neutral-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .ring-neutral-200\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .ring-neutral-200\/60:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .ring-neutral-300:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .ring-slate-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   --tw-ring-color: var(--theme-border) !important;
 }
 
-:root[data-theme="dark"] .text-neutral-900,
-:root[data-theme="dark"] .text-neutral-800,
-:root[data-theme="dark"] .text-slate-900,
-:root[data-theme="dark"] .text-slate-800,
-:root[data-theme="dark"] .text-slate-950 {
+:root[data-theme="dark"] .text-neutral-900:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-neutral-800:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-slate-900:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-slate-800:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-slate-950:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: var(--theme-text) !important;
 }
 
-:root[data-theme="dark"] .text-neutral-700,
-:root[data-theme="dark"] .text-neutral-600,
-:root[data-theme="dark"] .text-neutral-500,
-:root[data-theme="dark"] .text-neutral-400,
-:root[data-theme="dark"] .text-neutral-300,
-:root[data-theme="dark"] .text-slate-700,
-:root[data-theme="dark"] .text-slate-600,
-:root[data-theme="dark"] .text-slate-500,
-:root[data-theme="dark"] .text-slate-400,
-:root[data-theme="dark"] .text-slate-300 {
+:root[data-theme="dark"] .text-neutral-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-neutral-600:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-neutral-500:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-neutral-400:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-neutral-300:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-slate-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-slate-600:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-slate-500:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-slate-400:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-slate-300:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: var(--theme-text-muted) !important;
 }
 
-:root[data-theme="dark"] .placeholder\:text-neutral-400::placeholder,
-:root[data-theme="dark"] .placeholder\:text-neutral-500::placeholder {
+:root[data-theme="dark"] .placeholder\:text-neutral-400:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *))::placeholder,
+:root[data-theme="dark"] .placeholder\:text-neutral-500:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *))::placeholder {
   color: var(--theme-text-soft) !important;
 }
 
-:root[data-theme="dark"] .hover\:bg-neutral-50:hover,
-:root[data-theme="dark"] .hover\:bg-neutral-50\/50:hover,
-:root[data-theme="dark"] .hover\:bg-neutral-50\/80:hover,
-:root[data-theme="dark"] .hover\:bg-neutral-100:hover,
-:root[data-theme="dark"] .hover\:bg-neutral-100\/50:hover,
-:root[data-theme="dark"] .hover\:bg-white:hover,
-:root[data-theme="dark"] .hover\:bg-white\/50:hover,
-:root[data-theme="dark"] .hover\:bg-white\/90:hover,
-:root[data-theme="dark"] .hover\:bg-slate-50:hover,
-:root[data-theme="dark"] .hover\:bg-slate-50\/50:hover,
-:root[data-theme="dark"] .hover\:bg-slate-50\/70:hover,
-:root[data-theme="dark"] .hover\:bg-slate-50\/80:hover,
-:root[data-theme="dark"] .hover\:bg-slate-50\/90:hover,
-:root[data-theme="dark"] .hover\:bg-slate-100:hover {
+:root[data-theme="dark"] .hover\:bg-neutral-50:hover:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .hover\:bg-neutral-50\/50:hover:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .hover\:bg-neutral-50\/80:hover:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .hover\:bg-neutral-100:hover:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .hover\:bg-neutral-100\/50:hover:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .hover\:bg-white:hover:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .hover\:bg-white\/50:hover:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .hover\:bg-white\/90:hover:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .hover\:bg-slate-50:hover:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .hover\:bg-slate-50\/50:hover:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .hover\:bg-slate-50\/70:hover:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .hover\:bg-slate-50\/80:hover:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .hover\:bg-slate-50\/90:hover:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .hover\:bg-slate-100:hover:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   background-color: var(--theme-table-row-hover) !important;
 }
 
-:root[data-theme="dark"] .hover\:text-neutral-900:hover,
-:root[data-theme="dark"] .hover\:text-neutral-700:hover,
-:root[data-theme="dark"] .hover\:text-slate-700:hover {
+:root[data-theme="dark"] .hover\:text-neutral-900:hover:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .hover\:text-neutral-700:hover:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .hover\:text-slate-700:hover:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: var(--theme-text) !important;
 }
 
-:root[data-theme="dark"] .hover\:border-neutral-300:hover,
-:root[data-theme="dark"] .hover\:border-slate-300:hover {
+:root[data-theme="dark"] .hover\:border-neutral-300:hover:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .hover\:border-slate-300:hover:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   border-color: var(--theme-border-strong) !important;
 }
 
-:root[data-theme="dark"] .shadow-sm,
-:root[data-theme="dark"] .shadow-md,
-:root[data-theme="dark"] .shadow-lg,
-:root[data-theme="dark"] .shadow-xl,
-:root[data-theme="dark"] .shadow-2xl {
+:root[data-theme="dark"] .shadow-sm:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .shadow-md:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .shadow-lg:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .shadow-xl:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .shadow-2xl:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   box-shadow: var(--theme-shadow-sm) !important;
 }
 
@@ -1301,127 +1308,127 @@ select:focus {
   border-color: var(--theme-border);
 }
 
-:root[data-theme="dark"] thead.bg-white\/40,
-:root[data-theme="dark"] thead.bg-neutral-50\/50,
-:root[data-theme="dark"] thead.bg-neutral-50\/80,
-:root[data-theme="dark"] thead.bg-neutral-50\/30,
-:root[data-theme="dark"] thead.bg-slate-50\/70,
-:root[data-theme="dark"] thead.bg-slate-50\/80 {
+:root[data-theme="dark"] thead.bg-white\/40:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] thead.bg-neutral-50\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] thead.bg-neutral-50\/80:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] thead.bg-neutral-50\/30:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] thead.bg-slate-50\/70:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] thead.bg-slate-50\/80:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   background-color: color-mix(in srgb, var(--theme-table-bg) 94%, transparent) !important;
 }
 
-:root[data-theme="dark"] tbody.bg-white,
-:root[data-theme="dark"] tbody.bg-neutral-50,
-:root[data-theme="dark"] tbody.bg-neutral-50\/50,
-:root[data-theme="dark"] tbody.bg-slate-50,
-:root[data-theme="dark"] tbody.bg-slate-50\/70 {
+:root[data-theme="dark"] tbody.bg-white:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] tbody.bg-neutral-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] tbody.bg-neutral-50\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] tbody.bg-slate-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] tbody.bg-slate-50\/70:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   background-color: var(--theme-table-bg) !important;
 }
 
-:root[data-theme="dark"] tr.bg-white\/30,
-:root[data-theme="dark"] tr.bg-white\/40,
-:root[data-theme="dark"] tr.bg-white,
-:root[data-theme="dark"] tr.bg-neutral-50\/30,
-:root[data-theme="dark"] tr.bg-neutral-50\/50,
-:root[data-theme="dark"] tr.bg-neutral-50,
-:root[data-theme="dark"] tr.bg-slate-50\/70,
-:root[data-theme="dark"] tr.bg-slate-50\/80,
-:root[data-theme="dark"] tr.hover\:bg-neutral-50\/50:hover,
-:root[data-theme="dark"] tr.hover\:bg-neutral-50\/80:hover,
-:root[data-theme="dark"] tr.hover\:bg-slate-50\/70:hover,
-:root[data-theme="dark"] tr.hover\:bg-slate-50\/80:hover {
+:root[data-theme="dark"] tr.bg-white\/30:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] tr.bg-white\/40:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] tr.bg-white:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] tr.bg-neutral-50\/30:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] tr.bg-neutral-50\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] tr.bg-neutral-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] tr.bg-slate-50\/70:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] tr.bg-slate-50\/80:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] tr.hover\:bg-neutral-50\/50:hover:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] tr.hover\:bg-neutral-50\/80:hover:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] tr.hover\:bg-slate-50\/70:hover:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] tr.hover\:bg-slate-50\/80:hover:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   background-color: var(--theme-table-row) !important;
 }
 
-:root[data-theme="dark"] .bg-emerald-50 {
+:root[data-theme="dark"] .bg-emerald-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   background-color: color-mix(in srgb, var(--theme-success) 18%, var(--theme-surface-solid)) !important;
 }
 
-:root[data-theme="dark"] .bg-amber-50 {
+:root[data-theme="dark"] .bg-amber-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   background-color: color-mix(in srgb, var(--theme-warning) 18%, var(--theme-surface-solid)) !important;
 }
 
-:root[data-theme="dark"] .bg-red-50 {
+:root[data-theme="dark"] .bg-red-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   background-color: color-mix(in srgb, var(--theme-danger) 18%, var(--theme-surface-solid)) !important;
 }
 
-:root[data-theme="dark"] .bg-orange-50,
-:root[data-theme="dark"] .bg-yellow-50 {
+:root[data-theme="dark"] .bg-orange-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-yellow-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   background-color: color-mix(in srgb, var(--theme-warning) 16%, var(--theme-surface-solid)) !important;
 }
 
-:root[data-theme="dark"] .bg-blue-50,
-:root[data-theme="dark"] .bg-sky-50,
-:root[data-theme="dark"] .bg-cyan-50 {
+:root[data-theme="dark"] .bg-blue-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-sky-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-cyan-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   background-color: color-mix(in srgb, var(--theme-brand) 18%, var(--theme-surface-solid)) !important;
 }
 
-:root[data-theme="dark"] .bg-purple-50,
-:root[data-theme="dark"] .bg-violet-50,
-:root[data-theme="dark"] .bg-fuchsia-50 {
+:root[data-theme="dark"] .bg-purple-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-violet-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-fuchsia-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   background-color: color-mix(in srgb, #a78bfa 16%, var(--theme-surface-solid)) !important;
 }
 
-:root[data-theme="dark"] .border-emerald-200,
-:root[data-theme="dark"] .border-emerald-200\/50,
-:root[data-theme="dark"] .border-emerald-200\/60 {
+:root[data-theme="dark"] .border-emerald-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-emerald-200\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-emerald-200\/60:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   border-color: color-mix(in srgb, var(--theme-success) 34%, var(--theme-border)) !important;
 }
 
-:root[data-theme="dark"] .border-amber-200,
-:root[data-theme="dark"] .border-amber-200\/50,
-:root[data-theme="dark"] .border-amber-200\/60,
-:root[data-theme="dark"] .border-orange-200,
-:root[data-theme="dark"] .border-orange-200\/50 {
+:root[data-theme="dark"] .border-amber-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-amber-200\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-amber-200\/60:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-orange-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-orange-200\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   border-color: color-mix(in srgb, var(--theme-warning) 34%, var(--theme-border)) !important;
 }
 
-:root[data-theme="dark"] .border-red-200,
-:root[data-theme="dark"] .border-red-200\/50,
-:root[data-theme="dark"] .border-red-200\/60 {
+:root[data-theme="dark"] .border-red-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-red-200\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-red-200\/60:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   border-color: color-mix(in srgb, var(--theme-danger) 34%, var(--theme-border)) !important;
 }
 
-:root[data-theme="dark"] .border-blue-200,
-:root[data-theme="dark"] .border-sky-200,
-:root[data-theme="dark"] .border-sky-200\/60,
-:root[data-theme="dark"] .border-cyan-200 {
+:root[data-theme="dark"] .border-blue-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-sky-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-sky-200\/60:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-cyan-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   border-color: color-mix(in srgb, var(--theme-brand) 34%, var(--theme-border)) !important;
 }
 
-:root[data-theme="dark"] .text-emerald-900,
-:root[data-theme="dark"] .text-emerald-800,
-:root[data-theme="dark"] .text-emerald-700 {
+:root[data-theme="dark"] .text-emerald-900:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-emerald-800:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-emerald-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: color-mix(in srgb, var(--theme-success) 78%, white) !important;
 }
 
-:root[data-theme="dark"] .text-amber-800,
-:root[data-theme="dark"] .text-amber-700,
-:root[data-theme="dark"] .text-orange-800,
-:root[data-theme="dark"] .text-orange-700 {
+:root[data-theme="dark"] .text-amber-800:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-amber-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-orange-800:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-orange-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: color-mix(in srgb, var(--theme-warning) 82%, white) !important;
 }
 
-:root[data-theme="dark"] .text-red-800,
-:root[data-theme="dark"] .text-red-700,
-:root[data-theme="dark"] .text-rose-800,
-:root[data-theme="dark"] .text-rose-700,
-:root[data-theme="dark"] .text-red-600 {
+:root[data-theme="dark"] .text-red-800:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-red-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-rose-800:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-rose-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-red-600:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: color-mix(in srgb, var(--theme-danger) 80%, white) !important;
 }
 
-:root[data-theme="dark"] .text-blue-800,
-:root[data-theme="dark"] .text-blue-700,
-:root[data-theme="dark"] .text-sky-800,
-:root[data-theme="dark"] .text-sky-700,
-:root[data-theme="dark"] .text-cyan-800,
-:root[data-theme="dark"] .text-cyan-700 {
+:root[data-theme="dark"] .text-blue-800:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-blue-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-sky-800:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-sky-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-cyan-800:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-cyan-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: color-mix(in srgb, var(--theme-brand) 82%, white) !important;
 }
 
-:root[data-theme="dark"] .text-purple-700,
-:root[data-theme="dark"] .text-violet-700,
-:root[data-theme="dark"] .text-fuchsia-700 {
+:root[data-theme="dark"] .text-purple-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-violet-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-fuchsia-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: color-mix(in srgb, #c4b5fd 86%, white) !important;
 }
 
@@ -1515,90 +1522,83 @@ select:focus {
   color: #0f172a !important;
 }
 
-:root[data-theme="dark"] .attendance-station-page .text-slate-950,
-:root[data-theme="dark"] .attendance-station-page .text-slate-900,
-:root[data-theme="dark"] .attendance-station-page .text-slate-800 {
+:root[data-theme="dark"] .attendance-station-page .text-slate-950:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .attendance-station-page .text-slate-900:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .attendance-station-page .text-slate-800:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: #0f172a !important;
 }
 
-:root[data-theme="dark"] .attendance-station-page .text-slate-600,
-:root[data-theme="dark"] .attendance-station-page .text-slate-500,
-.attendance-station-page .attendance-station-helper {
+:root[data-theme="dark"] .attendance-station-page .text-slate-600:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .attendance-station-page .text-slate-500:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.attendance-station-page .attendance-station-helper:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: #475569 !important;
 }
 
-:root[data-theme="dark"] .attendance-station-page .border-slate-200,
-:root[data-theme="dark"] .attendance-station-page .border-slate-300 {
+:root[data-theme="dark"] .attendance-station-page .border-slate-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .attendance-station-page .border-slate-300:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   border-color: #cbd5e1 !important;
 }
 
-:root[data-theme="dark"] .attendance-station-page .bg-white {
+:root[data-theme="dark"] .attendance-station-page .bg-white:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   background-color: #fbfdfc !important;
 }
 
-.org-admin-v2 .org-admin-content [class*="bg-neutral-950"],
-.org-admin-v2 .org-admin-content [class*="bg-neutral-900"],
-.org-admin-v2 .org-admin-content [class*="bg-slate-950"],
-.org-admin-v2 .org-admin-content [class*="bg-slate-900"] {
-  background-color: var(--oa-brand) !important;
+.org-admin-v2 .org-admin-content .bg-neutral-950:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 .org-admin-content .bg-neutral-900:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 .org-admin-content .bg-slate-950:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 .org-admin-content .bg-slate-900:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
+  background-color: var(--theme-chrome) !important;
   background-image: none !important;
-  color: var(--oa-on-brand) !important;
+  color: var(--theme-on-chrome) !important;
 }
 
-.org-admin-v2 .org-admin-content [class*="bg-neutral-50"],
-.org-admin-v2 .org-admin-content [class*="bg-neutral-100"],
-.org-admin-v2 .org-admin-content [class*="bg-slate-50"],
-.org-admin-v2 .org-admin-content [class*="bg-slate-100"] {
+.org-admin-v2 .org-admin-content [class*="bg-neutral-50"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 .org-admin-content [class*="bg-neutral-100"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 .org-admin-content [class*="bg-slate-50"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 .org-admin-content [class*="bg-slate-100"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   background-color: var(--oa-panel-soft) !important;
   background-image: none !important;
 }
 
-.org-admin-v2 .org-admin-content [class*="border-white"],
-.org-admin-v2 .org-admin-content [class*="border-neutral-200"],
-.org-admin-v2 .org-admin-content [class*="border-slate-200"] {
+.org-admin-v2 .org-admin-content [class*="border-white"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 .org-admin-content [class*="border-neutral-200"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 .org-admin-content [class*="border-slate-200"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   border-color: var(--oa-line) !important;
 }
 
-.org-admin-v2 .org-admin-content [class*="text-neutral-900"],
-.org-admin-v2 .org-admin-content [class*="text-slate-900"],
-.org-admin-v2 .org-admin-content [class*="text-slate-950"] {
+.org-admin-v2 .org-admin-content [class*="text-neutral-900"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 .org-admin-content [class*="text-slate-900"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 .org-admin-content [class*="text-slate-950"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: var(--oa-text) !important;
 }
 
-.org-admin-v2 .org-admin-content [class*="text-neutral-600"],
-.org-admin-v2 .org-admin-content [class*="text-neutral-500"],
-.org-admin-v2 .org-admin-content [class*="text-neutral-400"],
-.org-admin-v2 .org-admin-content [class*="text-slate-600"],
-.org-admin-v2 .org-admin-content [class*="text-slate-500"],
-.org-admin-v2 .org-admin-content [class*="text-slate-400"] {
+.org-admin-v2 .org-admin-content [class*="text-neutral-600"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 .org-admin-content [class*="text-neutral-500"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 .org-admin-content [class*="text-neutral-400"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 .org-admin-content [class*="text-slate-600"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 .org-admin-content [class*="text-slate-500"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 .org-admin-content [class*="text-slate-400"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: var(--oa-muted) !important;
 }
 
-.org-admin-v2 .org-admin-content [class*="text-brand"] {
+.org-admin-v2 .org-admin-content [class*="text-brand"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: var(--oa-brand-strong) !important;
 }
 
-:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="bg-[#fb"],
-:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="bg-[#f8"],
-:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="bg-[#f7"],
-:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="bg-[#f6"],
-:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="bg-[#f4"],
-:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="bg-[#ee"],
-:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="bg-[#ec"],
-:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="bg-[#ea"] {
+:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="bg-[#fb"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="bg-[#f8"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="bg-[#f7"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="bg-[#f6"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="bg-[#f4"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="bg-[#ee"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="bg-[#ec"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="bg-[#ea"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   background-color: var(--oa-panel-soft) !important;
   background-image: none !important;
 }
 
-:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="text-[#"] {
+:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="text-[#"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: var(--oa-muted) !important;
-}
-
-.org-admin-v2 .org-admin-content .btn-primary,
-.org-admin-v2 .org-admin-content .btn-success {
-  background-color: var(--oa-brand) !important;
-  background-image: none !important;
-  color: var(--oa-on-brand) !important;
 }
 
 .org-admin-v2 .org-admin-content .btn-ghost,
@@ -1612,30 +1612,30 @@ select:focus {
 /* Super-admin pages define their own `--sa-*` tokens in index.css, which is
    imported before this global bridge. Re-assert dark utility colors here so
    table rows and modal copy do not fall back to near-black Tailwind colors. */
-:root[data-theme="dark"] .super-admin-v2 .text-neutral-950,
-:root[data-theme="dark"] .super-admin-v2 .text-neutral-900,
-:root[data-theme="dark"] .super-admin-v2 .text-neutral-800,
-:root[data-theme="dark"] .super-admin-v2 .text-neutral-700,
-:root[data-theme="dark"] .super-admin-v2 .text-slate-950,
-:root[data-theme="dark"] .super-admin-v2 .text-slate-900,
-:root[data-theme="dark"] .super-admin-v2 .text-slate-800 {
+:root[data-theme="dark"] .super-admin-v2 .text-neutral-950:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .super-admin-v2 .text-neutral-900:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .super-admin-v2 .text-neutral-800:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .super-admin-v2 .text-neutral-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .super-admin-v2 .text-slate-950:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .super-admin-v2 .text-slate-900:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .super-admin-v2 .text-slate-800:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: var(--sa-text) !important;
   -webkit-text-fill-color: var(--sa-text) !important;
 }
 
-:root[data-theme="dark"] .super-admin-v2 .text-neutral-600,
-:root[data-theme="dark"] .super-admin-v2 .text-neutral-500,
-:root[data-theme="dark"] .super-admin-v2 .text-slate-700,
-:root[data-theme="dark"] .super-admin-v2 .text-slate-600,
-:root[data-theme="dark"] .super-admin-v2 .text-slate-500 {
+:root[data-theme="dark"] .super-admin-v2 .text-neutral-600:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .super-admin-v2 .text-neutral-500:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .super-admin-v2 .text-slate-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .super-admin-v2 .text-slate-600:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .super-admin-v2 .text-slate-500:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: var(--sa-muted) !important;
   -webkit-text-fill-color: var(--sa-muted) !important;
 }
 
-:root[data-theme="dark"] .super-admin-v2 .text-neutral-400,
-:root[data-theme="dark"] .super-admin-v2 .text-neutral-300,
-:root[data-theme="dark"] .super-admin-v2 .text-slate-400,
-:root[data-theme="dark"] .super-admin-v2 .text-slate-300 {
+:root[data-theme="dark"] .super-admin-v2 .text-neutral-400:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .super-admin-v2 .text-neutral-300:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .super-admin-v2 .text-slate-400:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .super-admin-v2 .text-slate-300:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: var(--sa-soft) !important;
   -webkit-text-fill-color: var(--sa-soft) !important;
 }
@@ -1648,8 +1648,8 @@ select:focus {
 :root[data-theme="dark"] .super-admin-v2 .sa-textarea {
   border-color: var(--sa-line-strong) !important;
   background: var(--sa-panel-strong) !important;
-  color: #151b1f !important;
-  -webkit-text-fill-color: #151b1f !important;
+  color: var(--sa-text) !important;
+  -webkit-text-fill-color: var(--sa-text) !important;
 }
 
 :root[data-theme="dark"] .super-admin-v2 .sa-orgs-table-shell table thead tr {
@@ -1689,17 +1689,17 @@ select:focus {
 }
 
 :root[data-theme="dark"] .associations-page .associations-hero-icon {
-  background: rgba(20, 184, 166, 0.16) !important;
-  color: #5eead4 !important;
-  box-shadow: 0 0 0 1px rgba(94, 234, 212, 0.24), 0 18px 42px rgba(20, 184, 166, 0.12);
+  background: var(--theme-badge-bg) !important;
+  color: var(--theme-brand) !important;
+  box-shadow: none;
 }
 
 :root[data-theme="dark"] .associations-page .association-card {
-  border-color: rgba(148, 163, 184, 0.24) !important;
+  border-color: var(--theme-border) !important;
 }
 
 :root[data-theme="dark"] .associations-page .association-card-body {
-  background: #142231 !important;
+  background: var(--theme-panel-bg) !important;
 }
 
 :root[data-theme="dark"] .associations-page .association-logo-plate {
@@ -1713,4 +1713,95 @@ select:focus {
 :root[data-theme="dark"] .associations-page .association-placeholder-icon {
   color: #0f766e !important;
   opacity: 1 !important;
+}
+
+/* Shared interface primitives. Keep role shells as aliases of the tokens above. */
+
+:root[data-theme] :is(.btn-primary, .signup-wizard-primary, .sa-btn--primary) {
+  background: var(--theme-brand) !important;
+  background-image: none !important;
+  color: var(--theme-on-brand) !important;
+  -webkit-text-fill-color: var(--theme-on-brand) !important;
+  border: 1px solid transparent;
+  box-shadow: none;
+  border-radius: 0.5rem;
+  min-height: 2.75rem;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  text-shadow: none;
+  filter: none;
+  transform: none;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+:root[data-theme] :is(.btn-primary, .signup-wizard-primary, .sa-btn--primary):hover:not(:disabled) {
+  background: var(--theme-brand-strong) !important;
+  color: var(--theme-on-brand) !important;
+  box-shadow: none;
+  transform: none;
+  filter: none;
+}
+
+:root[data-theme] :is(.btn-secondary, .btn-ghost, .signup-wizard-secondary, .sa-btn--secondary, .sa-btn--ghost) {
+  border: 1px solid var(--theme-border-strong);
+  background: var(--theme-surface-solid) !important;
+  color: var(--theme-text) !important;
+  -webkit-text-fill-color: var(--theme-text) !important;
+  border-radius: 0.5rem;
+  min-height: 2.75rem;
+  box-shadow: none;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  backdrop-filter: none;
+  transform: none;
+}
+
+:root[data-theme] :is(.btn-secondary, .btn-ghost, .signup-wizard-secondary, .sa-btn--secondary, .sa-btn--ghost):hover:not(:disabled) {
+  background: var(--theme-hover) !important;
+  border-color: var(--theme-brand);
+  color: var(--theme-text) !important;
+  box-shadow: none;
+  transform: none;
+}
+
+:root[data-theme] :is(.btn-primary, .btn-secondary, .btn-ghost, .signup-wizard-primary, .signup-wizard-secondary, .sa-btn--primary, .sa-btn--secondary, .sa-btn--ghost):focus-visible {
+  outline: 2px solid var(--theme-brand);
+  outline-offset: 3px;
+  box-shadow: none;
+}
+
+:root[data-theme] :is(.theme-input, .theme-select, .premium-select, .auth-input) {
+  border-radius: 0.5rem;
+  background: var(--theme-input-bg) !important;
+  color: var(--theme-text) !important;
+  -webkit-text-fill-color: var(--theme-text) !important;
+}
+
+:root[data-theme] :is(.theme-input, .theme-select, .premium-select, .auth-input):focus {
+  outline: 2px solid var(--theme-brand);
+  outline-offset: 2px;
+  border-color: var(--theme-brand) !important;
+  box-shadow: none;
+}
+
+:root[data-theme] :is(.surface, .surface-strong, .modal-panel) { border-radius: 1rem; }
+
+.member-card-flip[data-card-branding] { font-family: "Source Sans 3", system-ui, sans-serif; }
+
+/* Solid brand utilities also need the paired foreground in dark mode. */
+:root[data-theme] .bg-brand.text-white:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
+  color: var(--theme-on-brand) !important;
+  -webkit-text-fill-color: var(--theme-on-brand) !important;
+}
+
+/* Keep editable controls readable without triggering browser zoom on phones. */
+@media (max-width: 767px) {
+  :root[data-theme] :is(.theme-input, .theme-select, .premium-select, .auth-input),
+  :root[data-theme] :is(.org-admin-v2, .super-admin-v2) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), select, textarea):not(:where(.form-public-canvas-container, .form-public-canvas-container *)) {
+    font-size: 1rem;
+  }
 }

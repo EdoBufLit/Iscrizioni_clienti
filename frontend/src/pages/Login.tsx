@@ -80,9 +80,9 @@ const Login = () => {
         <div className="container-shell w-full">
           <div className="auth-shell mx-auto max-w-3xl p-8 md:p-10">
             <p className="section-title">Area riservata</p>
-            <h1 ref={sentHeadingRef} className="section-heading auth-title" tabIndex={-1}>Controlla la tua email</h1>
+            <h1 ref={sentHeadingRef} className="auth-title text-3xl font-semibold tracking-tight" tabIndex={-1}>Controlla la tua email</h1>
             <p className="auth-copy mt-5 max-w-2xl text-sm leading-7" role="status">
-              Se l'indirizzo e associato a un account, riceverai un link di accesso sicuro entro
+              Se l'indirizzo è associato a un account, riceverai un link di accesso sicuro entro
               pochi istanti.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
@@ -109,7 +109,7 @@ const Login = () => {
         <div className="auth-shell mx-auto grid max-w-5xl md:grid-cols-2">
           <div className="auth-panel p-8 md:p-10">
             <p className="section-title">Area riservata</p>
-            <h1 className="section-heading auth-title">Accedi al portale soci</h1>
+            <h1 className="auth-title text-3xl font-semibold tracking-tight">Accedi al portale soci</h1>
             <p className="auth-copy mt-4 text-sm leading-7">
               Inserisci le credenziali oppure richiedi un link di accesso via email.
             </p>
@@ -125,7 +125,7 @@ const Login = () => {
                 </label>
                 <input
                   id="login-email"
-                  className="auth-input mt-2 w-full rounded-xl px-4 py-2.5 text-sm"
+                  className="auth-input theme-input mt-2 w-full rounded-xl px-4 py-3 text-base"
                   type="email"
                   autoComplete="email"
                   placeholder="nome@esempio.it"
@@ -142,7 +142,7 @@ const Login = () => {
                   </label>
                   <input
                     id="login-password"
-                    className="auth-input mt-2 w-full rounded-xl px-4 py-2.5 text-sm"
+                    className="auth-input theme-input mt-2 w-full rounded-xl px-4 py-3 text-base"
                     type="password"
                     autoComplete="current-password"
                     placeholder="La tua password"
@@ -154,7 +154,7 @@ const Login = () => {
               ) : null}
 
               <button
-                className="btn-primary mt-2 w-full py-2.5 text-sm"
+                className="btn-primary mt-2 w-full py-3 text-base"
                 type="submit"
                 disabled={!canSubmit}
                 data-component="login-submit"
@@ -170,7 +170,7 @@ const Login = () => {
 
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs">
               <button
-                className="auth-link"
+                className="auth-link inline-flex min-h-11 items-center text-sm font-semibold"
                 type="button"
                 onClick={() => setMode(mode === "password" ? "magic" : "password")}
               >
@@ -178,7 +178,7 @@ const Login = () => {
               </button>
               {mode === "password" ? (
                 <button
-                  className="auth-link auth-link--accent"
+                  className="auth-link auth-link--accent inline-flex min-h-11 items-center text-sm font-semibold"
                   type="button"
                   onClick={() => {
                     const query = email.trim()
@@ -213,8 +213,8 @@ const Login = () => {
             />
             <div className="auth-media__overlay" />
             <div className="auth-media__content flex h-full flex-col justify-end p-10">
-              <p className="auth-media__eyebrow text-xs uppercase tracking-[0.2em]">ASSONAM</p>
-              <p className="mt-3 font-display text-2xl leading-tight text-white">
+              <p className="auth-media__eyebrow text-sm font-semibold">ASSONAM</p>
+              <p className="mt-3 text-2xl font-semibold leading-tight text-white">
                 Accesso protetto per soci e flussi associativi.
               </p>
               <p className="auth-media__copy mt-4 max-w-sm text-sm leading-7">

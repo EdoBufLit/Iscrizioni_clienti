@@ -15,6 +15,7 @@ from app.models import (
 )
 from app.services.annual_memberships import as_rome_datetime
 from app.services.card_verification import (
+    card_snapshot_membership_type,
     extract_card_verification_token,
     parse_card_verification_token,
     resolve_card_verification_membership,
@@ -116,11 +117,7 @@ def check_in_member_from_qr(
     resolved_term: AnnualMembershipTerm | None = annual_term
     card_no = resolved_term.card_no if resolved_term else payload["card_number"]
     card_year = resolved_term.card_year if resolved_term else payload["card_year"]
-    membership_type = (
-        MembershipType.ANNUAL.value
-        if resolved_term is not None
-        else resolve_member_membership_type(member)
-    )
+    membership_type = card_snapshot_membership_type(resolved_term, member)
     attendance = MemberAttendance(
         org_id=org_id,
         member_id=member.id,

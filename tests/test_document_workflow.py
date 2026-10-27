@@ -44,6 +44,7 @@ def _login_member(client, db, member_id: int):
     token = Token(
         member_id=member_id,
         purpose=TokenType.LOGIN_MAGIC_LINK,
+        auth_version=db.get(Member, member_id).auth_version,
         token_hash=hash_token(token_str),
         expires_at=datetime.utcnow() + timedelta(minutes=15),
     )

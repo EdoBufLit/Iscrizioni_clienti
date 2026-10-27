@@ -2,11 +2,12 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from fastapi import Request, Response
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.log_redaction import hash_identifier
-from app.models import AdminRole, AdminUser, OrgAdminSession
+from app.models import AdminMfaFactor, AdminRole, AdminUser, OrgAdminSession
 from app.utils import generate_token, hash_token
 
 ORG_ADMIN_SESSION_COOKIE = "org_admin_session"
@@ -134,6 +135,15 @@ def resolve_org_admin_session(
             AdminUser.role == AdminRole.ORG_ADMIN,
             AdminUser.is_active.is_(True),
             AdminUser.deleted_at.is_(None),
+            or_(
+                OrgAdminSession.mfa_verified_at.isnot(None),
+                ~db.query(AdminMfaFactor.id)
+                .filter(
+                    AdminMfaFactor.admin_id == OrgAdminSession.admin_id,
+                    AdminMfaFactor.status == "active",
+                )
+                .exists(),
+            ),
         )
         .first()
     )

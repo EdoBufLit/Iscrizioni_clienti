@@ -6,6 +6,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
@@ -17,6 +18,7 @@ from app.services.csv_safety import neutralize_csv_formula
 from app.services.org_admin_sessions import get_current_org_admin_from_request
 from app.services.renewals import (
     build_quote_center,
+    iter_quote_rows,
     confirm_unpaid_renewal,
     create_renewal_checkout,
     get_account_member_from_session,
@@ -259,50 +261,22 @@ def export_org_admin_quotes(
 ):
     admin = _require_org_admin(request, db)
     org = _get_org(db, admin.org_id)
-    payload = build_quote_center(
-        db,
-        org=org,
-        year=year,
-        status_filter=status_filter,
-        search=q,
-        limit=100000,
-        offset=0,
-    )
-    buffer = io.StringIO()
-    writer = csv.writer(buffer)
-    writer.writerow(
-        [
-            "Nome",
-            "Cognome",
-            "Email",
-            "Scadenza precedente",
-            "Stato rinnovo",
-            "Stato pagamento",
-            "Quota",
-            "Valuta",
-            "Nuova tessera",
-        ]
-    )
-    for item in payload["items"]:
-        values = [
-            item["first_name"] or "",
-            item["last_name"] or "",
-            item["email"] or "",
-            item["previous_valid_through"] or "",
-            item["renewal_status"],
-            item["payment_state"],
-            item["fee_amount"],
-            item["currency"],
-            item["new_card_no"] or "",
-        ]
-        writer.writerow([neutralize_csv_formula(value) for value in values])
-    return Response(
-        content="\ufeff" + buffer.getvalue(),
-        media_type="text/csv; charset=utf-8",
-        headers={
-            "Content-Disposition": f'attachment; filename="quote-rinnovi-{year}.csv"'
-        },
-    )
+    def chunks():
+        buffer = io.StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(["Nome", "Cognome", "Email", "Scadenza precedente", "Stato rinnovo",
+                         "Stato pagamento", "Quota", "Valuta", "Nuova tessera"])
+        yield "\ufeff" + buffer.getvalue()
+        for item in iter_quote_rows(db, org=org, year=year, status_filter=status_filter, search=q):
+            buffer.seek(0)
+            buffer.truncate(0)
+            values = [item["first_name"] or "", item["last_name"] or "", item["email"] or "",
+                      item["previous_valid_through"] or "", item["renewal_status"], item["payment_state"],
+                      item["fee_amount"], item["currency"], item["new_card_no"] or ""]
+            writer.writerow([neutralize_csv_formula(value) for value in values])
+            yield buffer.getvalue()
+    return StreamingResponse(chunks(), media_type="text/csv; charset=utf-8",
+                             headers={"Content-Disposition": f'attachment; filename="quote-rinnovi-{year}.csv"'})
 
 
 @router.post(

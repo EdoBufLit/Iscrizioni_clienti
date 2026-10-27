@@ -270,6 +270,7 @@ def test_paid_signup_persists_explicit_consent_without_changing_checkout_status(
 ):
     client.cookies.clear()
     org = _create_org(db, sumup=True)
+    _add_available_batch(db, org)
     monkeypatch.setattr(
         "app.routes.membership_payments.create_sumup_hosted_checkout",
         lambda **kwargs: {

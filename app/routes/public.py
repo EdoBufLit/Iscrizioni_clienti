@@ -29,6 +29,7 @@ from app.services.accounting import (
     resolve_accounting_share_link,
 )
 from app.services.card_verification import (
+    card_snapshot_membership_type,
     parse_card_verification_token,
     resolve_card_verification_membership,
 )
@@ -1289,6 +1290,10 @@ def _render_card_download_html(
 
 
 def _term_valid_until(term: AnnualMembershipTerm | None, member: Member | None):
+    from app.models import TemporaryMembershipPurchase
+    if isinstance(term, TemporaryMembershipPurchase):
+        from app.services.annual_memberships import as_rome_datetime
+        return as_rome_datetime(term.valid_until) if term.valid_until else None
     if term is not None:
         return datetime.combine(term.valid_through, time.max)
     return resolve_member_valid_until(member)
@@ -1341,11 +1346,15 @@ def verify_member_card(request: Request, token: str, db: Session = Depends(get_d
     organization_display_name = resolve_club_display_name(organization) or (
         organization.name if organization else None
     )
-    membership_type = MembershipType.ANNUAL.value if annual_term else resolve_member_membership_type(member)
+    membership_type = card_snapshot_membership_type(annual_term, member)
     valid_until = _term_valid_until(annual_term, member)
     term_payment = (
         db.query(MembershipPayment)
-        .filter(MembershipPayment.annual_term_id == annual_term.id)
+        .filter(
+            (MembershipPayment.temporary_purchase_id == annual_term.id)
+            if membership_type == MembershipType.TEMPORARY.value
+            else (MembershipPayment.annual_term_id == annual_term.id)
+        )
         .order_by(MembershipPayment.id.desc())
         .first()
         if annual_term
@@ -1486,7 +1495,7 @@ def download_member_card(token: str, request: Request, db: Session = Depends(get
     )
     card_logo_url = resolve_card_logo_url(organization, base_url=backend_base)
     club_display_name = resolve_club_display_name(organization)
-    membership_type = MembershipType.ANNUAL.value if annual_term else resolve_member_membership_type(member)
+    membership_type = card_snapshot_membership_type(annual_term, member)
     valid_until = _term_valid_until(annual_term, member)
 
     html_content = _render_card_download_html(
@@ -1601,7 +1610,7 @@ def download_card_pdf(token: str, request: Request, db: Session = Depends(get_db
     )
     org_logo_path = _resolve_logo_disk_path(organization)
     assonam_logo_path = _resolve_assonam_disk_path()
-    membership_type = MembershipType.ANNUAL.value if annual_term else resolve_member_membership_type(member)
+    membership_type = card_snapshot_membership_type(annual_term, member)
     valid_until = _term_valid_until(annual_term, member)
 
     try:
@@ -1671,7 +1680,7 @@ def card_image_png(token: str, request: Request, db: Session = Depends(get_db)):
     )
     org_logo_path = _resolve_logo_disk_path(organization)
     assonam_logo_path = _resolve_assonam_disk_path()
-    membership_type = MembershipType.ANNUAL.value if annual_term else resolve_member_membership_type(member)
+    membership_type = card_snapshot_membership_type(annual_term, member)
 
     try:
         png_bytes = generate_card_image_bytes(

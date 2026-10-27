@@ -52,6 +52,7 @@ from app.config import settings
 from app.log_redaction import hash_identifier, redact_for_log
 from app.middleware import get_client_ip, get_request_id
 from app.services.security_rate_limits import enforce_join_rate_limit
+from app.services.member_sessions import issue_member_auth_token
 from app.services.sqlite_card_allocation_guard import (
     sqlite_card_allocation_request_guard,
 )
@@ -87,15 +88,12 @@ _EXISTING_SIGNUP_CONFLICT_DETAIL = (
 
 def _new_registration_continuation(db: Session, member: Member) -> str:
     """Create the one-time proof consumed by the existing password setup call."""
-    token_value = generate_token()
-    db.add(
-        Token(
-            member_id=member.id,
-            purpose=TokenType.REGISTRATION_CONTINUATION,
-            token_hash=hash_token(token_value),
-            expires_at=datetime.utcnow()
-            + timedelta(minutes=_REGISTRATION_CONTINUATION_TTL_MINUTES),
-        )
+    token_value, _token = issue_member_auth_token(
+        db,
+        member=member,
+        purpose=TokenType.REGISTRATION_CONTINUATION,
+        expires_at=datetime.utcnow()
+        + timedelta(minutes=_REGISTRATION_CONTINUATION_TTL_MINUTES),
     )
     return token_value
 
@@ -147,6 +145,7 @@ def _can_resume_existing_signup(
                 Token.member_id == member.id,
                 Token.token_hash == hash_token(continuation),
                 Token.purpose == TokenType.REGISTRATION_CONTINUATION,
+                Token.auth_version == member.auth_version,
                 Token.expires_at > datetime.utcnow(),
                 Token.used_at.is_(None),
             )

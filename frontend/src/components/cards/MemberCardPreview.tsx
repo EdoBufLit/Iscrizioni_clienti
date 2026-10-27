@@ -141,6 +141,7 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
       <button
         type="button"
         className="member-card-flip group relative block w-full cursor-pointer select-none"
+        data-card-branding="member"
         onClick={() => setIsFlipped((prev) => !prev)}
         aria-pressed={isFlipped}
         aria-label={isFlipped ? "Mostra il fronte della tessera" : "Mostra il retro e il codice QR della tessera"}
@@ -314,7 +315,7 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
                   </span>
                   {validUntil ? (
                     <span className="mt-1 block text-[10px] font-medium uppercase tracking-[0.12em] text-[#c9a8b0]">
-                      Scade {new Date(validUntil).toLocaleDateString("it-IT")}
+                      Scade {new Date(validUntil).toLocaleDateString("it-IT", { timeZone: "Europe/Rome" })}
                     </span>
                   ) : null}
                 </span>
@@ -421,7 +422,7 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
                   <span className="flex items-baseline justify-between gap-3">
                     <span className="text-[0.58rem] font-semibold uppercase tracking-[0.16em] text-[#c9a8b0]">Scadenza</span>
                     <span className="text-xs font-semibold text-[#fdf6e3]/85 sm:text-sm">
-                      {new Date(validUntil).toLocaleDateString("it-IT")}
+                      {new Date(validUntil).toLocaleDateString("it-IT", { timeZone: "Europe/Rome" })}
                     </span>
                   </span>
                 ) : null}
@@ -437,7 +438,7 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
         <p id={cardDescriptionId} className="text-xs text-neutral-500">
           Clicca la tessera per vedere {isFlipped ? "il fronte" : "il retro"}.
           <span className="sr-only">
-            {` Tessera ${membershipTypeLabel || "associativa"} ${cardNumber ? `numero ${cardNumber}` : "senza numero"}, intestata a ${displayName || "socio"}, anno ${cardYear}${validUntil ? `, scadenza ${new Date(validUntil).toLocaleDateString("it-IT")}` : ""}.`}
+            {` Tessera ${membershipTypeLabel || "associativa"} ${cardNumber ? `numero ${cardNumber}` : "senza numero"}, intestata a ${displayName || "socio"}, anno ${cardYear}${validUntil ? `, scadenza ${new Date(validUntil).toLocaleDateString("it-IT", { timeZone: "Europe/Rome" })}` : ""}.`}
           </span>
         </p>
         {verificationUrl && (

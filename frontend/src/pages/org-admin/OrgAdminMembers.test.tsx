@@ -78,6 +78,15 @@ describe("OrgAdminMembers search", () => {
     mocks.fetchSettings.mockResolvedValue(null);
   });
 
+  it("uses global renewal metrics and does not display invented growth", async () => {
+    mocks.fetchMetrics.mockResolvedValue({ active_members_count: 120, expiring_members_count: 88,
+      pending_requests_count: 3, documents_pending_review: 2 });
+    await renderMembers();
+    expect(screen.getAllByText("88")).toHaveLength(2);
+    expect(screen.queryByText("+3% questo mese")).not.toBeInTheDocument();
+    expect(screen.getByText("Documenti da verificare")).toBeInTheDocument();
+  });
+
   it("indica i risultati simili su desktop e mobile mantenendo visibile l'email registrata", async () => {
     await renderMembers();
     mocks.fetchMembers.mockResolvedValue(

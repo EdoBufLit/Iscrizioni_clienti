@@ -19,6 +19,7 @@ import {
   StatusChip,
 } from "./components/OrgAdminPrimitives";
 import AttendanceStationsPanel from "./components/AttendanceStationsPanel";
+import AttendanceMemberSearch from "./components/AttendanceMemberSearch";
 
 function localDateValue() {
   const now = new Date();
@@ -39,6 +40,7 @@ function membershipLabel(value: string) {
 }
 
 function attendanceSourceLabel(item: OrgAdminAttendance) {
+  if (item.source === "manual") return "Inserimento manuale";
   return item.scanner_station_name || "Area Riservata";
 }
 
@@ -58,6 +60,7 @@ const OrgAdminAttendancePage = () => {
   const [scanError, setScanError] = useState("");
   const [manualValue, setManualValue] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [checkInMode, setCheckInMode] = useState<"qr" | "search">("qr");
   const [lastResult, setLastResult] = useState<{
     created: boolean;
     item: OrgAdminAttendance;
@@ -65,8 +68,11 @@ const OrgAdminAttendancePage = () => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const scannerControlsRef = useRef<IScannerControls | null>(null);
   const scanLockedRef = useRef(false);
+  const scannerSessionRef = useRef(0);
+  const listRequestRef = useRef(0);
 
   const loadAttendances = useCallback(async (day: string, q: string) => {
+    const requestId = ++listRequestRef.current;
     setLoading(true);
     setListError("");
     try {
@@ -75,12 +81,14 @@ const OrgAdminAttendancePage = () => {
         q: q.trim() || undefined,
         limit: 250,
       });
+      if (requestId !== listRequestRef.current) return;
       setItems(response.items);
       setTotal(response.total);
     } catch (error) {
+      if (requestId !== listRequestRef.current) return;
       setListError(error instanceof Error ? error.message : "Errore caricamento presenze");
     } finally {
-      setLoading(false);
+      if (requestId === listRequestRef.current) setLoading(false);
     }
   }, []);
 
@@ -92,6 +100,7 @@ const OrgAdminAttendancePage = () => {
   }, [loadAttendances, search, selectedDay]);
 
   const stopScanner = useCallback(() => {
+    scannerSessionRef.current += 1;
     scannerControlsRef.current?.stop();
     scannerControlsRef.current = null;
     const stream = videoRef.current?.srcObject as MediaStream | null | undefined;
@@ -138,6 +147,7 @@ const OrgAdminAttendancePage = () => {
 
   const startScanner = useCallback(async () => {
     stopScanner();
+    const scannerSession = scannerSessionRef.current;
     setLastResult(null);
     setScanError("");
     setScannerState("starting");
@@ -168,8 +178,16 @@ const OrgAdminAttendancePage = () => {
         },
         audio: false,
       });
+      if (scannerSession !== scannerSessionRef.current) {
+        stopMediaStream(pendingStream);
+        return;
+      }
 
       const { BrowserQRCodeReader } = await import("@zxing/browser");
+      if (scannerSession !== scannerSessionRef.current) {
+        stopMediaStream(pendingStream);
+        return;
+      }
       const reader = new BrowserQRCodeReader(undefined, {
         delayBetweenScanAttempts: 250,
       });
@@ -177,13 +195,13 @@ const OrgAdminAttendancePage = () => {
         pendingStream,
         video,
         (result) => {
-          if (result && !scanLockedRef.current) {
+          if (scannerSession === scannerSessionRef.current && result && !scanLockedRef.current) {
             void registerPresence(result.getText());
           }
         },
       );
       pendingStream = null;
-      if (scanLockedRef.current) {
+      if (scannerSession !== scannerSessionRef.current || scanLockedRef.current) {
         controls.stop();
         return;
       }
@@ -191,6 +209,7 @@ const OrgAdminAttendancePage = () => {
       setScannerState("scanning");
     } catch (error) {
       stopMediaStream(pendingStream);
+      if (scannerSession !== scannerSessionRef.current) return;
       stopScanner();
       setScanError(cameraAccessErrorMessage(error));
     }
@@ -201,12 +220,20 @@ const OrgAdminAttendancePage = () => {
     void registerPresence(manualValue);
   };
 
+  const handleMemberRegistered = (response: { created: boolean; item: OrgAdminAttendance }) => {
+    setLastResult(response);
+    setScanError("");
+    setSearch("");
+    setSelectedDay(response.item.attendance_date);
+    void loadAttendances(response.item.attendance_date, "");
+  };
+
   return (
     <div className="container-shell org-admin-mobile-page py-10 space-y-6">
       <PageHeader
         eyebrow="Soci e tessere"
         title="Presenze"
-        subtitle="Scansiona il QR della tessera e registra il primo ingresso giornaliero del socio."
+        subtitle="Registra il primo ingresso giornaliero scansionando il QR o cercando il socio."
         actions={
           <StatusChip tone={total > 0 ? "success" : "muted"}>
             {total} {total === 1 ? "presenza" : "presenze"}
@@ -215,7 +242,19 @@ const OrgAdminAttendancePage = () => {
       />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
-        <SectionPanel title="Scansiona tessera" eyebrow="Check-in QR">
+        <SectionPanel title="Registra ingresso" eyebrow="Presenza di oggi" className="min-w-0">
+          <div className="grid grid-cols-2 gap-2 border-b border-slate-100 p-4" role="group" aria-label="Metodo di registrazione">
+            {([['qr', 'Scanner QR'], ['search', 'Cerca socio']] as const).map(([mode, label]) => (
+              <button key={mode} type="button" aria-pressed={checkInMode === mode}
+                className={`${checkInMode === mode ? "btn-primary" : "btn-secondary"} min-w-0 justify-center px-3 py-3`}
+                disabled={submitting}
+                onClick={() => { if (mode === checkInMode) return; stopScanner(); setCheckInMode(mode); setScanError(""); setLastResult(null); }}
+              >{label}</button>
+            ))}
+          </div>
+          {checkInMode === "search" ? (
+            <div className="p-5 md:p-6"><AttendanceMemberSearch onRegistered={handleMemberRegistered} onBusyChange={setSubmitting} /></div>
+          ) : (
           <div className="grid gap-5 p-5 md:p-6">
             <div className="relative aspect-[4/3] overflow-hidden rounded-[1.2rem] border border-slate-200 bg-slate-950">
               <video
@@ -286,9 +325,10 @@ const OrgAdminAttendancePage = () => {
               </div>
             </form>
           </div>
+          )}
         </SectionPanel>
 
-        <SectionPanel title="Esito ultimo controllo" eyebrow="Ingresso">
+        <SectionPanel title="Esito ultimo controllo" eyebrow="Ingresso" className="min-w-0">
           <div className="p-5 md:p-6">
             {scanError ? (
               <div className="rounded-[1rem] border border-rose-200 bg-rose-50 px-5 py-5 text-rose-800" role="alert">
@@ -307,7 +347,7 @@ const OrgAdminAttendancePage = () => {
                 <StatusChip tone={lastResult.created ? "success" : "warning"}>
                   {lastResult.created ? "Ingresso registrato" : "Già presente oggi"}
                 </StatusChip>
-                <p className="mt-5 text-2xl font-semibold tracking-tight text-slate-950">
+                <p className="mt-5 break-words text-2xl font-semibold tracking-tight text-slate-950 [overflow-wrap:anywhere]">
                   {lastResult.item.member_name}
                 </p>
                 <dl className="mt-5 grid grid-cols-2 gap-4 text-sm">
@@ -336,17 +376,17 @@ const OrgAdminAttendancePage = () => {
                     </dd>
                   </div>
                 </dl>
-                <button
+                {checkInMode === "qr" ? <button
                   className="btn-primary mt-6 w-full justify-center"
                   type="button"
                   onClick={() => void startScanner()}
                 >
                   Scansiona un&apos;altra tessera
-                </button>
+                </button> : null}
               </div>
             ) : (
               <EmptyState
-                title="Nessuna scansione effettuata"
+                title="Nessun ingresso controllato"
                 description="L'esito mostra nome del socio, tessera e ora del primo ingresso."
               />
             )}
@@ -389,11 +429,11 @@ const OrgAdminAttendancePage = () => {
         ) : items.length === 0 ? (
           <EmptyState
             title="Nessuna presenza per questa giornata"
-            description="Le presenze registrate tramite QR compariranno qui in ordine di ingresso."
+            description="Le presenze registrate tramite QR o ricerca socio compariranno qui in ordine di ingresso."
           />
         ) : (
           <>
-            <div className="divide-y divide-slate-100 md:hidden">
+            <div className="divide-y divide-slate-100 xl:hidden">
               {items.map((item) => (
                 <article key={item.id} className="p-4">
                   <div className="flex items-start justify-between gap-4">
@@ -430,7 +470,7 @@ const OrgAdminAttendancePage = () => {
                 </article>
               ))}
             </div>
-            <div className="hidden overflow-x-auto md:block">
+            <div className="hidden overflow-x-auto xl:block">
               <table className="w-full min-w-[820px] text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase tracking-[0.12em] text-slate-500">
                   <tr>
@@ -448,7 +488,7 @@ const OrgAdminAttendancePage = () => {
                       <td className="px-5 py-4 font-semibold tabular-nums text-slate-950">
                         {formatTime(item.checked_in_at)}
                       </td>
-                      <td className="px-5 py-4 font-medium text-slate-900">{item.member_name}</td>
+                      <td className="max-w-[280px] px-5 py-4 font-medium text-slate-900 [overflow-wrap:anywhere]">{item.member_name}</td>
                       <td className="px-5 py-4 tabular-nums text-slate-600">
                         {item.card_no} / {item.card_year}
                       </td>

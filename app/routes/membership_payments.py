@@ -575,6 +575,9 @@ def create_membership_payment_checkout(
         and existing_owner_verified
     )
 
+    from app.services.member_accounting import guard_partial_manual_payment
+    guard_partial_manual_payment(db, member=member, year=datetime.utcnow().year)
+
     latest_payment = (
         db.query(MembershipPayment)
         .filter(

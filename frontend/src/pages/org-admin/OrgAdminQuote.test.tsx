@@ -1,0 +1,27 @@
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import { beforeEach, expect, it, vi } from "vitest";
+import OrgAdminQuote from "./OrgAdminQuote";
+
+const mocks = vi.hoisted(() => ({ quotes: vi.fn() }));
+vi.mock("../../lib/api", async (original) => ({ ...await original<typeof import("../../lib/api")>(),
+  fetchOrgAdminQuotes: (...args: unknown[]) => mocks.quotes(...args) }));
+
+beforeEach(() => {
+  mocks.quotes.mockReset().mockResolvedValue({ year: 2027, total: 26,
+    kpis: { due: 25, renewed: 1, collected_total: 0, theoretical_total: 650, outstanding_total: 650,
+      currency: "EUR", paid_waiting_card: 0, approved_waiting_card: 0 },
+    items: [{ member_id: 1, first_name: "Anna", last_name: "Rossi", email: "anna@example.com", renewed: true,
+      renewal_status: "active", payment_state: "unpaid", fee_amount: 25, currency: "EUR", new_card_no: 123,
+      previous_valid_through: null, can_confirm_without_payment: true }],
+  });
+});
+
+it("paginates by 25 and still allows payment registration after card issuance", async () => {
+  render(<MemoryRouter><OrgAdminQuote /></MemoryRouter>);
+  await screen.findByText("Anna Rossi");
+  expect(mocks.quotes).toHaveBeenCalledWith(expect.objectContaining({ limit: 25, offset: 0 }));
+  expect(screen.getByRole("button", { name: "Registra pagamento" })).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Successiva" }));
+  await waitFor(() => expect(mocks.quotes).toHaveBeenCalledWith(expect.objectContaining({ limit: 25, offset: 25 })));
+});

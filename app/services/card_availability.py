@@ -13,6 +13,7 @@ from app.models import (
     Member,
     MembershipPayment,
     Organization,
+    TemporaryMembershipPurchase,
 )
 
 
@@ -47,6 +48,11 @@ def _occupancy_rows(
             AnnualMembershipTerm, AnnualMembershipTerm.card_no,
             AnnualMembershipTerm.numbering_scope_id, AnnualMembershipTerm.batch_id,
             [AnnualMembershipTerm.status.notin_(("expired", "cancelled"))], "assigned",
+        ),
+        (
+            TemporaryMembershipPurchase, TemporaryMembershipPurchase.card_no,
+            TemporaryMembershipPurchase.numbering_scope_id, TemporaryMembershipPurchase.batch_id,
+            [], "assigned",
         ),
         (
             MembershipPayment, MembershipPayment.reserved_card_no,
@@ -176,6 +182,9 @@ def batches_with_linked_terms_or_reservations(db: Session, batches: list[CardBat
     return set(db.execute(union_all(
         select(AnnualMembershipTerm.batch_id).where(
             AnnualMembershipTerm.batch_id.in_(batch_ids)
+        ),
+        select(TemporaryMembershipPurchase.batch_id).where(
+            TemporaryMembershipPurchase.batch_id.in_(batch_ids)
         ),
         select(MembershipPayment.reserved_batch_id).where(
             MembershipPayment.reserved_batch_id.in_(batch_ids),

@@ -2,6 +2,7 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import Joyride, {
   type CallBackProps,
+  type Styles,
   STATUS,
   ACTIONS,
   EVENTS,
@@ -19,19 +20,35 @@ import {
   type TourStep,
 } from "./tourSteps";
 import { ONBOARDING_RESET_EVENT } from "./ReviewGuideButton";
+import "./onboarding.css";
 
 type OnboardingTourProps = {
   role: "member" | "org_admin";
   onTourEnd?: () => void;
 };
 
-const JOYRIDE_STYLES = {
+const JOYRIDE_STYLES: Partial<Styles> = {
   options: {
-    primaryColor: "#4F46E5",
+    primaryColor: "var(--theme-brand)",
+    backgroundColor: "var(--theme-surface-elevated)",
+    arrowColor: "var(--theme-surface-elevated)",
+    textColor: "var(--theme-text)",
+    overlayColor: "var(--theme-overlay)",
     zIndex: 10000,
   },
+  beaconInner: {
+    backgroundColor: "var(--theme-brand)",
+  },
+  beaconOuter: {
+    // Joyride derives this value by parsing primaryColor as a hex string.
+    backgroundColor: "color-mix(in srgb, var(--theme-brand) 20%, transparent)",
+    borderColor: "var(--theme-brand)",
+  },
   tooltip: {
+    border: "1px solid var(--theme-border)",
     borderRadius: 8,
+    boxShadow: "var(--theme-shadow-lg)",
+    fontFamily: "var(--font-ui)",
     padding: 16,
   },
   tooltipTitle: {
@@ -39,21 +56,36 @@ const JOYRIDE_STYLES = {
     fontWeight: 600,
   },
   tooltipContent: {
+    color: "var(--theme-text-muted)",
     fontSize: 14,
     lineHeight: 1.5,
   },
   buttonNext: {
+    backgroundColor: "var(--theme-brand)",
+    color: "var(--theme-on-brand)",
+    fontFamily: "inherit",
+    fontWeight: 600,
+    minHeight: 44,
     borderRadius: 6,
     padding: "8px 16px",
     fontSize: 14,
   },
   buttonBack: {
+    color: "var(--theme-link)",
+    fontFamily: "inherit",
+    minHeight: 44,
     marginRight: 8,
     fontSize: 14,
   },
   buttonSkip: {
-    color: "#6B7280",
+    color: "var(--theme-text-muted)",
+    fontFamily: "inherit",
+    minHeight: 44,
     fontSize: 14,
+  },
+  buttonClose: {
+    color: "var(--theme-text-muted)",
+    fontFamily: "inherit",
   },
 };
 
@@ -62,6 +94,7 @@ const LOCALE = {
   close: "Chiudi",
   last: "Fine",
   next: "Avanti",
+  nextLabelWithProgress: "Avanti ({step} di {steps})",
   open: "Apri",
   skip: "Salta guida",
 };
@@ -98,44 +131,44 @@ const FinalStepDialog = ({
 
   return (
     <div
-      className="fixed inset-0 z-[10001] flex items-center justify-center px-4"
+      className="onboarding-final-dialog fixed inset-0 z-[10001] flex items-center justify-center px-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="onboarding-final-step-title"
     >
       <button
         type="button"
-        className="absolute inset-0 bg-black/50"
+        className="absolute inset-0 bg-[var(--theme-overlay)]"
         aria-label="Chiudi modale guida completata"
         onClick={() => onOpenChange(false)}
       />
-      <div className="relative z-10 w-full max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow-2xl">
+      <div className="relative z-10 w-full max-w-md rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-surface-elevated)] p-6 shadow-2xl">
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-700"
+          className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--theme-text-muted)] transition hover:bg-[var(--theme-hover)] hover:text-[var(--theme-text)]"
           aria-label="Chiudi"
         >
           X
         </button>
 
-        <h2 id="onboarding-final-step-title" className="text-lg font-semibold text-neutral-900">
+        <h2 id="onboarding-final-step-title" className="text-lg font-semibold text-[var(--theme-text)]">
           {title}
         </h2>
-        <p className="mt-2 text-sm text-neutral-600">{content}</p>
+        <p className="mt-2 text-sm text-[var(--theme-text-muted)]">{content}</p>
 
         <div className="mt-6 flex items-center justify-end gap-2">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100"
+            className="btn-secondary rounded-md border border-[var(--theme-border)] px-3 py-2 text-sm font-medium text-[var(--theme-text)] transition hover:bg-[var(--theme-hover)]"
           >
             Indietro
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
+            className="btn-primary px-3 py-2 text-sm font-semibold"
           >
             Fine
           </button>
@@ -231,6 +264,8 @@ const clearMemberTourProgressInStorage = () => {
 export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const currentPathRef = useRef(location.pathname);
+  currentPathRef.current = location.pathname;
   const isMemberTour = role === "member";
 
   const [run, setRun] = useState(false);
@@ -432,10 +467,16 @@ export const OnboardingTour = ({ role, onTourEnd }: OnboardingTourProps) => {
           }
         }
 
+        // Deep links and navigation while loading must keep the user's destination.
+        // An explicitly resumed member tour can still restore its saved step.
+        const automaticStartRoute = isMemberTour ? "/dashboard" : "/org-admin";
+        if (!resumeInProgress && currentPathRef.current !== automaticStartRoute) return;
+
         setStepIndex(initialStepIndex);
         // Delay to ensure initial DOM is ready
         startTimer = window.setTimeout(() => {
           if (cancelled || tourEndedRef.current) return;
+          if (!resumeInProgress && currentPathRef.current !== automaticStartRoute) return;
           const localRecheck = getTourStateFromStorage(role);
           if (localRecheck) return;
           setRun(true);

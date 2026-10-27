@@ -72,7 +72,7 @@ const Servizi = () => {
                   operativo sulle attività associative.
                 </p>
               </div>
-              <div className="overflow-hidden rounded-2xl border border-white/50 shadow-premium">
+              <div className="overflow-hidden rounded-lg border border-neutral-200">
                 <img
                   src={`${import.meta.env.BASE_URL}hero-office.avif`}
                   alt="Ufficio professionale"

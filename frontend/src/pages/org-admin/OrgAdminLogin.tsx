@@ -33,7 +33,7 @@ const OrgAdminLogin = () => {
       await requestOrgAdminMagicLink(email.trim());
       setSent(true);
     } catch {
-      setError("Si ? verificato un errore. Riprova più tardi.");
+      setError("Si è verificato un errore. Riprova più tardi.");
     } finally {
       setSubmitting(false);
     }
@@ -71,7 +71,7 @@ const OrgAdminLogin = () => {
       />
       <div className="auth-media__overlay" aria-hidden="true" />
       <div className="auth-media__content flex h-full flex-col justify-end p-10">
-        <p className="auth-media__eyebrow text-xs font-semibold uppercase tracking-[0.25em]">
+        <p className="auth-media__eyebrow text-sm font-semibold">
           Area amministratori
         </p>
         <p className="mt-2 text-lg font-semibold leading-snug text-white">
@@ -118,8 +118,8 @@ const OrgAdminLogin = () => {
                   className="auth-logo-mark h-10 rounded-xl"
                 />
                 <div>
-                  <p className="auth-copy-strong text-sm font-bold">ASSO.N.A.M.</p>
-                  <p className="auth-kicker text-[11px] leading-tight">Amministrazione associazione</p>
+                  <p className="auth-copy-strong text-base font-semibold">ASSO.N.A.M.</p>
+                  <p className="auth-kicker text-sm leading-tight">Amministrazione associazione</p>
                 </div>
               </div>
               <div className="mt-10">
@@ -134,19 +134,19 @@ const OrgAdminLogin = () => {
                 >
                   <path d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
                 </svg>
-                <h1 className="auth-title mt-4 text-xl font-semibold">Controlla la tua email</h1>
+                <h1 className="auth-title mt-4 text-3xl font-semibold tracking-tight">Controlla la tua email</h1>
                 <p className="auth-copy mt-3 text-sm leading-6">
-                  Se l'indirizzo e associato a un account amministratore, riceverai un link e un
+                  Se l'indirizzo è associato a un account amministratore, riceverai un link e un
                   codice a 6 cifre. Per restare nell'app, copia il codice qui sotto.
                 </p>
               </div>
-              <form className="mt-7" onSubmit={handleCodeSubmit}>
-                <label htmlFor="org-admin-code" className="auth-label block text-sm font-medium">
+              <form className="mt-7" onSubmit={handleCodeSubmit} aria-describedby={codeError ? "org-admin-code-error" : undefined}>
+                <label htmlFor="org-admin-code" className="auth-label block text-sm font-semibold">
                   Codice ricevuto via email
                 </label>
                 <input
                   id="org-admin-code"
-                  className="auth-input mt-1.5 w-full rounded-xl px-4 py-3 text-center text-lg font-semibold tracking-[0.35em] outline-none"
+                  className="auth-input theme-input mt-1.5 w-full rounded-xl px-4 py-3 text-center text-lg font-semibold tracking-[0.35em] outline-none"
                   type="text"
                   inputMode="numeric"
                   autoComplete="one-time-code"
@@ -154,12 +154,15 @@ const OrgAdminLogin = () => {
                   maxLength={6}
                   value={normalizedAccessCode}
                   onChange={(e) => setAccessCode(e.target.value)}
+                  aria-invalid={codeError ? true : undefined}
+                  aria-describedby={codeError ? "org-admin-code-error" : undefined}
                 />
-                {codeError ? <p className="mt-3 text-sm font-semibold text-red-600">{codeError}</p> : null}
+                {codeError ? <p id="org-admin-code-error" className="auth-alert mt-3 px-4 py-3 text-sm" role="alert">{codeError}</p> : null}
                 <button
-                  className="btn-primary mt-5 w-full py-2.5 text-sm"
+                  className="btn-primary mt-5 w-full py-3 text-base"
                   type="submit"
                   disabled={!canVerifyCode}
+                  aria-busy={verifyingCode}
                 >
                   {verifyingCode ? "Verifica in corso..." : "Entra con codice"}
                 </button>
@@ -167,7 +170,7 @@ const OrgAdminLogin = () => {
               <div className="auth-divider mt-10 border-t pt-6">
                 <button
                   type="button"
-                  className="auth-link text-sm font-medium"
+                  className="auth-link inline-flex min-h-11 items-center text-sm font-semibold"
                   onClick={() => {
                     setSent(false);
                     setAccessCode("");
@@ -197,13 +200,13 @@ const OrgAdminLogin = () => {
                 className="auth-logo-mark h-10 rounded-xl"
               />
               <div>
-                <p className="auth-copy-strong text-sm font-bold">ASSO.N.A.M.</p>
-                <p className="auth-kicker text-[11px] leading-tight">Amministrazione associazione</p>
+                <p className="auth-copy-strong text-base font-semibold">ASSO.N.A.M.</p>
+                <p className="auth-kicker text-sm leading-tight">Amministrazione associazione</p>
               </div>
             </div>
 
             <div className="mt-10">
-              <h1 className="auth-title text-xl font-semibold">Accesso amministratore</h1>
+              <h1 className="auth-title text-3xl font-semibold tracking-tight">Accesso amministratore</h1>
               <p className="auth-copy mt-1.5 text-sm leading-6">
                 Inserisci l'email associata al tuo account per ricevere un link e un codice di
                 accesso. Il codice ti permette di restare nell'app senza aprire un browser esterno.
@@ -211,19 +214,19 @@ const OrgAdminLogin = () => {
             </div>
 
             {error ? (
-              <div className="auth-alert mt-6 px-4 py-3">
+              <div id="org-admin-login-error" className="auth-alert mt-6 px-4 py-3" role="alert">
                 <p className="text-sm">{error}</p>
               </div>
             ) : null}
 
-            <form className="mt-8" onSubmit={handleSubmit}>
+            <form className="mt-8" onSubmit={handleSubmit} aria-describedby={error ? "org-admin-login-error" : undefined}>
               <div>
-                <label htmlFor="org-admin-email" className="auth-label block text-sm font-medium">
+                <label htmlFor="org-admin-email" className="auth-label block text-sm font-semibold">
                   Email
                 </label>
                 <input
                   id="org-admin-email"
-                  className="auth-input mt-1.5 w-full rounded-xl px-4 py-2.5 text-sm outline-none"
+                  className="auth-input theme-input mt-1.5 w-full rounded-xl px-4 py-3 text-base outline-none"
                   type="email"
                   placeholder="admin@associazione.it"
                   autoComplete="email"
@@ -233,9 +236,10 @@ const OrgAdminLogin = () => {
               </div>
 
               <button
-                className="btn-primary mt-7 w-full py-2.5 text-sm"
+                className="btn-primary mt-7 w-full py-3 text-base"
                 type="submit"
                 disabled={!canSubmit}
+                aria-busy={submitting}
                 data-component="org-admin-login-submit"
               >
                 {submitting ? "Invio in corso..." : "Ricevi link e codice"}
@@ -247,7 +251,7 @@ const OrgAdminLogin = () => {
             </p>
 
             <div className="auth-divider mt-6 border-t pt-4">
-              <Link className="auth-link text-sm font-medium" to="/">
+              <Link className="auth-link text-sm font-semibold" to="/">
                 &larr; Torna alla home
               </Link>
             </div>

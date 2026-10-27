@@ -7,8 +7,8 @@ from decimal import Decimal
 from typing import Any, Iterable
 
 from fastapi import HTTPException, Request
-from sqlalchemy import func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy import func, or_, and_, case, cast, Numeric
+from sqlalchemy.orm import Session, aliased
 
 from app.config import settings
 from app.db import SessionLocal
@@ -41,6 +41,7 @@ from app.services.card_reservations import reserve_payment_card, reserved_paymen
 from app.services.system_email_layout import build_system_email_html
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
+from app.services.member_sessions import resolve_member_session
 from app.services.membership_payments import (
     PAID_MEMBERSHIP_STATUSES,
     create_checkout_reference,
@@ -87,7 +88,7 @@ def _status_value(value: object) -> str:
 
 
 def can_access_member_account(member: Member | None) -> bool:
-    """Allow an expired annual member to reach renewal-only account surfaces."""
+    """Keep approved former cardholders able to purchase/renew after expiry."""
 
     if member is None or member.deleted_at is not None:
         return False
@@ -97,16 +98,11 @@ def can_access_member_account(member: Member | None) -> bool:
         _status_value(member.status) == MemberStatus.EXPIRED.value
         and member.card_no is not None
         and member.card_year is not None
-        and str(member.membership_type or MembershipType.ANNUAL.value).lower()
-        != MembershipType.TEMPORARY.value
     )
 
 
 def get_account_member_from_session(request: Request, db: Session) -> Member | None:
-    member_id = request.session.get("member_id")
-    if not member_id:
-        return None
-    member = db.query(Member).filter(Member.id == member_id).first()
+    member = resolve_member_session(request, db)
     return member if can_access_member_account(member) else None
 
 
@@ -293,6 +289,9 @@ def promote_renewal_term(
         # A future paid/scheduled term must never silently undo an explicit
         # organization-admin rejection.
         return False
+    from app.services.member_activity import is_member_active
+    if member.membership_type == MembershipType.TEMPORARY.value and is_member_active(member, now=now):
+        return False
 
     member.card_no = term.card_no
     member.card_year = term.card_year
@@ -432,6 +431,9 @@ def request_renewal(
     member: Member,
     now: datetime | None = None,
 ) -> RenewalAction:
+    lock_card_allocation(db, member.org_id, as_rome_datetime(now).year)
+    from app.services.temporary_memberships import assert_no_temporary_purchase
+    assert_no_temporary_purchase(db, member)
     assert_member_renewal_window_open(db, member, now=now)
     term, created = ensure_renewal_term(db, member=member, now=now)
     if term.card_no is not None or term.status in _RENEWED_STATUSES:
@@ -588,6 +590,10 @@ def serialize_member_membership(
         and local_today >= renewal_opens_on
         and (future is None or future.status not in _RENEWED_STATUSES)
     )
+    from app.services.temporary_memberships import current_purchase
+    from app.services.member_activity import is_member_active
+    if current_purchase(db, member.id) or (member.membership_type == "temporary" and is_member_active(member, now=now)):
+        can_renew = False
     return {
         "current": serialize_annual_term(db, current),
         "renewal": serialize_annual_term(db, future),
@@ -607,7 +613,11 @@ def create_renewal_checkout(
     if term.member_id != member.id or term.org_id != member.org_id:
         raise HTTPException(status_code=404, detail="Rinnovo non trovato.")
     lock_card_allocation(db, org_id=term.org_id, year=int(term.membership_year))
+    from app.services.temporary_memberships import assert_no_temporary_purchase
+    assert_no_temporary_purchase(db, member)
     db.refresh(term)
+    from app.services.member_accounting import guard_partial_manual_payment
+    guard_partial_manual_payment(db, member=member, year=int(term.membership_year))
     if term.card_no is not None:
         raise HTTPException(status_code=409, detail="Rinnovo già completato.")
     org = member.organization
@@ -700,6 +710,11 @@ def record_manual_renewal_payment(
     notes: str | None,
     now: datetime | None = None,
 ) -> tuple[AnnualMembershipTerm, MembershipPayment, bool]:
+    lock_card_allocation(db, member.org_id, membership_year)
+    from app.services.member_accounting import guard_partial_manual_payment
+    guard_partial_manual_payment(db, member=member, year=membership_year)
+    from app.services.temporary_memberships import assert_no_temporary_purchase
+    assert_no_temporary_purchase(db, member)
     term, _ = ensure_renewal_term(
         db,
         member=member,
@@ -738,6 +753,9 @@ def confirm_unpaid_renewal(
     membership_year: int,
     now: datetime | None = None,
 ) -> tuple[AnnualMembershipTerm, bool]:
+    lock_card_allocation(db, member.org_id, membership_year)
+    from app.services.temporary_memberships import assert_no_temporary_purchase
+    assert_no_temporary_purchase(db, member)
     term, _ = ensure_renewal_term(
         db,
         member=member,
@@ -975,10 +993,13 @@ def dispatch_due_renewal_reminders(
     )
     assigned = retry_waiting_renewal_cards(db, now=now)
     activated = activate_due_renewal_terms(db, now=now)
+    from app.services.temporary_memberships import retry_paid_temporary_purchases
+    temporary_assigned = retry_paid_temporary_purchases(db)
     return {
         "reminders_queued": queued,
         "cards_assigned": assigned,
         "terms_activated": activated,
+        "temporary_cards_assigned": temporary_assigned,
     }
 
 
@@ -1009,10 +1030,13 @@ def _quote_row(
     target: AnnualMembershipTerm | None,
     year: int,
     org: Organization,
+    payment: MembershipPayment | None = None,
+    accounting_fee=None,
+    accounting_paid=None,
 ) -> dict[str, Any]:
-    payment = _latest_payment_for_term(db, target.id) if target else None
-    paid = bool(payment and payment_status_is_paid(payment.status))
-    fee = _decimal_amount(target.fee_amount if target else org.membership_fee_amount)
+    fee = _decimal_amount(accounting_fee if accounting_fee is not None else target.fee_amount if target else org.membership_fee_amount)
+    paid_amount = _decimal_amount(accounting_paid if accounting_paid is not None else payment.amount if payment and payment_status_is_paid(payment.status) else 0)
+    paid = paid_amount >= fee and paid_amount > 0
     renewal_status = target.status if target else AnnualMembershipTermStatus.DUE.value
     renewed = bool(
         target
@@ -1025,6 +1049,8 @@ def _quote_row(
     )
     if paid:
         payment_state = "paid"
+    elif paid_amount > 0:
+        payment_state = "partial"
     elif payment and payment.status == MembershipPaymentStatus.PENDING.value:
         payment_state = "pending"
     elif fee <= 0:
@@ -1048,10 +1074,90 @@ def _quote_row(
         ),
         "currency": target.currency if target else (org.membership_fee_currency or "EUR"),
         "payment_state": payment_state,
+        "accounting_balance": {
+            "expected_cents": int(fee * 100), "paid_cents": int(paid_amount * 100),
+            "outstanding_cents": int(max(fee - paid_amount, Decimal("0.00")) * 100),
+            "currency": target.currency if target else (org.membership_fee_currency or "EUR"),
+        },
         "payment": serialize_term_payment(payment),
         "new_card_no": target.card_no if target else None,
         "new_card_year": target.card_year if target else None,
     }
+
+
+def _quote_query(db: Session, *, org: Organization, year: int):
+    from sqlalchemy import extract
+    from app.models_accounting import AccountingAllocation, AccountingReceipt
+    source, target = aliased(AnnualMembershipTerm), aliased(AnnualMembershipTerm)
+    ranked = db.query(
+        MembershipPayment.id.label("id"), MembershipPayment.annual_term_id.label("term_id"),
+        func.row_number().over(partition_by=MembershipPayment.annual_term_id,
+                               order_by=(MembershipPayment.created_at.desc(), MembershipPayment.id.desc())).label("rank")
+    ).filter(MembershipPayment.org_id == org.id, MembershipPayment.annual_term_id.isnot(None)).subquery()
+    query = db.query(Member, source, target, MembershipPayment).outerjoin(
+        source, and_(source.member_id == Member.id, source.org_id == org.id, source.membership_year == year - 1)
+    ).outerjoin(target, and_(target.member_id == Member.id, target.org_id == org.id, target.membership_year == year)).outerjoin(
+        ranked, and_(ranked.c.term_id == target.id, ranked.c.rank == 1)
+    ).outerjoin(MembershipPayment, MembershipPayment.id == ranked.c.id).filter(
+        Member.org_id == org.id, Member.deleted_at.is_(None), or_(source.id.isnot(None), target.id.isnot(None))
+    )
+    # Aggregate ledger money once in SQL, including partial receipts and reversals.
+    # A provider/manual row already represented by an allocation must not be counted twice.
+    ledger = db.query(
+        AccountingAllocation.member_id.label("member_id"),
+        func.max(AccountingAllocation.expected_cents).label("expected_cents"),
+        func.sum(case((and_(AccountingAllocation.reversed_at.is_(None), AccountingReceipt.voided.is_(False)), AccountingAllocation.amount_cents), else_=0)).label("paid_cents"),
+    ).join(AccountingReceipt, AccountingReceipt.id == AccountingAllocation.receipt_id).filter(
+        AccountingAllocation.org_id == org.id, AccountingAllocation.membership_year == year,
+        AccountingAllocation.kind != "temporary", AccountingReceipt.org_id == org.id,
+    ).group_by(AccountingAllocation.member_id).subquery()
+    accounted = db.query(AccountingAllocation.id).filter(AccountingAllocation.payment_id == MembershipPayment.id).exists()
+    payment_year = func.coalesce(MembershipPayment.membership_year, AnnualMembershipTerm.membership_year,
+                                extract("year", func.coalesce(MembershipPayment.confirmed_at, MembershipPayment.created_at)))
+    uncovered = db.query(MembershipPayment.socio_id.label("member_id"), func.sum(MembershipPayment.amount).label("paid_amount")).outerjoin(
+        AnnualMembershipTerm, AnnualMembershipTerm.id == MembershipPayment.annual_term_id,
+    ).filter(MembershipPayment.org_id == org.id, MembershipPayment.payment_kind != "temporary",
+             MembershipPayment.status.in_(list(PAID_MEMBERSHIP_STATUSES)), payment_year == year, ~accounted).group_by(MembershipPayment.socio_id).subquery()
+    query = query.outerjoin(ledger, ledger.c.member_id == Member.id).outerjoin(uncovered, uncovered.c.member_id == Member.id)
+    fee = func.coalesce(cast(ledger.c.expected_cents, Numeric(14, 2)) / 100, target.fee_amount, _decimal_amount(org.membership_fee_amount))
+    paid_amount = func.coalesce(cast(ledger.c.paid_cents, Numeric(14, 2)) / 100, 0) + func.coalesce(uncovered.c.paid_amount, 0)
+    status = func.coalesce(target.status, AnnualMembershipTermStatus.DUE.value)
+    paid = and_(paid_amount >= fee, paid_amount > 0)
+    payment_state = case((paid, "paid"), (paid_amount > 0, "partial"), (MembershipPayment.status == MembershipPaymentStatus.PENDING.value, "pending"),
+                         (fee <= 0, "not_required"), else_="unpaid")
+    renewed = and_(target.card_no.isnot(None), target.status.in_([
+        AnnualMembershipTermStatus.SCHEDULED.value, AnnualMembershipTermStatus.ACTIVE.value]))
+    return query.add_columns(fee.label("accounting_fee"), paid_amount.label("accounting_paid")), source, target, fee, status, payment_state, renewed, paid_amount
+
+
+def _filter_quote_query(query, *, search, status_filter, status, payment_state, renewed):
+    normalized_search = (search or "").strip().lower()
+    if normalized_search:
+        name = func.lower(func.coalesce(Member.first_name, "") + " " + func.coalesce(Member.last_name, "")
+                          + " " + func.coalesce(Member.email, ""))
+        # contains(autoescape) preserves the previous literal substring matching.
+        query = query.filter(name.contains(normalized_search, autoescape=True))
+    normalized_status = (status_filter or "").strip().lower()
+    if normalized_status == "renewed":
+        query = query.filter(renewed)
+    elif normalized_status == "unpaid":
+        query = query.filter(payment_state.in_(["unpaid", "partial"]))
+    elif normalized_status == "partial":
+        query = query.filter(payment_state == "partial")
+    elif normalized_status:
+        query = query.filter(status == normalized_status)
+    return query
+
+
+def iter_quote_rows(db: Session, *, org: Organization, year: int, status_filter=None, search=None):
+    query, source, target, fee, status, payment_state, renewed, paid_amount = _quote_query(db, org=org, year=year)
+    query = _filter_quote_query(query, search=search, status_filter=status_filter, status=status,
+                               payment_state=payment_state, renewed=renewed)
+    for member, previous, current, payment, accounting_fee, accounting_paid in query.order_by(
+        func.lower(func.coalesce(Member.last_name, "")), func.lower(func.coalesce(Member.first_name, "")), Member.id
+    ).yield_per(500):
+        yield _quote_row(db, member=member, source=previous, target=current, payment=payment, year=year, org=org,
+                         accounting_fee=accounting_fee, accounting_paid=accounting_paid)
 
 
 def build_quote_center(
@@ -1064,100 +1170,39 @@ def build_quote_center(
     limit: int = 100,
     offset: int = 0,
 ) -> dict[str, Any]:
-    source_terms = (
-        db.query(AnnualMembershipTerm)
-        .filter(
-            AnnualMembershipTerm.org_id == org.id,
-            AnnualMembershipTerm.membership_year == year - 1,
-        )
-        .all()
-    )
-    target_terms = (
-        db.query(AnnualMembershipTerm)
-        .filter(
-            AnnualMembershipTerm.org_id == org.id,
-            AnnualMembershipTerm.membership_year == year,
-        )
-        .all()
-    )
-    source_by_member = {item.member_id: item for item in source_terms}
-    target_by_member = {item.member_id: item for item in target_terms}
-    member_ids = sorted(set(source_by_member) | set(target_by_member))
-    members = (
-        db.query(Member)
-        .filter(
-            Member.id.in_(member_ids) if member_ids else Member.id == -1,
-            Member.org_id == org.id,
-            Member.deleted_at.is_(None),
-        )
-        .all()
-    )
-    rows = [
-        _quote_row(
-            db,
-            member=member,
-            source=source_by_member.get(member.id),
-            target=target_by_member.get(member.id),
-            year=year,
-            org=org,
-        )
-        for member in members
-    ]
-    rows.sort(key=lambda item: ((item["last_name"] or "").lower(), (item["first_name"] or "").lower(), item["member_id"]))
-
-    paid_total = sum(
-        Decimal(str(row["payment"]["amount"]))
-        for row in rows
-        if row["payment_state"] == "paid" and row["payment"]
-    )
-    theoretical = sum(Decimal(str(row["fee_amount"])) for row in rows)
+    query, source, target, fee, status, payment_state, renewed, paid_amount = _quote_query(db, org=org, year=year)
+    count_if = lambda expression: func.coalesce(func.sum(case((expression, 1), else_=0)), 0)
+    totals = query.with_entities(
+        count_if(status == AnnualMembershipTermStatus.DUE.value), count_if(renewed),
+        count_if(payment_state == "pending"), count_if(payment_state.in_(["unpaid", "partial"])),
+        count_if(status == AnnualMembershipTermStatus.PAID_WAITING_CARD.value),
+        count_if(status == AnnualMembershipTermStatus.APPROVED_WAITING_CARD.value),
+        func.coalesce(func.sum(fee), 0),
+        func.coalesce(func.sum(paid_amount), 0),
+        func.coalesce(func.sum(case((fee > paid_amount, fee - paid_amount), else_=0)), 0),
+    ).one()
+    theoretical, paid_total = Decimal(str(totals[6])), Decimal(str(totals[7]))
     kpis = {
-        "due": sum(1 for row in rows if row["renewal_status"] == AnnualMembershipTermStatus.DUE.value),
-        "renewed": sum(1 for row in rows if row["renewed"]),
-        "payment_pending": sum(1 for row in rows if row["payment_state"] == "pending"),
-        "unpaid": sum(1 for row in rows if row["payment_state"] == "unpaid"),
-        "paid_waiting_card": sum(
-            1
-            for row in rows
-            if row["renewal_status"] == AnnualMembershipTermStatus.PAID_WAITING_CARD.value
-        ),
-        "approved_waiting_card": sum(
-            1
-            for row in rows
-            if row["renewal_status"]
-            == AnnualMembershipTermStatus.APPROVED_WAITING_CARD.value
-        ),
+        "due": int(totals[0]), "renewed": int(totals[1]), "payment_pending": int(totals[2]),
+        "unpaid": int(totals[3]), "paid_waiting_card": int(totals[4]), "approved_waiting_card": int(totals[5]),
         "theoretical_total": float(theoretical),
         "collected_total": float(paid_total),
-        "outstanding_total": float(max(theoretical - paid_total, Decimal("0.00"))),
+        "outstanding_total": float(totals[8]),
         "currency": str(org.membership_fee_currency or "EUR"),
     }
 
-    filtered = rows
-    normalized_search = (search or "").strip().lower()
-    if normalized_search:
-        filtered = [
-            row
-            for row in filtered
-            if normalized_search
-            in " ".join(
-                str(row.get(field) or "").lower()
-                for field in ("first_name", "last_name", "email")
-            )
-        ]
-    normalized_status = (status_filter or "").strip().lower()
-    if normalized_status == "renewed":
-        filtered = [row for row in filtered if row["renewed"]]
-    elif normalized_status == "unpaid":
-        filtered = [row for row in filtered if row["payment_state"] == "unpaid"]
-    elif normalized_status:
-        filtered = [row for row in filtered if row["renewal_status"] == normalized_status]
-
+    query = _filter_quote_query(query, search=search, status_filter=status_filter, status=status,
+                               payment_state=payment_state, renewed=renewed)
+    total = query.count()
+    page = query.order_by(func.lower(func.coalesce(Member.last_name, "")),
+                          func.lower(func.coalesce(Member.first_name, "")), Member.id).offset(offset).limit(limit).all()
     return {
         "year": year,
         "kpis": kpis,
-        "items": filtered[offset : offset + limit],
-        "total": len(filtered),
+        "items": [_quote_row(db, member=member, source=previous, target=current, payment=payment, year=year, org=org,
+                              accounting_fee=accounting_fee, accounting_paid=accounting_paid)
+                  for member, previous, current, payment, accounting_fee, accounting_paid in page],
+        "total": total,
     }
 
 

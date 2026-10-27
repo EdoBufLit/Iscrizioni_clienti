@@ -1,3 +1,21 @@
+## Plan (Google Wallet Golden Age e popup installazione dark - Sep 21, 2026)
+- [x] Verificare configurazione Wallet effettiva e preparare i nuovi asset/fallback, preservando le personalizzazioni degli altri circoli.
+- [x] Correggere fondo, testi, pulsanti e focus del popup installazione usando i colori del tema.
+- [x] Verificare popup installabile/iOS su mobile e desktop, tema chiaro/scuro, contrasto e azioni; verificare payload Wallet.
+- [ ] Dopo il deploy aggiornare i tre valori Wallet espliciti di Golden Age con audit e verifica dei valori attesi.
+- [ ] Pubblicare su Main e controllare pagina live, asset, stabilita e infrastruttura.
+
+### Evidenze iniziali
+- Configurazione Wallet live verificata in transazione READ ONLY: logo e banner espliciti puntano agli asset storici; il fallback aggiornato in precedenza non prevale sui riferimenti salvati. Google Wallet usa un template proprio, distinto dall'immagine PDF.
+- Popup: pannello con fondo chiaro fisso mentre le utility testo vengono sovrascritte dal tema dark, causando testo chiaro su fondo chiaro. Usare colori semantici coerenti per tutto il pannello.
+
+### Decisione e verifiche locali
+- L'utente conferma: "Bordeaux e nuovo logo, come la tessera". Preparati logo Wallet 660x660 con margini per la maschera circolare e hero 1032x812 sul bordeaux #3A0015, usando il marchio originale senza ridisegnarlo. Indicazioni Google verificate: https://developers.google.com/wallet/generic/resources/brand-guidelines.
+- Il marchio nel logo circolare resta entro raggio 245.5 px su 330 disponibili; hero con almeno 80 px di margine. Asset versionati; riferimenti storici conservati.
+- 17 test backend Wallet/branding superati, inclusi entrambi gli slug Golden Age e branding personalizzato degli altri circoli. Build TypeScript/Vite e compilazione Python completate; diff check OK.
+- Popup sulla build reale: 12 combinazioni (installabile/iOS, chiaro/scuro, 320/390/1440 px), cambio tema a popup aperto, focus da tastiera, installazione simulata e rinvio persistente verificati. Nessun overflow o errore JS. In dark: contrasto titolo 13.54:1, descrizione/chiusura 10.80:1, pulsanti 14.58:1. Minimo generale 6.49:1.
+- Screenshot e misure in `output/wallet-install-20260921`. Nessuna installazione reale o chiamata di modifica a Google Wallet nei test.
+
 ## Plan (Conferma Golden Age senza riquadro scuro e rilascio - Sep 21, 2026)
 - [x] Rimuovere il riquadro del logo solo nella conferma Golden Age, con contrasto adeguato in entrambi i temi.
 - [x] Verificare la build reale su mobile/desktop e modalita chiara/scura, conservando il marchio originale sulle tessere approvate.
@@ -5965,3 +5983,202 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - At 10:10, all application workers and web are healthy with zero restarts/OOM, no lock waiters and no abandoned transaction (one normal transaction was only 47ms old). Web memory about 302MiB, host available memory about 13GB, disk 47%, inodes 12%, no Docker build cache. No pruning needed.
 - UUID test schemas are gone from stock_tests, disposable QA container removed, verified private remote QA staging directory removed; original two Docker data volumes preserved. Backup retained. No production checkout/payment was submitted for verification.
 - Pre-existing Wallet/InstallAppPrompt changes, assets, build script and earlier note additions remain untouched and uncommitted. Separate pre-existing reconciliation/cleanup issues remain recorded in the incident review above.
+
+## Plan (Verifica email tessere Club Futura - Oct 14, 2026)
+- [x] Individuare Club Futura e verificare in sola lettura l'intero storico email degli indirizzi del club, notifiche e richieste tessere in produzione.
+- [x] Ricostruire l'origine dei 50 euro confrontando testo email, dati e logica applicativa.
+- [x] Documentare riscontri, correttezza dell'importo ed eventuali limiti della verifica.
+
+### Scope
+- Branch Main; preservare le modifiche locali preesistenti.
+- Verifica senza inviare messaggi, creare pagamenti o modificare record di produzione.
+
+### Review
+- Club Futura = org 36, ASS. CULTURALE FUTURA; campo email org vuoto, unico contatto admin Giuliano Attili. Storico intero senza LIMIT e senza filtro temporale: 29 email, tutte sent con provider_message_id, 24 accessi admin e 5 altri invii (invito, accesso socio, tessera socio, alert scorte, reminder rinnovo).
+- Tutti i 7 corpi conservati verificati: nessuno menziona esattamente 50 euro. L'invito del 9 giugno alle 15:16 cita 150 euro per Comunicazioni; l'alert del 9 giugno alle 15:17 indica 49 tessere disponibili e non cita pagamenti. Gli altri 22 corpi sono rimossi dal sistema dopo invio (21 accessi admin e un reminder rinnovo); oggetti/tipi/stati disponibili, nessuno relativo a pagamento tessere.
+- Richiesta WhatsApp #21 del 30 maggio, 50 tessere, lotto #66, importo 5000 cent. Unico evento contabile #21 del 12 settembre ore 20:36 Roma: migration 9d5e7a31c802, actor null, not_applicable -> unpaid. Attribuzione automatica ai dati storici, senza verifica bonifici: non prova mancato pagamento. Nessuna email inviata dalla migrazione.
+- Verifica solo lettura in transazioni READ ONLY con timeout; nessun invio, modifica dati, restart o deploy. Elenco completo e limiti in output/futura-email-20261014/verifica-futura.md; controlli automatici sui conteggi e dati raccolti. Preservate tutte le modifiche locali preesistenti.
+
+## Plan (Segnare pagate le 50 tessere di Club Futura - Oct 14, 2026)
+- [x] Verificare dati attuali e visualizzazione del debito nell'area Org Admin.
+- [x] Se la richiesta #21 di Futura risulta unpaid, aggiornarla a paid tramite servizio applicativo con nota e audit.
+- [x] Rileggere dati persistiti e riepilogo Org Admin: stato Pagato e importo da pagare zero; documentare l'esito.
+
+### Scope
+- Autorizzazione esplicita utente: se le 50 tessere appaiono da pagare, segnarle pagate.
+- Aggiornare solo richiesta #21, associazione #36, 50 tessere, 5000 cent, lotto #66; nessun nuovo pagamento o messaggio.
+- Preservare origine/importo/lotto della richiesta e le modifiche locali preesistenti su Main.
+
+### Review
+- Confermato prima della rettifica tramite dati live e codice API/frontend: unica richiesta #21 WhatsApp, 50 tessere, 50 euro, stato unpaid. La sezione Tessere Org Admin mostrava badge Da pagare e totale da pagare 50,00 euro.
+- Il 14 ottobre alle 18:03:44 Europe/Rome, aggiornata esclusivamente la richiesta #21 usando update_replenishment_accounting nell'applicazione distribuita, transazione con lock sul record e controlli espliciti di org/importo/quantita/lotto. Stato paid, nota della richiesta esplicita del titolare, nessun riferimento bancario inventato; paid_at e data della registrazione, non data di un versamento verificato.
+- Audit applicativo: evento contabile #25, operation_log #14887, actor super-admin configurato #1; metadata source codex_authorized_maintenance e user_requested_correction, verifica bancaria false.
+- Rilettura da una nuova sessione DB: stato paid persistito; summary outstanding_cents 5000 -> 0, unpaid 1 -> 0, paid 0 -> 1, paid_cents 0 -> 5000. Lotto #66, numerazione, disponibilita e importo invariati. La riga ora ha badge Pagato; ricaricare l'area Org Admin per aggiornare i dati gia caricati.
+- Nessuna email inviata, nessun nuovo pagamento, deploy o restart. Evidenza prima/dopo in output/futura-email-20261014/paid-result.json; preservate le modifiche locali preesistenti.
+
+## Plan (Correzioni portale e acquisto temporanee - Oct 17, 2026)
+
+### Scope approvato
+- Main tracking origin/Main; preservare tutte le modifiche locali preesistenti.
+- Implementare il piano approvato: revoca sessioni socio/MFA, correttezza incassi e creazione socio, temporanee dall'area socio, Google Wallet automatico, prestazioni applicative.
+- Temporanee soltanto per soci gia approvati senza tessera valida e club abilitati; metodi del club, durata dal rilascio effettivo.
+- Esclusi webhook WhatsApp/Pienissimo, /api/join/continue, CI, aggiornamenti dipendenze e pulizia/osservabilita P3.
+- Restyling resta bozza; rettifica/riconciliazione e bulk soci restano proposte future. Nessun deploy o modifica dati di produzione in questo task.
+
+### Implementazione
+- [x] Revocare sessioni/token precedenti dopo reset/cambio password e sessioni org admin senza MFA dopo attivazione.
+- [x] Correggere invio accesso differito, data incasso e idempotenza dei registri; mantenere incasso disponibile dopo emissione.
+- [x] Introdurre registro acquisti temporanei, eligibility, pagamento online/manuale e rilascio atomico con durata corretta.
+- [x] Collegare acquisto/stato temporanee all'area socio e conferma incasso al dettaglio org admin.
+- [x] Implementare registro/outbox/worker Google Wallet; rinnovi sul pass annuale esistente e identita distinte per temporanee.
+- [x] Separare riepiloghi form/statistiche da dettagli e risposte paginate; eliminare crescita moltiplicativa delle query.
+- [x] Limitare Agenda/WhatsApp ai dati necessari e proteggere richieste concorrenti; ottimizzare query e paginazione Quote.
+- [x] Caricare editor/tab su richiesta e limitare il precache PWA; recuperare capabilities dopo errori temporanei.
+- [x] Integrare migrazioni/bootstrap/schema gate e verificare compatibilita dei consumer.
+
+### Verifica
+- [x] Regressioni auth, MFA, incassi, attivazione/email e temporanee con dati isolati e provider simulati.
+- [x] Concorrenza/risposte fuori ordine, archivi grandi, conteggi/CSV invariati e byte bundle/cache prima/dopo.
+- [x] Test backend/frontend, build/typecheck, compileall e verifica mobile dei flussi interessati.
+- [x] Review indipendente e riepilogo finale delle prove e dei limiti.
+
+### Review
+- Completate le correzioni approvate; nessun commit/push/deploy o modifica dei dati di produzione. Main tracking origin/Main, base c657992; preservate le modifiche locali preesistenti.
+- Backend completo finale: 853 passed, 12 skipped; frontend: 95 test / 29 file passed. Typecheck, build produzione, compileall e git diff --check riusciti. Single Alembic head 20261017_04_wallet_sync; migrazioni/backfill testati su dati isolati.
+- Review indipendenti auth/MFA, funzionale e Wallet; chiusi i casi di rigetto socio/club inattivo, pass temporaneo legacy, cancellazione durante provisioning, lease/ack fuori ordine e revoca durante purga bulk. I/O Google e nuovo checkout temporanea fuori dalle transazioni DB.
+- Metriche: 500 quote = 3 query; form/prenotazioni 1000+1000 con pagine25 e aggregati; WhatsApp201 messaggi pagine100. Comunicazioni shell 2,99kB gzip + Panoramica4,06kB; editor1040kB caricato all'apertura. Precache97/7247,46KiB ->10/1042,93KiB (-85,6%).
+- Browser su build produzione locale390x844, dati sintetici: accesso socio scaduto, richiesta temporanea contanti, conferma incasso Org Admin, emissione unica e quattro ore dal rilascio; scadenza uniforme20:38 nel registro e nella tessera. Nessun overflow orizzontale. Demo pubblica: Enter, Escape e ripristino focus. Screenshot e report in output/audit-20261017/.
+- Tre fixture già fallite sulla base precedente corrette: dominio globale numerazione, stock del test marketing checkout, organizzazioni eliminate escluse dal controllo signup. Log baseline conservato.
+- Limiti: prove PostgreSQL reali/concorrenza stock_tests e collaudo rollout Linux non eseguibili qui (PostgreSQL/Docker/Bash assenti); provider simulati, nessun invio/pagamento reale. Al rilascio necessari quattro migrazioni e worker Google Wallet; vecchi cookie socio richiederanno nuovo login.
+- Bozza UI/UX ed esempi rettifica/riconciliazione/bulk soci nel riepilogo; queste proposte non sono state implementate. Esclusioni webhook WhatsApp/Pienissimo, legacy /api/join/continue, CI, dipendenze e P3 rispettate.
+- La rimozione ricorsiva della copia temporanea baseline e stata rifiutata dal controllo automatico per policy; lasciata nella cartella Temp. Processi e schede del collaudo locale chiusi; viewport ripristinato.
+
+
+## Plan (Applicare UI/UX uniforme - Oct 17, 2026)
+
+### Scope approvato
+- Main tracking origin/Main; conservare tutte le modifiche precedenti. Applicare ora la bozza UI/UX approvata, senza deploy in questa fase.
+- Unico font interfaccia Source Sans 3, dimensione base16px, petrolio comune e superfici neutre tra pubblico, signup, login, socio, Org Admin e Super Admin.
+- Stati semantici distinti, controlli/focus/superfici coerenti in light/dark; ridurre gradienti, tracking e decorazioni.
+- Branding tessere invariato: loghi, bordeaux/oro, font artwork, QR e geometria; preservare anche contenuti personalizzati del builder e template.
+
+### Implementazione e verifica
+- [x] Consolidare token/famiglie e alias tema, evitando nuove palette scollegate.
+- [x] Uniformare pubblico e navigazione, preservando hero Three e percorsi/feature gate.
+- [x] Uniformare signup/login, preservando campi, pagamenti, upload e consensi.
+- [x] Allineare privato e componenti condivisi; isolare il branding delle tessere dai bridge globali.
+- [x] Verificare desktop/mobile e light/dark su build reale, contrasto campi e pulsanti, modali e tessere prima/dopo.
+- [x] Eseguire test frontend, typecheck/build e review indipendente; documentare risultati/screenshots.
+
+### Review
+- Completata su Main in locale, senza commit/push/deploy; preservate le modifiche precedenti. Riepilogo e anteprime in output/ui-ux-20261017/riepilogo.md.
+- Source Sans 3 unico font UI, base 16 px; palette petrolio e superfici neutre condivise, alias dei ruoli consolidati, focus/controlli/guida/menu mobile allineati. Famiglie font richieste da 6 a 2, con Source Serif 4 riservato alla tessera.
+- Branding tessere isolato dai bridge di colore; artwork/font/bordeaux/oro preservati. QR standard di nuovo bianco in dark; Golden Age identico fra temi. Corretta la griglia desktop che tagliava la tessera.
+- 97 test frontend in 30 file passati; typecheck/build e diffcheck riusciti. Review indipendente conclusa senza blocker. Contrasto pulsanti 12,01:1 light e 10,27:1 dark; input mobile 16 px e modali leggibili. CSS 65,14 kB gzip, precache 10 risorse.
+- Browser locale 1440x1000/390x844 su pubblico, signup, auth, socio, Org Admin e Super Admin; light/dark, validazione, menu con Escape, modali annullate, tessere/QR e guida. Nessun overflow nei controlli raccolti. Dati/account sintetici, nessun invio/pagamento o modifica produzione; chiusi server/scheda e ripristinato viewport.
+- Esclusioni precedenti rispettate. Limite: collaudo rappresentativo locale, non verifica di ogni pagina/contenuto personalizzato in produzione.
+
+## Plan (Scroll modifica anagrafica Org Admin - Oct 26, 2026)
+
+- [x] Esaminare modulo, contenitore modale e CSS responsive; identificare la causa senza alterare le modifiche locali precedenti.
+- [x] Riprodurre su viewport basso e correggere lo scroll del pannello mantenendo raggiungibili campi e Salva.
+- [x] Verificare nel browser desktop/mobile, salvataggio e chiusura; eseguire test frontend e build pertinenti.
+- [x] Completare review indipendente e documentare prove e limiti.
+
+### Review
+- Correzione locale su Main tracking origin/Main, senza commit/push/deploy; preservate le modifiche precedenti. Tocca solo la classe del pannello ModalShell e il CSS di scroll/default viewport; nessun cambio a dati, API o logica salvataggio.
+- Causa riprodotta nel browser sulla pagina reale con fixture API: body bloccato e pannello senza limite/scroll interno. A 1280x600 il pannello era alto 894,6px, Salva finiva a 734,3px e la rotella lasciava scrollTop=0. Dopo il fix pannello 568px, scrollTop=327 e Salva a 570,6px, cliccabile.
+- Pannello dedicato modal-shell-panel: max-height calc(100dvh - 2rem) con fallback vh, overflow-y auto e contenimento dello scroll verticale; override mobile aggiornato a 92dvh con fallback. Le utility dei consumer continuano a prevalere sui default.
+- Browser Chromium/Edge headless: 1280x600, 768x600, 390x667, 844x390, 390x480, 1440x1000 in light/dark. Scroll reale con rotella, errore nome obbligatorio senza invio, note ingrandite a 400px, PATCH unico con payload aggiornato, riapertura con valore salvato, Escape e ripristino focus/body riusciti. Nessun overflow orizzontale o errore JavaScript. Dati sintetici, API intercettate; nessun socio reale modificato.
+- npm run test:run: 97 test / 30 file superati. npm run build: TypeScript e Vite/PWA riusciti. git diff --check riuscito. Review indipendente senza blocker.
+- Evidenze riproducibili, screenshot e metriche prima/dopo in output/member-profile-scroll-20261026/. Limiti: viewport mobile simulato, nessuna prova su Safari/iOS fisico o produzione.
+## Plan (Deploy fix scroll anagrafica - Oct 26, 2026)
+
+- [x] Verificare Main/origin, workflow e modifiche pregresse; limitare il rilascio al fix scroll autorizzato.
+- [x] Preparare e verificare snapshot della versione da committare senza includere gli altri lavori locali.
+- [x] Committare il solo fix su Main, push e monitorare build/rollout/canary GitHub Actions.
+- [x] Verificare versione e asset pubblicati, salute DB/worker, spazio disco e Docker; documentare il rilascio.
+
+### Review deploy
+- Rilasciato soltanto il fix scroll: 02f3319d84ef61b7992bba3bfd66e91e3c37ba07, due file frontend e 10 aggiunte/una rimozione. Tutti i cambiamenti locali preesistenti conservati; nessuna altra feature o modifica alla configurazione rilasciata.
+- Snapshot esatto del rilascio: 83 test frontend/24 file superati, build TypeScript/Vite/PWA riuscita, browser sulla build produzione in sei viewport con tutti i controlli scroll/validazione/salvataggio simulato/focus riusciti.
+- GitHub Actions Deploy to Hetzner, run 40326511574: build-images e deploy success, incluso canary finale delle 14:04 Europe/Rome circa, health 200 e Alembic a head. Nessuna nuova migrazione nel fix.
+- Verificati asset effettivamente pubblicati (index-gJ2RIVsE.js, index-BTkcwNTz.css, OrgAdminMemberDetail-BZJ8xnCK.js) e ripetuti i sei scenari browser sul sito live con fixture API: tutti riusciti, nessun socio reale modificato. /health pubblico e interno status=ok, db=true. /version ha metadata git/build non configurati preesistenti; identita rilascio provata da checkout, immagini immutabili SHA e asset pubblici.
+- Web e cinque worker applicativi con immagine 02f3319, healthy, zero restart/OOM; video/Evolution healthy e PostgreSQL accepting connections. Disco 43%, 21GB disponibili, inode 10%, immagini Docker 5.076GB e build cache zero; nessun prune necessario. .git/objects scrivibile dall'utente deploy.
+- Documentazione tracciata: docs/member_profile_scroll_release_2026-10-26.md. Evidenze in output/member-profile-scroll-20261026 (release.json, live.json, public-release.json e screenshot); preview locale chiusa e junction temporanea dipendenze rimossa.
+
+## Plan (Funzioni extra incassi e selezione multipla soci - Oct 26, 2026)
+
+### Scope e specifica
+- Implementare le due proposte ora approvate: rettifica/riconciliazione incassi e azioni sui soci selezionati. Main tracking origin/Main; preservare tutte le modifiche locali precedenti e il fix scroll modali. Nessun deploy, invio reale o modifica di dati di produzione in questa fase.
+- Incassi: registro ricevute manuali e importazione CSV con anteprima, errori per riga e conferma; deduplicazione degli import e delle richieste. Proposte di abbinamento senza scritture automatiche, importi in centesimi, allocazioni parziali o a piu soci, residui sempre visibili.
+- Rettifica: motivo obbligatorio, versione attesa, eventi con originale/prima/dopo e attore; storno contabile esplicito e storico conservato. Proiezioni dei soli incassi manuali aggiornabili; pagamenti online/provider immutabili. Nessun rimborso finanziario o revoca automatica delle tessere. Quote/KPI e nuovi incassi coerenti con il saldo effettivo.
+- Soci: checkbox desktop/mobile, selezione pagina o tutti i risultati filtrati con esclusioni, numero esplicito. Snapshot server dei soci selezionati; filtri e ricerca identici alla lista. Anteprima prima di esportare, accodare accessi eleggibili o sollecitare quote ancora dovute per l'annualita scelta.
+- Esecuzione a blocchi riprendibili con esiti per socio, controlli aggiornati su stato/permessi/destinatario, idempotenza, retry solo dei falliti. L'esito email indica accodamento, non consegna. Nessun invio provocato dalla semplice selezione o dal cambio filtri.
+- Esclusioni precedenti conservate: webhook WhatsApp/Pienissimo, legacy /api/join/continue, CI, upgrade generalizzati delle dipendenze e pulizia/osservabilita P3. Nessuna integrazione bancaria o rimborso provider implicito.
+
+### Implementazione
+- [x] Definire contratti e confini dei moduli, salvare baseline locale e verificare le integrazioni esistenti.
+- [x] Implementare registro incassi, CSV, suggerimenti, allocazioni, rettifiche/storni e proiezioni coerenti.
+- [x] Implementare snapshot/selezione soci, anteprima, export e accodamenti con esiti e ripresa.
+- [x] Integrare pagina incassi, storico, collegamenti Quote/dettaglio, checkbox e toolbar soci nei temi condivisi.
+- [x] Integrare modelli, migrazioni Alembic, bootstrap e gate dello schema senza alterare il rilascio preesistente.
+
+### Verifica e consegna
+- [x] Test backend su permessi/tenant, importi e saldi, duplicati, versioni/concorrenza, storico, selezione filtrata e retry.
+- [x] Test frontend dei flussi ed errori; typecheck/build; regressioni backend/frontend e migrazione su dati isolati.
+- [x] Browser desktop/mobile e viewport bassi: bonifico per due soci, rettifica/storno, selezione filtrata, esiti e ripresa, focus/scroll/contrasto.
+- [x] Review indipendente, correzione dei problemi emersi e rapporto dettagliato di completato, limiti e requisiti di rilascio.
+
+### Review
+- Completate entrambe le funzioni extra in locale su Main; nessun commit/push/deploy di queste modifiche, invio reale o scrittura su dati di produzione. Conservati il lavoro precedente e il fix scroll gia rilasciato separatamente.
+- Incassi: registro, CSV con anteprima/deduplica atomica, allocazioni parziali e per piu soci, rettifiche/storni con motivazione e originale/prima/dopo/attore. Saldi netti integrati in Quote/dettaglio; provider immutabile e tessere emesse conservate. Bloccati nuovi checkout per l'intera quota dopo un acconto riconciliato e abbinamenti manuali durante checkout aperti.
+- Bulk: selezione per pagina/ID o tutti i risultati filtrati con esclusioni; anteprima e snapshot server, export Excel selettivo, accessi eleggibili, solleciti del debito reale per annualita. Blocchi25, pausa/ripresa, esiti e retry dei soli falliti; stato accodato distinto dalla consegna. Anteprime30min, limite10k esplicito; filtri condivisi e isolamento per associazione/creatore.
+- Chiusi i problemi emersi in review: vecchia selezione A-B-A, operazione precedente ancora confermabile dopo errore, riuso ID dopo cancellazione, lock ordine purghe/invii, duplicazione termine no-autoflush, provider saldato dopo storno doppione e temporanee storiche. Corretti contatore residui parziali e guida che interrompeva i deep link; impronta Privacy riallineata alle sole classi CSS senza cambio del testo/versione/consensi.
+- Verifica finale: 913 test backend superati, 12 skipped; 121 frontend in33 file superati; TypeScript/build produzione, compileall, diffcheck, scansione encoding e singola head Alembic20261026_06_member_bulk riusciti. Due migrazioni nuove verificate con FK attive su DB isolato. Un fallimento del test concorrente dovuto al lazy-load della stessa sessione ORM tra thread e stato corretto nel test (valore immutabile catturato prima dei thread); suite completa ripetuta con successo.
+- Browser build reale: 1440x900/1280x600/390x844, light/dark; incasso60 per due quote30, rettifica metodo, storno e acconto10, residuo20 coerente in Quote e sollecito; CSV30+15,50 e duplicati riconosciuti. Selezione25 mantenuta in pagina2, tutti32 meno uno; 29 accessi accodati in2 blocchi,2 saltati motivati; Excel verificato con soli Anna/Marco. Storico ripreso, menu mobile e deep link riusciti; nessun overflow orizzontale e nessun errore console finale. Tab/server QA chiusi e viewport ripristinato.
+- Prestazioni: Quote500 soci resta3 query; saldi in blocco, pagine25, sync storico100/max1000 per clic con sincronizzazione mirata nelle allocazioni. Incassi11,60kB gzip, bulk condiviso4,62kB; precache10/1077,94KiB. Nessun upgrade dipendenze o intervento P3.
+- Riepilogo completo, screenshot, metriche e prova persistenza in output/extras-20261026/riepilogo.md; contratti in tasks/*-api-20261026.md. Restano rilascio con backup/migrazioni, collaudo PostgreSQL reale (qui PostgreSQL/Docker assenti), provider/email/Wallet su staging e dispositivi fisici. Per vecchi incassi senza prova autorevole serve riconciliazione manuale; solo entrate EUR/CSV, senza collegamento banca o rimborso automatico. Esclusioni precedenti rispettate.
+
+## Plan (Rilascio completo piano, UI/UX e funzioni extra - Oct 26, 2026)
+
+### Perimetro autorizzato
+- Pubblicare su Main tutte le modifiche funzionali del piano precedente, UI/UX e funzioni extra; completare prima le verifiche P1 e dopo il rilascio verificare il sito. Nessun invio a soci o pagamento reale necessario al collaudo.
+- Includere anche le presenze manuali tramite ricerca socio, come confermato esplicitamente dall'utente; implementazione della chat parallela completata e sottoposta alle stesse verifiche del rilascio.
+- Includere codice, asset applicativi, test, migrazioni, configurazione worker e documentazione; conservare fuori dal commit database sintetici, export, log, segreti e artefatti locali di collaudo.
+- Eseguire le prove PostgreSQL e provider in ambiente isolato sul server, senza usare tabelle/dati di produzione per test di scrittura. Backup verificato prima di migrare.
+
+### Verifica, rilascio e collaudo
+- [x] Inventario delle modifiche e review dei prerequisiti: Main/origin, workflow, configurazione, schema e worker attuali; registrare baseline e piano di rollback.
+- [x] Completare review indipendente di migrazioni/worker e sicurezza/correttezza; correggere problemi bloccanti emersi.
+- [x] Eseguire suite locali e prove PostgreSQL isolate, migrazioni su schema rappresentativo e controlli provider/configurazione non distruttivi.
+- [ ] Preparare commit completo e verificabile, controllare contenuti e segreti, eseguire push Main e monitorare workflow/deploy.
+- [ ] Verificare backup, migrazioni, immagini/versione, worker, salute, log, spazio disco e permessi checkout dopo rollout.
+- [ ] Verificare sito pubblicato desktop/mobile e temi, iscrizione/auth, aree riservate, incassi/bulk/temporanee/Wallet con fixture isolate; documentare limiti delle prove senza invii o incassi reali.
+- [ ] Riepilogare commit pubblicati, prove svolte e requisiti residui effettivi.
+
+### Review
+- In corso.
+## Plan (Presenze manuali tramite ricerca socio - Oct 26, 2026)
+
+### Specifica
+- Dalla sezione Presenze, affiancare allo scanner una modalita Cerca socio, raggiungibile subito su telefono, tablet e PC.
+- Ricerca per nome/cognome, email o numero tessera, risultati limitati alla propria associazione; scelta esplicita e pulsante Registra presenza. Nessuna presenza provocata dalla sola ricerca/selezione.
+- Registrare l'ingresso odierno mantenendo regole tessera attiva e unicita giornaliera Europe/Rome comuni allo scanner. Indicare inserimento manuale nel registro e nello storico; mostrare chiaramente gia presente, attesa, nessun risultato ed errori.
+- Preservare scanner/postazioni e modifiche locali precedenti; Main tracking origin/Main. Nessun deploy richiesto in questa fase.
+
+### Implementazione e verifica
+- [x] Esaminare pagina, ricerca, servizi QR e vincoli del registro; definire contratto API e perimetro dei file.
+- [x] Implementare API ricerca/manuale con permessi, validita, deduplicazione e audit; test backend.
+- [x] Integrare modalita ricerca e conferma responsive, accessibile e coerente con il tema; test frontend.
+- [x] Provare flusso completo ed errori su mobile/tablet/PC, light/dark e QR invariato; test/build e review indipendente.
+- [x] Documentare risultati, evidenze e limiti.
+
+### Review
+- Implementato su Main in locale, senza commit/push/deploy e preservando le modifiche preesistenti di altri lavori.
+- Presenze offre Scanner QR e Cerca socio. Ricerca per nome/cognome, email o numero tessera (min2, max20 risultati), scelta esplicita e conferma dell'ingresso odierno. Stato tessera, gia presente, caricamento, vuoto, errori e retry visibili; nuovo ingresso subito nel registro con origine Inserimento manuale.
+- API dedicate /api/org-admin/attendances/members e /manual-check-in: tenant e soci eliminati filtrati, autorizzazioni esistenti, POST con member_id intero positivo, validita ricontrollata tramite lo stesso servizio QR, deduplicazione Europe/Rome e audit unico con source manual. Nessuna migrazione.
+- Responsive: campo ricerca48px, nomi/email/messaggi lunghi a capo, registro a schede fino a tablet e tabella da xl. Cambio metodo ferma fotocamera e ignora stream/risultati QR tardivi; richieste ricerca/registro obsolete non sovrascrivono gli esiti aggiornati.
+- Test: 40 backend presenze/manuale/QR/postazioni superati; 129 frontend in34file superati, inclusi11 su ricerca/camera. Build TypeScript/Vite/PWA, compileall Python e diffcheck riusciti. Review indipendente finale senza blocker.
+- Browser sulla build produzione locale con FastAPI e SQLite isolato, senza mock nel percorso riuscito:320x667,390x844,768x1024,1024x768,1280x600,1440x1000, light/dark (12combinazioni). Registrazione reale, una sola presenza dopo nuovo passaggio QR, origine manuale nel registro, nessun prompt camera nel manuale, nessun errore JS/overflow/testo tagliato e controlli raggiungibili. Verificati anche ricerca vuota, tessera scaduta, gia presente e retry dopo503 simulato.
+- Evidenze e screenshot in output/attendance-manual-20261026/, report responsive-report.json, script riproducibili check-responsive.cjs e serve-smoke.py. Solo dati sintetici; nessuna modifica o invio in produzione. Limite: viewport Chromium/Edge simulati, nessuna prova fisica Safari/iOS o fotocamera reale.

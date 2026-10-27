@@ -132,6 +132,11 @@ def resolve_member_valid_until(member: Member | None) -> datetime | None:
     return annual_membership_expiry_datetime(parsed_year)
 
 
+def membership_datetime_iso(value: datetime | None) -> str | None:
+    """Expose an unambiguous instant, including for legacy naive UTC timestamps."""
+    return as_rome_datetime(value).isoformat() if value is not None else None
+
+
 def is_member_membership_expired(
     member: Member | None,
     *,

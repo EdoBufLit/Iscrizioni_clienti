@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import base64
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 import logging
 import os
@@ -44,10 +44,11 @@ class GoogleWalletConfigError(RuntimeError):
 
 
 class GoogleWalletApiError(RuntimeError):
-    def __init__(self, *, status_code: int, message: str, response_body: str | None = None):
+    def __init__(self, *, status_code: int, message: str, response_body: str | None = None, retry_after: int | None = None):
         super().__init__(message)
         self.status_code = status_code
         self.response_body = response_body or ""
+        self.retry_after = retry_after
 
 
 @dataclass(frozen=True)
@@ -159,7 +160,10 @@ def _get_google_wallet_access_token(service_account_info: dict[str, Any]) -> str
     credentials = build_google_wallet_credentials_from_info(service_account_info)
     request_cls = _load_google_auth_request()
     auth_request = request_cls()
-    credentials.refresh(auth_request)
+    def bounded_auth_request(*args, **kwargs):
+        kwargs["timeout"] = 15
+        return auth_request(*args, **kwargs)
+    credentials.refresh(bounded_auth_request)
     token = str(credentials.token or "").strip()
     if token:
         return token
@@ -194,16 +198,16 @@ def _wallet_request(
 def _raise_google_wallet_api_error(response: requests.Response, *, action: str) -> None:
     body_text = (response.text or "").strip()
     body_preview = body_text[:1500]
-    logger.error(
-        "Google Wallet API error during %s status=%s body=%s",
-        action,
-        response.status_code,
-        body_preview,
-    )
+    logger.error("Google Wallet API error during %s status=%s", action, response.status_code)
+    try:
+        retry_after = max(1, min(86400, int(getattr(response, "headers", {}).get("Retry-After", ""))))
+    except (ValueError, TypeError):
+        retry_after = None
     raise GoogleWalletApiError(
         status_code=int(response.status_code),
         message=f"Google Wallet API {action} failed ({response.status_code})",
         response_body=body_preview,
+        retry_after=retry_after,
     )
 
 
@@ -218,14 +222,8 @@ def _sanitize_wallet_id_component(value: str, *, fallback: str) -> str:
 
 
 def _build_wallet_ids(*, issuer_id: str, member: Member) -> tuple[str, str]:
-    card_year = int(member.card_year or datetime.utcnow().year)
-    org_slug = _sanitize_wallet_id_component(
-        getattr(member.organization, "slug", "") or "assonam",
-        fallback="assonam",
-    )
-    class_id = f"{issuer_id}.{_DEFAULT_CLASS_SUFFIX}"
-    object_id = f"{issuer_id}.{org_slug}.{member.id}.{card_year}"
-    return class_id, object_id
+    from app.services.google_wallet_sync import wallet_identity
+    return wallet_identity(member)
 
 
 def _build_backend_base_url() -> str:
@@ -336,8 +334,9 @@ def _build_generic_object_payload(*, member: Member, class_id: str, object_id: s
     membership_type = resolve_member_membership_type(member)
     membership_label = membership_type_label(membership_type)
     valid_until = resolve_member_valid_until(member)
+    from app.services.annual_memberships import as_rome_datetime
     validity_label = (
-        valid_until.strftime("%d/%m/%Y %H:%M")
+        as_rome_datetime(valid_until).strftime("%d/%m/%Y %H:%M")
         if valid_until is not None
         else str(card_year)
     )
@@ -401,6 +400,15 @@ def _build_generic_object_payload(*, member: Member, class_id: str, object_id: s
             ]
         },
     }
+
+    valid_from = getattr(member, "valid_from", None)
+    if valid_until is not None:
+        def wallet_date(value):
+            aware = value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+            return aware.isoformat().replace("+00:00", "Z")
+        payload["validTimeInterval"] = {"end": {"date": wallet_date(valid_until)}}
+        if valid_from is not None:
+            payload["validTimeInterval"]["start"] = {"date": wallet_date(valid_from)}
 
     if _is_public_wallet_image_url(logo_url):
         payload["logo"] = {
@@ -574,3 +582,17 @@ def generate_google_wallet_save_link_for_member(member: Member) -> GoogleWalletS
         object_payload=object_payload,
     )
     return GoogleWalletSaveLinkResult(url=save_url, class_id=class_id, object_id=object_id)
+
+
+def patch_google_wallet_object(*, object_id: str, payload: dict[str, Any]) -> bool:
+    """Update an already provisioned pass; never create historical passes in a worker."""
+    info = load_google_wallet_service_account_info()
+    token = _get_google_wallet_access_token(info)
+    response = _wallet_request(method="PATCH", path=f"/genericObject/{quote(object_id, safe='')}",
+                               access_token=token, payload=payload)
+    if response.status_code == 404:
+        # A removed remote pass can be provisioned again by its owner via Save.
+        return False
+    if response.status_code not in {200, 201}:
+        _raise_google_wallet_api_error(response, action="sync_generic_object")
+    return True

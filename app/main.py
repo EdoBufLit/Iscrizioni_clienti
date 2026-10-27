@@ -35,9 +35,12 @@ from app.routes import (
     join,
     marketing_preferences,
     membership_payments,
+    temporary_memberships,
     member,
     onboarding,
     org_admin,
+    org_admin_accounting,
+    org_admin_member_bulk,
     org_admin_attendance,
     public,
     renewals,
@@ -302,6 +305,7 @@ def _include_affiliation_routers() -> None:
 app.include_router(join.router)
 app.include_router(marketing_preferences.router)
 app.include_router(membership_payments.router)
+app.include_router(temporary_memberships.router)
 app.include_router(member.router)
 app.include_router(renewals.router)
 # The historical HTML admin router carried a second password-only super-admin
@@ -309,6 +313,8 @@ app.include_router(renewals.router)
 # through the SPA catch-all, but its legacy backend routes are intentionally not
 # mounted so privileged access has exactly one MFA-protected entry point.
 app.include_router(org_admin.router)
+app.include_router(org_admin_accounting.router)
+app.include_router(org_admin_member_bulk.router)
 app.include_router(affiliate_communications.org_admin_router)
 app.include_router(affiliate_communications.super_admin_router)
 app.include_router(org_admin_attendance.router)

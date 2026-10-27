@@ -4,27 +4,27 @@
 
 /* ORG ADMIN 2026 rehaul: scoped to the private association workspace. */
 .org-admin-v2 {
-  --oa-topbar: #003536;
-  --oa-topbar-2: #043f40;
-  --oa-brand: #005247;
-  --oa-brand-strong: #00483f;
-  --oa-accent: #d8b873;
-  --oa-bg: #f8faf9;
-  --oa-panel: #ffffff;
-  --oa-panel-soft: #f6f8f7;
-  --oa-panel-muted: #eef3f1;
-  --oa-line: #e4ebe8;
-  --oa-line-strong: #d7e2de;
-  --oa-border: #d7e2de;
-  --oa-text: #142331;
-  --oa-muted: #637184;
-  --oa-soft: #596879;
-  --oa-on-brand: #ffffff;
-  --oa-danger: #b4234a;
-  --oa-success: #157a56;
-  --oa-warning: #9a5d0d;
-  --oa-info: #1d5f90;
-  --oa-shadow: 0 18px 44px -34px rgba(15, 23, 42, 0.34);
+  --oa-topbar: var(--theme-chrome);
+  --oa-topbar-2: var(--theme-chrome-strong);
+  --oa-brand: var(--theme-brand);
+  --oa-brand-strong: var(--theme-brand-strong);
+  --oa-accent: var(--theme-accent);
+  --oa-bg: var(--theme-bg);
+  --oa-panel: var(--theme-surface-solid);
+  --oa-panel-soft: var(--theme-surface-muted);
+  --oa-panel-muted: var(--theme-panel-muted);
+  --oa-line: var(--theme-border);
+  --oa-line-strong: var(--theme-border-strong);
+  --oa-border: var(--theme-border);
+  --oa-text: var(--theme-text);
+  --oa-muted: var(--theme-text-muted);
+  --oa-soft: var(--theme-text-soft);
+  --oa-on-brand: var(--theme-on-brand);
+  --oa-danger: var(--theme-danger);
+  --oa-success: var(--theme-success);
+  --oa-warning: var(--theme-warning);
+  --oa-info: var(--theme-info);
+  --oa-shadow: var(--theme-shadow-lg);
   background: var(--oa-bg);
   color: var(--oa-text);
   min-height: 100vh;
@@ -42,7 +42,7 @@
 }
 
 .signup-wizard-shell label[for="documentoIdentita"]:focus-within {
-  outline: 3px solid color-mix(in srgb, #4f46e5 72%, white);
+  outline: 3px solid color-mix(in srgb, var(--theme-brand) 72%, white);
   outline-offset: 3px;
 }
 
@@ -70,82 +70,34 @@
   box-sizing: border-box;
 }
 
-:root[data-theme="dark"] .org-admin-v2 {
-  --oa-topbar: #061f24;
-  --oa-topbar-2: #082a2f;
-  --oa-brand: #6fd6c8;
-  --oa-brand-strong: #9de6da;
-  --oa-accent: #ddbb74;
-  --oa-bg: #0f1720;
-  --oa-panel: #172332;
-  --oa-panel-soft: #111c28;
-  --oa-panel-muted: #1c2b3a;
-  --oa-line: rgba(203, 213, 225, 0.16);
-  --oa-line-strong: rgba(203, 213, 225, 0.28);
-  --oa-border: rgba(203, 213, 225, 0.22);
-  --oa-text: #edf3f7;
-  --oa-muted: #c7d3df;
-  --oa-soft: #a7b6c4;
-  --oa-on-brand: #061014;
-  --oa-danger: #fb8fa2;
-  --oa-success: #73e0b4;
-  --oa-warning: #f4ca6a;
-  --oa-info: #90cdf4;
-  --oa-shadow: 0 22px 52px -34px rgba(0, 0, 0, 0.86);
-}
-
 /* SUPER ADMIN 2026 governance rehaul. Scoped to the central ASSONAM workspace. */
 .super-admin-v2 {
-  --sa-bg: #f8f6f1;
-  --sa-bg-soft: #f3efe8;
-  --sa-panel: #fffdf9;
-  --sa-panel-strong: #ffffff;
-  --sa-panel-muted: #f7f3ec;
-  --sa-line: rgba(38, 34, 28, 0.11);
-  --sa-line-strong: rgba(38, 34, 28, 0.18);
-  --sa-text: #151b1f;
-  --sa-muted: #626b73;
-  --sa-soft: #7f858b;
-  --sa-brand: #006358;
-  --sa-brand-strong: #004e47;
-  --sa-on-brand: #ffffff;
-  --sa-accent: #d1a95d;
-  --sa-success: #16835f;
-  --sa-warning: #c57413;
-  --sa-danger: #d23f45;
-  --sa-info: #2e72ba;
-  --sa-purple: #7c4cc5;
-  --sa-shadow: 0 24px 60px -44px rgba(18, 24, 31, 0.48);
-  --sa-shadow-soft: 0 12px 32px -28px rgba(18, 24, 31, 0.36);
+  --sa-bg: var(--theme-bg);
+  --sa-bg-soft: var(--theme-bg-soft);
+  --sa-panel: var(--theme-surface-solid);
+  --sa-panel-strong: var(--theme-surface-elevated);
+  --sa-panel-muted: var(--theme-panel-muted);
+  --sa-line: var(--theme-border);
+  --sa-line-strong: var(--theme-border-strong);
+  --sa-text: var(--theme-text);
+  --sa-muted: var(--theme-text-muted);
+  --sa-soft: var(--theme-text-soft);
+  --sa-brand: var(--theme-brand);
+  --sa-brand-strong: var(--theme-brand-strong);
+  --sa-on-brand: var(--theme-on-brand);
+  --sa-accent: var(--theme-accent);
+  --sa-success: var(--theme-success);
+  --sa-warning: var(--theme-warning);
+  --sa-danger: var(--theme-danger);
+  --sa-info: var(--theme-info);
+  --sa-purple: var(--theme-info);
+  --sa-shadow: var(--theme-shadow-lg);
+  --sa-shadow-soft: var(--theme-shadow-sm);
   min-height: 100vh;
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--sa-panel) 80%, transparent), transparent 18rem),
     var(--sa-bg);
   color: var(--sa-text);
-}
-
-:root[data-theme="dark"] .super-admin-v2 {
-  --sa-bg: #0f1720;
-  --sa-bg-soft: #111c28;
-  --sa-panel: #172332;
-  --sa-panel-strong: #1c2a39;
-  --sa-panel-muted: #111c28;
-  --sa-line: rgba(203, 213, 225, 0.16);
-  --sa-line-strong: rgba(203, 213, 225, 0.28);
-  --sa-text: #edf3f7;
-  --sa-muted: #c7d3df;
-  --sa-soft: #9fb0bf;
-  --sa-brand: #75d6c8;
-  --sa-brand-strong: #a6ece2;
-  --sa-on-brand: #071417;
-  --sa-accent: #ddbb74;
-  --sa-success: #73e0b4;
-  --sa-warning: #f4ca6a;
-  --sa-danger: #ff9aa9;
-  --sa-info: #93c5fd;
-  --sa-purple: #c4b5fd;
-  --sa-shadow: 0 24px 62px -38px rgba(0, 0, 0, 0.82);
-  --sa-shadow-soft: 0 12px 34px -24px rgba(0, 0, 0, 0.74);
 }
 
 .super-admin-v2 .container-shell {
@@ -184,7 +136,7 @@
   align-items: center;
   gap: 0.75rem;
   color: var(--sa-text);
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: -0.02em;
 }
 
@@ -206,8 +158,8 @@
   gap: 0.65rem;
   color: var(--sa-text);
   font-size: 0.95rem;
-  font-weight: 900;
-  letter-spacing: 0.16em;
+  font-weight: 600;
+  letter-spacing: 0.025em;
   text-transform: uppercase;
 }
 
@@ -220,8 +172,8 @@
   color: var(--sa-danger);
   padding: 0.1rem 0.45rem;
   font-size: 0.58rem;
-  font-weight: 900;
-  letter-spacing: 0.11em;
+  font-weight: 600;
+  letter-spacing: 0.025em;
 }
 
 .sa-header__email {
@@ -243,7 +195,7 @@
   gap: 0.45rem;
   color: var(--sa-brand-strong);
   font-size: 0.86rem;
-  font-weight: 850;
+  font-weight: 600;
   text-decoration: none;
 }
 
@@ -272,7 +224,7 @@
   color: var(--sa-muted);
   padding: 0 0.95rem;
   font-size: 0.86rem;
-  font-weight: 780;
+  font-weight: 600;
   text-decoration: none;
   transition: color 160ms ease, border-color 160ms ease, background 160ms ease;
 }
@@ -332,8 +284,8 @@
 .sa-toolbar label {
   color: var(--sa-soft);
   font-size: 0.68rem;
-  font-weight: 850;
-  letter-spacing: 0.16em;
+  font-weight: 600;
+  letter-spacing: 0.025em;
   text-transform: uppercase;
 }
 
@@ -341,7 +293,7 @@
   margin: 0;
   color: var(--sa-text);
   font-size: clamp(1.7rem, 2.4vw, 2.35rem);
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: -0.025em;
   line-height: 1.05;
 }
@@ -388,7 +340,7 @@
   margin-top: 0.25rem;
   color: var(--sa-text);
   font-size: clamp(1.45rem, 2vw, 1.95rem);
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: -0.03em;
   line-height: 1;
 }
@@ -504,7 +456,7 @@
   color: var(--sa-muted);
   padding: 0.34rem 0.72rem;
   font-size: 0.76rem;
-  font-weight: 800;
+  font-weight: 600;
   transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
 }
 
@@ -594,7 +546,7 @@
   border-radius: 0.55rem !important;
   padding: 0.65rem 1rem;
   font-size: 0.84rem;
-  font-weight: 850;
+  font-weight: 600;
   line-height: 1;
   text-decoration: none;
   transition: background 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease;
@@ -609,19 +561,6 @@
 .sa-btn:hover {
   border-color: var(--sa-brand);
   color: var(--sa-brand-strong);
-}
-
-.sa-btn--primary,
-.super-admin-v2 .btn-primary {
-  border-color: var(--sa-brand) !important;
-  background: var(--sa-brand) !important;
-  color: var(--sa-on-brand) !important;
-}
-
-.sa-btn--primary:hover,
-.super-admin-v2 .btn-primary:hover {
-  border-color: var(--sa-brand-strong) !important;
-  background: var(--sa-brand-strong) !important;
 }
 
 .sa-btn--danger {
@@ -662,7 +601,7 @@
   color: var(--sa-muted);
   padding: 0.25rem 0.62rem;
   font-size: 0.68rem;
-  font-weight: 850;
+  font-weight: 600;
   line-height: 1;
   text-transform: uppercase;
 }
@@ -721,7 +660,7 @@
   color: var(--sa-muted);
   padding: 0.5rem 0.8rem;
   font-size: 0.82rem;
-  font-weight: 820;
+  font-weight: 600;
   transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
 }
 
@@ -763,7 +702,7 @@
   margin: 0;
   color: var(--sa-text);
   font-size: 1.02rem;
-  font-weight: 850;
+  font-weight: 600;
   letter-spacing: -0.01em;
 }
 
@@ -825,47 +764,47 @@
   background: color-mix(in srgb, var(--sa-success) 14%, var(--sa-panel));
   color: var(--sa-success);
   font-size: 0.75rem;
-  font-weight: 850;
+  font-weight: 600;
 }
 
-.super-admin-v2 .text-neutral-900,
-.super-admin-v2 .text-neutral-800,
-.super-admin-v2 .text-neutral-700 {
+.super-admin-v2 .text-neutral-900:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.super-admin-v2 .text-neutral-800:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.super-admin-v2 .text-neutral-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: var(--sa-text) !important;
 }
 
-.super-admin-v2 .text-neutral-600,
-.super-admin-v2 .text-neutral-500 {
+.super-admin-v2 .text-neutral-600:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.super-admin-v2 .text-neutral-500:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: var(--sa-muted) !important;
 }
 
-.super-admin-v2 .text-neutral-400,
-.super-admin-v2 .text-neutral-300 {
+.super-admin-v2 .text-neutral-400:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.super-admin-v2 .text-neutral-300:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: var(--sa-soft) !important;
 }
 
-.super-admin-v2 .bg-white,
-.super-admin-v2 .bg-white\/50,
-.super-admin-v2 .bg-white\/80 {
+.super-admin-v2 .bg-white:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.super-admin-v2 .bg-white\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.super-admin-v2 .bg-white\/80:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   background-color: var(--sa-panel-strong) !important;
 }
 
-.super-admin-v2 .bg-neutral-50,
-.super-admin-v2 .bg-neutral-50\/30,
-.super-admin-v2 .bg-neutral-50\/50,
-.super-admin-v2 .bg-neutral-50\/60,
-.super-admin-v2 .bg-neutral-50\/70,
-.super-admin-v2 .bg-neutral-50\/80,
-.super-admin-v2 .bg-neutral-100,
-.super-admin-v2 .bg-neutral-100\/50 {
+.super-admin-v2 .bg-neutral-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.super-admin-v2 .bg-neutral-50\/30:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.super-admin-v2 .bg-neutral-50\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.super-admin-v2 .bg-neutral-50\/60:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.super-admin-v2 .bg-neutral-50\/70:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.super-admin-v2 .bg-neutral-50\/80:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.super-admin-v2 .bg-neutral-100:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.super-admin-v2 .bg-neutral-100\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   background-color: var(--sa-panel-muted) !important;
 }
 
-.super-admin-v2 .border-neutral-100,
-.super-admin-v2 .border-neutral-200,
-.super-admin-v2 .divide-neutral-50 > :not([hidden]) ~ :not([hidden]),
-.super-admin-v2 .divide-neutral-100 > :not([hidden]) ~ :not([hidden]),
-.super-admin-v2 .divide-neutral-200 > :not([hidden]) ~ :not([hidden]) {
+.super-admin-v2 .border-neutral-100:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.super-admin-v2 .border-neutral-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.super-admin-v2 .divide-neutral-50 > :not([hidden]) ~ :not([hidden]):not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.super-admin-v2 .divide-neutral-100 > :not([hidden]) ~ :not([hidden]):not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.super-admin-v2 .divide-neutral-200 > :not([hidden]) ~ :not([hidden]):not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   border-color: var(--sa-line) !important;
 }
 
@@ -896,8 +835,8 @@
 .sa-info-box__label {
   color: var(--sa-soft);
   font-size: 0.66rem;
-  font-weight: 850;
-  letter-spacing: 0.14em;
+  font-weight: 600;
+  letter-spacing: 0.025em;
   text-transform: uppercase;
 }
 
@@ -905,7 +844,7 @@
   margin-top: 0.35rem;
   color: var(--sa-text);
   font-size: 0.9rem;
-  font-weight: 760;
+  font-weight: 600;
 }
 
 .sa-master-detail {
@@ -969,7 +908,7 @@
 .sa-progress__label {
   color: var(--sa-muted);
   font-size: 0.72rem;
-  font-weight: 760;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -984,7 +923,7 @@
 .sa-empty__title {
   color: var(--sa-text);
   font-size: 0.94rem;
-  font-weight: 820;
+  font-weight: 600;
 }
 
 .sa-empty__description {
@@ -1094,7 +1033,7 @@
   margin: 0;
   color: var(--sa-text);
   font-size: 1.35rem;
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: -0.02em;
 }
 
@@ -1182,7 +1121,7 @@
   color: var(--sa-muted);
   padding: 0.78rem 0.8rem;
   font-size: 0.84rem;
-  font-weight: 780;
+  font-weight: 600;
   text-align: left;
 }
 
@@ -1235,7 +1174,7 @@
   background: color-mix(in srgb, var(--sa-brand) 14%, var(--sa-panel));
   color: var(--sa-brand-strong);
   font-size: 0.9rem;
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .sa-switch {
@@ -1251,7 +1190,7 @@
   color: var(--sa-muted);
   padding: 0 0.35rem;
   font-size: 0.63rem;
-  font-weight: 900;
+  font-weight: 600;
   transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
 }
 
@@ -1290,7 +1229,7 @@
   color: var(--sa-text);
   padding: 0.45rem 0.72rem;
   font-size: 0.78rem;
-  font-weight: 780;
+  font-weight: 600;
   transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
 }
 
@@ -1332,7 +1271,7 @@
 
 .sa-setup-header h3 {
   font-size: 1.25rem;
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: -0.02em;
 }
 
@@ -1371,7 +1310,7 @@
   color: var(--sa-muted);
   padding: 0.72rem 0.75rem;
   font-size: 0.76rem;
-  font-weight: 780;
+  font-weight: 600;
   text-align: left;
 }
 
@@ -1405,7 +1344,7 @@
   margin: 0;
   color: var(--sa-text);
   font-size: 0.94rem;
-  font-weight: 850;
+  font-weight: 600;
 }
 
 .sa-setup-section__heading p {
@@ -1514,7 +1453,7 @@
   grid-column: 2;
   margin: 0.1rem 0 0;
   font-size: 1.25rem;
-  font-weight: 850;
+  font-weight: 600;
 }
 
 .sa-lots-table {
@@ -1543,7 +1482,7 @@
 .sa-lots-info p {
   margin: 0;
   color: color-mix(in srgb, var(--sa-info) 80%, var(--sa-text));
-  font-weight: 850;
+  font-weight: 600;
 }
 
 .sa-lots-info span {
@@ -1621,7 +1560,7 @@
 .sa-option-card__title {
   color: var(--sa-text);
   font-size: 0.9rem;
-  font-weight: 850;
+  font-weight: 600;
 }
 
 .sa-option-card__description {
@@ -1728,16 +1667,16 @@
   display: grid;
   gap: 0.12rem;
   color: #ffffff !important;
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: 0.09em;
   line-height: 1;
 }
 
 .org-admin-sidebar__brand-text small {
-  color: var(--oa-accent);
+  color: var(--theme-on-chrome);
   font-size: 0.68rem;
-  font-weight: 850;
-  letter-spacing: 0.17em;
+  font-weight: 600;
+  letter-spacing: 0.025em;
 }
 
 .org-admin-sidebar__nav {
@@ -1754,8 +1693,8 @@
   margin: 0 0 0.55rem 0.4rem;
   color: var(--oa-soft);
   font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.18em;
+  font-weight: 600;
+  letter-spacing: 0.025em;
   text-transform: uppercase;
 }
 
@@ -1830,7 +1769,7 @@
   background: #00675a;
   color: #ffffff;
   font-size: 0.8rem;
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: 0.02em;
 }
 
@@ -1871,7 +1810,7 @@
 
 .org-admin-v2 h1 {
   font-size: clamp(1.55rem, 2.2vw, 2rem);
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .org-admin-v2 .org-admin-topbar h1 {
@@ -1885,12 +1824,12 @@
 
 .org-admin-v2 h2 {
   font-size: clamp(1.45rem, 2vw, 1.82rem);
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .org-admin-v2 h3 {
   color: var(--oa-text);
-  font-weight: 760;
+  font-weight: 600;
 }
 
 .org-admin-v2 .surface,
@@ -1921,30 +1860,22 @@
   box-shadow: var(--oa-shadow) !important;
 }
 
-.org-admin-v2 .admin-toolbar,
-.org-admin-v2 [class*="bg-slate-50"],
-.org-admin-v2 [class*="bg-neutral-50"] {
+.org-admin-v2 .admin-toolbar:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 [class*="bg-slate-50"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 [class*="bg-neutral-50"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   border-color: var(--oa-line);
 }
 
-.org-admin-v2 .admin-stat,
-.org-admin-v2 .metric-card,
-.org-admin-v2 [class*="shadow-"][class*="border"],
-.org-admin-v2 [class*="ring-inset"][class*="ring-slate-200"] {
+.org-admin-v2 .admin-stat:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 .metric-card:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 [class*="shadow-"][class*="border"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 [class*="ring-inset"][class*="ring-slate-200"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   border-color: var(--oa-line) !important;
 }
 
 .org-admin-v2 .btn-primary,
 .org-admin-v2 .btn-success {
   border-radius: 0.45rem;
-  background: var(--oa-brand) !important;
-  box-shadow: 0 14px 24px -18px rgba(0, 82, 71, 0.72);
-}
-
-.org-admin-v2 .btn-primary:hover,
-.org-admin-v2 .btn-success:hover {
-  background: var(--oa-brand-strong) !important;
-  transform: translateY(-1px);
 }
 
 .org-admin-v2 .btn-ghost,
@@ -1996,8 +1927,8 @@
 .org-admin-v2 th {
   color: var(--oa-soft) !important;
   font-size: 0.68rem !important;
-  font-weight: 900 !important;
-  letter-spacing: 0.16em !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.025em !important;
 }
 
 .org-admin-v2 td {
@@ -2012,20 +1943,20 @@
   background: color-mix(in srgb, var(--oa-brand) 9%, var(--oa-panel)) !important;
 }
 
-.org-admin-v2 .status-badge,
-.org-admin-v2 [class*="rounded-full"][class*="bg-emerald"],
-.org-admin-v2 [class*="rounded-full"][class*="bg-amber"],
-.org-admin-v2 [class*="rounded-full"][class*="bg-rose"],
-.org-admin-v2 [class*="rounded-full"][class*="bg-red"],
-.org-admin-v2 [class*="rounded-full"][class*="bg-slate"] {
+.org-admin-v2 .status-badge:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 [class*="rounded-full"][class*="bg-emerald"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 [class*="rounded-full"][class*="bg-amber"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 [class*="rounded-full"][class*="bg-rose"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 [class*="rounded-full"][class*="bg-red"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 [class*="rounded-full"][class*="bg-slate"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   border-radius: 999px !important;
-  font-weight: 800;
+  font-weight: 600;
 }
 
-.org-admin-v2 [role="tab"],
-.org-admin-v2 .builder-device,
-.org-admin-v2 button[class*="rounded-md"],
-.org-admin-v2 button[class*="rounded-lg"] {
+.org-admin-v2 [role="tab"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 .builder-device:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 button[class*="rounded-md"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 button[class*="rounded-lg"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   border-radius: 0.45rem;
 }
 
@@ -2139,11 +2070,13 @@ body,
 }
 
 body {
-  font-family: "Source Sans 3", system-ui, sans-serif;
+  font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--tone-ivory);
   color: var(--tone-ink);
+  font-size: 1rem;
+  line-height: 1.6;
 }
 
 body::before {
@@ -2151,12 +2084,11 @@ body::before {
   position: fixed;
   inset: 0;
   background:
-    radial-gradient(circle at 15% 10%, rgba(198, 160, 79, 0.12), transparent 40%),
-    radial-gradient(circle at 90% 20%, rgba(15, 61, 58, 0.10), transparent 45%),
-    radial-gradient(circle at 50% 85%, rgba(210, 112, 90, 0.10), transparent 45%);
+    none;
   opacity: 0.7;
   z-index: -20;
   pointer-events: none;
+  display: none;
 }
 
 ::selection {
@@ -2174,7 +2106,7 @@ body::before {
 
   .section-heading {
     @apply text-3xl font-semibold text-neutral-900 md:text-4xl;
-    font-family: "Source Serif 4", serif;
+    font-family: var(--font-ui);
     letter-spacing: -0.015em;
   }
 
@@ -2186,15 +2118,13 @@ body::before {
 
   .surface {
     @apply relative overflow-hidden rounded-xl border border-neutral-200/50 shadow-premium;
-    background: linear-gradient(
-        135deg,
-        rgba(255, 255, 255, 0.98) 0%,
-        rgba(255, 255, 255, 0.94) 45%,
-        rgba(252, 248, 240, 0.96) 100%
-      );
-    -webkit-backdrop-filter: blur(12px);
-    backdrop-filter: blur(12px);
+    background: var(--theme-surface-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
     transition: all 240ms cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: var(--theme-shadow-sm);
+    border-color: var(--theme-border);
+    transform: none;
   }
 
   .surface::after {
@@ -2208,20 +2138,29 @@ body::before {
       );
     opacity: 0.6;
     pointer-events: none;
+    display: none;
   }
 
   .surface:hover {
     @apply border-accent/30 -translate-y-[1px];
-    background: #ffffff;
+    background: var(--theme-surface-solid);
     box-shadow: 
-      0 12px 30px -4px rgba(15, 23, 42, 0.08),
-      0 4px 12px -2px rgba(15, 23, 42, 0.03);
+      var(--theme-shadow-sm);
+    border-color: var(--theme-border);
+    transform: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 
   .surface-strong {
     @apply relative overflow-hidden rounded-2xl border border-neutral-200/60 shadow-premium-lg;
-    background: #ffffff;
+    background: var(--theme-surface-solid);
     transition: all 240ms cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: var(--theme-shadow-sm);
+    border-color: var(--theme-border);
+    transform: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 
   .surface-strong::after {
@@ -2234,13 +2173,18 @@ body::before {
         transparent 50%
       );
     pointer-events: none;
+    display: none;
   }
 
   .surface-strong:hover {
     @apply border-accent/35;
     box-shadow: 
-      0 20px 40px -8px rgba(15, 23, 42, 0.12),
-      0 8px 16px -4px rgba(15, 23, 42, 0.04);
+      var(--theme-shadow-sm);
+    background: var(--theme-surface-solid);
+    border-color: var(--theme-border);
+    transform: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 
   .modal-panel {
@@ -2266,17 +2210,10 @@ body::before {
 
   .btn-primary {
     @apply relative inline-flex items-center justify-center overflow-hidden rounded-lg px-6 py-2.5 text-sm font-semibold text-white transition-all duration-200;
-    background: linear-gradient(135deg, #0f3d3a 0%, #1e6f67 100%);
-    box-shadow: 
-      0 1px 2px 0 rgba(0, 0, 0, 0.05),
-      0 4px 12px -2px rgba(15, 61, 58, 0.25);
   }
 
   .btn-primary:hover {
     @apply -translate-y-px brightness-105 shadow-lg;
-    box-shadow: 
-      0 8px 20px -4px rgba(15, 61, 58, 0.3),
-      0 0 0 1px rgba(255, 255, 255, 0.1) inset;
   }
 
   .btn-primary:focus-visible {
@@ -2480,8 +2417,7 @@ body::before {
     @apply mx-auto flex max-w-xl items-stretch gap-2 rounded-[2rem] border border-white/70 px-2 py-2 shadow-2xl;
     pointer-events: auto;
     background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(248, 245, 238, 0.96)),
-      radial-gradient(circle at top, rgba(198, 160, 79, 0.12), transparent 48%);
+      var(--theme-surface-solid);
     -webkit-backdrop-filter: blur(18px);
     backdrop-filter: blur(18px);
     box-shadow:
@@ -2539,8 +2475,7 @@ body::before {
   .mobile-dashboard-sheet__panel {
     @apply absolute bottom-0 left-0 right-0 flex flex-col overflow-hidden rounded-t-[2rem] border border-white/60 px-5 pt-3 shadow-2xl;
     background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(251, 248, 241, 0.97)),
-      radial-gradient(circle at top, rgba(198, 160, 79, 0.16), transparent 46%);
+      var(--theme-surface-solid);
     max-height: calc(100dvh - max(0.75rem, env(safe-area-inset-top, 0px)));
     animation: mobile-dashboard-sheet-in 280ms cubic-bezier(0.16, 1, 0.3, 1);
   }
@@ -2559,7 +2494,7 @@ body::before {
 
   .mobile-dashboard-sheet__title {
     @apply mt-2 text-xl font-bold tracking-tight text-neutral-900;
-    font-family: "Source Serif 4", serif;
+    font-family: var(--font-ui);
   }
 
   .mobile-dashboard-sheet__close {
@@ -2871,11 +2806,6 @@ body.dashboard-perf-mode .surface-strong:hover {
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
 }
 
-body.dashboard-perf-mode .btn-primary:hover,
-body.dashboard-perf-mode .btn-ghost:hover {
-  transform: none;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .member-card-flip,
   .member-card-flip-stage,
@@ -2891,15 +2821,15 @@ body.dashboard-perf-mode .btn-ghost:hover {
 /* Public-only redesign */
 
 :root {
-  --public-bg: #f2f6f7;
-  --public-bg-soft: #e6f0f2;
-  --public-ink: #112729;
-  --public-muted: #4f666a;
-  --public-line: rgba(16, 39, 42, 0.12);
-  --public-brand: #1f5e63;
-  --public-brand-strong: #18484b;
-  --public-accent: #d2b071;
-  --public-card: rgba(255, 255, 255, 0.84);
+  --public-bg: var(--theme-page-bg);
+  --public-bg-soft: var(--theme-bg-soft);
+  --public-ink: var(--theme-text);
+  --public-muted: var(--theme-text-muted);
+  --public-line: var(--theme-border);
+  --public-brand: var(--theme-brand);
+  --public-brand-strong: var(--theme-brand-strong);
+  --public-accent: var(--theme-accent);
+  --public-card: var(--theme-surface-solid);
   --public-radius: 1.25rem;
   --public-micro: 160ms;
   --public-ui: 300ms;
@@ -2914,7 +2844,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   min-height: 100vh;
   flex-direction: column;
   color: var(--public-ink);
-  font-family: "Manrope", "Source Sans 3", system-ui, sans-serif;
+  font-family: var(--font-ui);
 }
 
 .public-shell::before {
@@ -2927,6 +2857,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
     radial-gradient(circle at 6% 8%, rgba(210, 176, 113, 0.19), transparent 36%),
     radial-gradient(circle at 92% 12%, rgba(31, 94, 99, 0.2), transparent 40%),
     linear-gradient(165deg, var(--public-bg) 0%, #f7fafb 45%, #ecf3f4 100%);
+  display: none;
 }
 
 .public-site-glow {
@@ -3002,12 +2933,12 @@ body.dashboard-perf-mode .btn-ghost:hover {
 
 .public-shell .section-title {
   font-size: 0.68rem;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.025em;
   color: rgba(17, 39, 41, 0.58);
 }
 
 .public-shell .section-heading {
-  font-family: "Manrope", "Source Sans 3", system-ui, sans-serif;
+  font-family: var(--font-ui);
   font-size: clamp(1.95rem, 4.4vw, 3.1rem);
   line-height: 1.08;
   letter-spacing: -0.03em;
@@ -3026,13 +2957,8 @@ body.dashboard-perf-mode .btn-ghost:hover {
 .public-shell .surface-strong {
   border-radius: var(--public-radius);
   border: 1px solid var(--public-line);
-  background: linear-gradient(
-    162deg,
-    rgba(255, 255, 255, 0.93) 0%,
-    rgba(255, 255, 255, 0.84) 62%,
-    rgba(245, 251, 252, 0.72) 100%
-  );
-  box-shadow: 0 22px 50px rgba(13, 37, 40, 0.09);
+  background: var(--theme-surface-solid);
+  box-shadow: var(--theme-shadow-sm);
   transition:
     transform var(--public-micro) var(--public-ease),
     box-shadow var(--public-micro) var(--public-ease),
@@ -3040,6 +2966,8 @@ body.dashboard-perf-mode .btn-ghost:hover {
     background var(--public-micro) var(--public-ease);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
+  border-color: var(--theme-border);
+  transform: none;
 }
 
 .public-shell .surface::after,
@@ -3049,35 +2977,21 @@ body.dashboard-perf-mode .btn-ghost:hover {
 
 .public-shell .surface:hover,
 .public-shell .surface-strong:hover {
-  transform: translateY(-2px);
-  border-color: rgba(31, 94, 99, 0.26);
-  box-shadow: 0 28px 56px rgba(10, 30, 33, 0.14);
+  transform: none;
+  border-color: var(--theme-border);
+  box-shadow: var(--theme-shadow-sm);
+  background: var(--theme-surface-solid);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .public-shell .btn-primary {
   border: 1px solid rgba(27, 63, 173, 0.48);
   border-radius: 0.78rem;
-  color: #ffffff;
-  background: linear-gradient(132deg, #2348cc 0%, #3d61dd 62%, #d5a81c 100%);
-  box-shadow:
-    0 12px 24px rgba(35, 63, 161, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.22);
   transition:
     transform var(--public-micro) var(--public-ease),
     box-shadow var(--public-micro) var(--public-ease),
     filter var(--public-micro) var(--public-ease);
-}
-
-.public-shell .btn-primary:hover {
-  transform: translateY(-1px);
-  filter: saturate(1.04);
-  box-shadow:
-    0 14px 30px rgba(35, 63, 161, 0.34),
-    0 0 0 1px rgba(255, 255, 255, 0.14) inset;
-}
-
-.public-shell .btn-primary:active {
-  transform: translateY(0);
 }
 
 .public-shell .btn-primary:focus-visible,
@@ -3087,7 +3001,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
 .public-shell input:focus-visible,
 .public-shell select:focus-visible,
 .public-shell textarea:focus-visible {
-  outline: 2px solid rgba(210, 176, 113, 0.9);
+  outline: 2px solid var(--theme-brand);
   outline-offset: 2px;
   box-shadow: none;
 }
@@ -3142,11 +3056,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   top: 0;
   z-index: 48;
   border-bottom: 1px solid rgba(255, 255, 255, 0.5);
-  background: linear-gradient(
-    180deg,
-    rgba(242, 246, 247, 0.92) 0%,
-    rgba(242, 246, 247, 0.74) 100%
-  );
+  background: var(--theme-surface-solid);
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
   transition:
@@ -3158,7 +3068,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
 .public-header.is-shrunk {
   border-color: rgba(17, 39, 41, 0.12);
   box-shadow: 0 12px 35px rgba(15, 35, 38, 0.14);
-  background: rgba(246, 250, 250, 0.92);
+  background: var(--theme-surface-solid);
 }
 
 .public-header-inner {
@@ -3191,10 +3101,10 @@ body.dashboard-perf-mode .btn-ghost:hover {
 
 .public-brand-name {
   display: block;
-  font-family: "Manrope", "Source Sans 3", system-ui, sans-serif;
+  font-family: var(--font-ui);
   font-size: 1.12rem;
   letter-spacing: 0.01em;
-  font-weight: 750;
+  font-weight: 600;
   color: #0f2527;
   white-space: nowrap;
 }
@@ -3267,7 +3177,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   background: linear-gradient(135deg, rgba(253, 241, 212, 0.95), rgba(248, 223, 164, 0.92));
   color: #12393e;
   font-size: 0.68rem;
-  font-weight: 720;
+  font-weight: 600;
   letter-spacing: 0.04em;
   padding: 0.18rem 0.58rem;
   box-shadow: 0 0 14px rgba(210, 176, 113, 0.3);
@@ -3351,10 +3261,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
 }
 
 .public-menu-toggle::after {
-  opacity: 0.9;
-  background:
-    radial-gradient(circle at 28% 24%, rgba(54, 108, 238, 0.22), transparent 42%),
-    radial-gradient(circle at 74% 78%, rgba(227, 179, 32, 0.24), transparent 44%);
+  display: none;
   transition: opacity 180ms ease, transform 180ms ease;
 }
 
@@ -3434,7 +3341,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   margin-top: 3.2rem;
   border-top: 1px solid rgba(17, 39, 41, 0.11);
   background:
-    linear-gradient(180deg, rgba(240, 246, 247, 0.76) 0%, rgba(235, 244, 245, 0.94) 100%);
+    var(--theme-surface-solid);
 }
 
 .public-footer-grid {
@@ -3444,7 +3351,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
 }
 
 .public-footer-brand {
-  font-family: "Fraunces", "Source Serif 4", serif;
+  font-family: var(--font-ui);
   font-size: 1.08rem;
   color: #153135;
 }
@@ -3610,11 +3517,11 @@ body.dashboard-perf-mode .btn-ghost:hover {
   margin-top: 1rem;
   max-width: 56rem;
   margin-inline: auto;
-  font-family: "Manrope", "Sora", "Source Sans 3", system-ui, sans-serif;
+  font-family: var(--font-ui);
   font-size: clamp(2.05rem, 5vw, 3.85rem);
   line-height: 1.07;
   letter-spacing: -0.028em;
-  font-weight: 760;
+  font-weight: 600;
   color: #f8fbff;
   background: none;
   -webkit-text-fill-color: currentColor;
@@ -3624,7 +3531,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
 .public-hero-content h1 {
   margin-top: 0.9rem;
   max-width: none;
-  font-family: "Manrope", "Sora", "Source Sans 3", system-ui, sans-serif;
+  font-family: var(--font-ui);
   font-size: clamp(2.2rem, 6.1vw, 5rem);
   line-height: 1.02;
   letter-spacing: -0.034em;
@@ -4646,7 +4553,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   pointer-events: none;
   text-align: center;
   text-transform: uppercase;
-  font-family: "Orbitron", "Sora", "Source Sans 3", system-ui, sans-serif;
+  font-family: var(--font-ui);
 }
 
 .affiliazione-hud-name-kicker {
@@ -4795,24 +4702,24 @@ body.dashboard-perf-mode .btn-ghost:hover {
 .signup-wizard-shell {
   position: relative;
   isolation: isolate;
-  --signup-shell-glow-top: rgba(99, 102, 241, 0.08);
-  --signup-shell-glow-left: rgba(148, 163, 184, 0.12);
-  --signup-shell-glow-right: rgba(129, 140, 248, 0.08);
-  --signup-card-border: rgba(226, 232, 240, 0.92);
-  --signup-card-bg-top: rgba(255, 255, 255, 0.98);
-  --signup-card-bg-bottom: rgba(255, 255, 255, 0.94);
-  --signup-card-shadow-primary: rgba(79, 70, 229, 0.24);
-  --signup-card-shadow-secondary: rgba(15, 23, 42, 0.2);
-  --signup-card-sheen: linear-gradient(145deg, rgba(255, 255, 255, 0.7), transparent 30%);
-  --signup-secondary-text: #475569;
-  --signup-secondary-border: rgba(203, 213, 225, 0.95);
-  --signup-secondary-bg: rgba(255, 255, 255, 0.9);
-  --signup-secondary-shadow: rgba(15, 23, 42, 0.55);
-  --signup-secondary-hover-border: rgba(165, 180, 252, 0.9);
-  --signup-secondary-hover-bg: rgba(238, 242, 255, 0.88);
-  --signup-secondary-hover-text: #312e81;
-  --signup-focus-ring: rgba(99, 102, 241, 0.14);
-  --signup-focus-outline: rgba(99, 102, 241, 0.2);
+  --signup-shell-glow-top: transparent;
+  --signup-shell-glow-left: transparent;
+  --signup-shell-glow-right: transparent;
+  --signup-card-border: var(--theme-border);
+  --signup-card-bg-top: var(--theme-surface-solid);
+  --signup-card-bg-bottom: var(--theme-surface-solid);
+  --signup-card-shadow-primary: transparent;
+  --signup-card-shadow-secondary: transparent;
+  --signup-card-sheen: none;
+  --signup-secondary-text: var(--theme-text);
+  --signup-secondary-border: var(--theme-border);
+  --signup-secondary-bg: var(--theme-surface-solid);
+  --signup-secondary-shadow: transparent;
+  --signup-secondary-hover-border: var(--theme-border-strong);
+  --signup-secondary-hover-bg: var(--theme-hover);
+  --signup-secondary-hover-text: var(--theme-text);
+  --signup-focus-ring: var(--theme-focus);
+  --signup-focus-outline: var(--theme-brand);
 }
 
 .signup-wizard-shell::before {
@@ -4825,46 +4732,46 @@ body.dashboard-perf-mode .btn-ghost:hover {
     radial-gradient(circle at 50% 6%, var(--signup-shell-glow-top), transparent 22rem),
     radial-gradient(circle at 12% 20%, var(--signup-shell-glow-left), transparent 24rem),
     radial-gradient(circle at 88% 26%, var(--signup-shell-glow-right), transparent 26rem);
+  display: none;
 }
 
 :root[data-theme="dark"] .signup-wizard-shell .signup-adults-only-banner {
-  border-color: color-mix(in srgb, var(--theme-danger) 46%, var(--theme-border)) !important;
+  border-color: color-mix(in srgb, var(--theme-warning) 46%, var(--theme-border)) !important;
   background:
     linear-gradient(
       135deg,
-      color-mix(in srgb, var(--theme-danger) 18%, var(--theme-surface-elevated)) 0%,
+      color-mix(in srgb, var(--theme-warning) 18%, var(--theme-surface-elevated)) 0%,
       color-mix(in srgb, var(--theme-panel-bg) 94%, #2b0f18) 100%
     ) !important;
   box-shadow:
     0 28px 58px -38px rgba(0, 0, 0, 0.9),
-    0 0 0 1px color-mix(in srgb, var(--theme-danger) 16%, transparent) !important;
+    0 0 0 1px color-mix(in srgb, var(--theme-warning) 16%, transparent) !important;
 }
 
 :root[data-theme="dark"] .signup-wizard-shell .signup-adults-only-banner__icon {
-  background: color-mix(in srgb, var(--theme-danger) 20%, var(--theme-surface-solid)) !important;
-  color: color-mix(in srgb, var(--theme-danger) 72%, white) !important;
+  background: color-mix(in srgb, var(--theme-warning) 20%, var(--theme-surface-solid)) !important;
+  color: color-mix(in srgb, var(--theme-warning) 72%, white) !important;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
     0 14px 28px -22px rgba(0, 0, 0, 0.9) !important;
 }
 
 :root[data-theme="dark"] .signup-wizard-shell .signup-adults-only-banner__title {
-  color: #fff7f8 !important;
+  color: var(--theme-text) !important;
 }
 
 :root[data-theme="dark"] .signup-wizard-shell .signup-adults-only-banner__copy {
-  color: color-mix(in srgb, var(--theme-danger) 32%, #f8dce1) !important;
+  color: var(--theme-text-muted) !important;
 }
 
 .signup-wizard-card {
   position: relative;
   overflow: hidden;
-  border-radius: 2rem;
+  border-radius: 1rem;
   border: 1px solid var(--signup-card-border);
-  background: linear-gradient(180deg, var(--signup-card-bg-top), var(--signup-card-bg-bottom));
+  background: var(--theme-surface-solid);
   box-shadow:
-    0 34px 80px -54px var(--signup-card-shadow-primary),
-    0 26px 54px -46px var(--signup-card-shadow-secondary);
+    var(--theme-shadow-sm);
 }
 
 .signup-wizard-card::after {
@@ -4873,26 +4780,14 @@ body.dashboard-perf-mode .btn-ghost:hover {
   inset: 0;
   pointer-events: none;
   background: var(--signup-card-sheen);
+  display: none;
 }
 
 .signup-wizard-primary {
-  color: #fff;
-  background: linear-gradient(135deg, #5b4cf4 0%, #4f46e5 52%, #4338ca 100%);
-  box-shadow:
-    0 22px 45px -30px rgba(79, 70, 229, 0.72),
-    inset 0 1px 0 rgba(255, 255, 255, 0.16);
   transition:
     transform 180ms ease,
     box-shadow 180ms ease,
     filter 180ms ease;
-}
-
-.signup-wizard-primary:hover {
-  transform: translateY(-1px);
-  filter: brightness(1.03);
-  box-shadow:
-    0 28px 55px -28px rgba(79, 70, 229, 0.74),
-    inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 .signup-wizard-primary:focus-visible,
@@ -4941,8 +4836,8 @@ body.dashboard-perf-mode .btn-ghost:hover {
   margin: 0;
   color: var(--oa-muted);
   font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.18em;
+  font-weight: 600;
+  letter-spacing: 0.025em;
   text-transform: uppercase;
 }
 
@@ -4950,7 +4845,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   margin: 0.25rem 0 0;
   color: var(--oa-text);
   font-size: clamp(1.75rem, 2.3vw, 2.35rem);
-  font-weight: 780;
+  font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.12;
 }
@@ -4996,7 +4891,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   margin: 0.25rem 0 0;
   color: var(--oa-text);
   font-size: 1.05rem;
-  font-weight: 760;
+  font-weight: 600;
   letter-spacing: -0.01em;
 }
 
@@ -5033,13 +4928,13 @@ body.dashboard-perf-mode .btn-ghost:hover {
 .org-admin-v2 .org-kpi-card__label {
   color: var(--oa-muted);
   font-size: 0.78rem;
-  font-weight: 760;
+  font-weight: 600;
 }
 
 .org-admin-v2 .org-kpi-card__value {
   color: var(--oa-text);
   font-size: clamp(1.65rem, 2.1vw, 2.25rem);
-  font-weight: 780;
+  font-weight: 600;
   letter-spacing: -0.035em;
   line-height: 1;
 }
@@ -5061,7 +4956,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   background: color-mix(in srgb, var(--oa-brand) 15%, var(--oa-panel));
   color: var(--oa-brand-strong);
   font-size: 1.15rem;
-  font-weight: 760;
+  font-weight: 600;
 }
 
 .org-admin-v2 .org-admin-mobile-stats-strip,
@@ -5092,7 +4987,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   right: 7%;
   color: #f8e49d;
   font-size: .58rem;
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: .18em;
   text-shadow: 0 2px 8px rgba(0, 0, 0, .35);
 }
@@ -5132,13 +5027,13 @@ body.dashboard-perf-mode .btn-ghost:hover {
 .org-admin-v2 .card-builder-preview__footer span,
 .org-admin-v2 .card-builder-preview__back-copy span {
   font-size: .58rem;
-  font-weight: 850;
+  font-weight: 600;
   letter-spacing: .16em;
   text-transform: uppercase;
 }
 .org-admin-v2 .card-builder-preview__year strong {
   font-size: clamp(2.25rem, 6vw, 4.6rem);
-  font-weight: 950;
+  font-weight: 600;
   line-height: .9;
   text-shadow: 0 3px 0 rgba(77, 35, 8, .34), 0 10px 16px rgba(0, 0, 0, .25), -1px -1px rgba(255, 246, 174, .32);
 }
@@ -5151,7 +5046,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   padding: .2rem .75rem;
   color: #ffe98f;
   font-style: normal;
-  font-weight: 850;
+  font-weight: 600;
   letter-spacing: .12em;
 }
 .org-admin-v2 .card-builder-preview__identity {
@@ -5212,7 +5107,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   border-radius: 1rem;
   background: #fff;
   color: #111;
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: .25em;
 }
 .org-admin-v2 .card-builder-preview__back-data {
@@ -5243,7 +5138,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
 .org-admin-v2 .card-builder-upload span {
   color: var(--oa-text, #0f172a);
   font-size: .86rem;
-  font-weight: 720;
+  font-weight: 600;
 }
 .org-admin-v2 .card-builder-field input[type="color"] {
   width: 3.8rem;
@@ -5346,7 +5241,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   margin: 0 0 0.45rem;
   color: var(--oa-text);
   font-size: 0.96rem;
-  font-weight: 780;
+  font-weight: 600;
   line-height: 1.2;
 }
 
@@ -5361,7 +5256,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   margin: 0;
   color: var(--oa-text);
   font-size: 2.25rem;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1;
 }
 
@@ -5391,7 +5286,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   color: var(--comm-accent);
   padding: 0.38rem 0.78rem;
   font-size: 0.76rem;
-  font-weight: 780;
+  font-weight: 600;
   line-height: 1;
   white-space: nowrap;
 }
@@ -5477,7 +5372,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   border-radius: 999px;
   padding: 0.25rem 0.62rem;
   font-size: 0.72rem;
-  font-weight: 760;
+  font-weight: 600;
   line-height: 1;
 }
 
@@ -5515,7 +5410,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   border-radius: 0.6rem;
   background: color-mix(in srgb, var(--oa-brand) 15%, var(--oa-panel));
   color: var(--oa-brand-strong);
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .org-admin-v2 .org-action-card__content {
@@ -5527,7 +5422,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
 .org-admin-v2 .org-action-card__title {
   color: var(--oa-text);
   font-size: 0.95rem;
-  font-weight: 760;
+  font-weight: 600;
 }
 
 .org-admin-v2 .org-action-card__description {
@@ -5540,7 +5435,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
 .org-admin-v2 .org-action-card__arrow {
   color: var(--oa-brand-strong);
   font-size: 0.78rem;
-  font-weight: 760;
+  font-weight: 600;
 }
 
 .org-admin-v2 .org-stepper {
@@ -5581,7 +5476,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   background: var(--oa-panel-soft);
   color: var(--oa-muted);
   font-size: 0.82rem;
-  font-weight: 780;
+  font-weight: 600;
 }
 
 .org-admin-v2 .org-stepper__item.is-active .org-stepper__dot,
@@ -5600,7 +5495,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
 .org-admin-v2 .org-stepper__label {
   color: var(--oa-text);
   font-size: 0.86rem;
-  font-weight: 760;
+  font-weight: 600;
 }
 
 .org-admin-v2 .org-stepper__hint {
@@ -5625,7 +5520,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
 .org-admin-v2 .org-empty-state__title {
   margin: 0;
   color: var(--oa-text);
-  font-weight: 760;
+  font-weight: 600;
 }
 
 .org-admin-v2 .org-empty-state__description {
@@ -5696,7 +5591,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
 .org-admin-v2 .booking-day-rail__item span,
 .org-admin-v2 .booking-day-rail__item small {
   font-size: 0.68rem;
-  font-weight: 850;
+  font-weight: 600;
   text-transform: uppercase;
 }
 
@@ -5704,7 +5599,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   margin-block: 0.16rem;
   color: var(--oa-text);
   font-size: 1.35rem;
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .org-admin-v2 .booking-day-rail__item em,
@@ -5712,7 +5607,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   position: absolute;
   border-radius: 999px;
   font-style: normal;
-  font-weight: 900;
+  font-weight: 600;
   line-height: 1;
 }
 
@@ -5766,7 +5661,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
 
 .org-admin-v2 .booking-request-strip p {
   font-size: 0.88rem;
-  font-weight: 900;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -5775,7 +5670,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   display: block;
   margin-top: 0.1rem;
   font-size: 1rem;
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .org-admin-v2 .booking-request-strip__rooms {
@@ -5790,7 +5685,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   background: rgba(255, 255, 255, 0.46);
   padding: 0.35rem 0.65rem;
   font-size: 0.74rem;
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .org-admin-v2 .booking-agenda-toolbar {
@@ -5821,7 +5716,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   background: var(--oa-panel-muted);
   color: var(--oa-text);
   font-size: 0.88rem;
-  font-weight: 850;
+  font-weight: 600;
 }
 
 .org-admin-v2 .booking-agenda-toolbar__day button {
@@ -5850,7 +5745,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
 
 .org-admin-v2 .booking-day-panel__eyebrow {
   font-size: 0.72rem;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #bff4db;
@@ -5859,7 +5754,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
 .org-admin-v2 .booking-day-panel__title {
   margin-top: 0.1rem;
   font-size: clamp(1.35rem, 2vw, 1.9rem);
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1;
   color: #ffffff;
 }
@@ -5884,7 +5779,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   background: rgba(255, 255, 255, 0.14);
   color: #ffffff;
   font-size: 1.2rem;
-  font-weight: 800;
+  font-weight: 600;
   transition: background 160ms ease, transform 160ms ease;
 }
 
@@ -5912,7 +5807,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   padding: 0.32rem 0.75rem;
   color: #ffffff;
   font-size: 0.88rem;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .org-admin-v2 .booking-day-panel__filters {
@@ -5925,7 +5820,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   border-radius: 8px;
   padding: 0.55rem 1.05rem;
   color: #ffffff;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1;
   transition: background 160ms ease, border-color 160ms ease;
 }
@@ -5998,7 +5893,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   background: #e0fbef;
   color: #0d755b;
   font-size: 0.85rem;
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .org-admin-v2 .booking-day-row__main {
@@ -6023,7 +5918,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   overflow: hidden;
   color: var(--oa-muted);
   font-size: 0.82rem;
-  font-weight: 850;
+  font-weight: 600;
   line-height: 1.1;
   white-space: nowrap;
 }
@@ -6074,7 +5969,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   overflow: hidden;
   color: var(--oa-text);
   font-size: 1.02rem;
-  font-weight: 900;
+  font-weight: 600;
   line-height: 1.15;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -6087,7 +5982,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   padding: 0.18rem 0.45rem;
   color: #075985;
   font-size: 0.62rem;
-  font-weight: 900;
+  font-weight: 600;
   line-height: 1;
   white-space: nowrap;
 }
@@ -6100,7 +5995,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   border-radius: 999px;
   padding: 0.16rem 0.42rem 0.16rem 0.32rem;
   font-size: 0.62rem;
-  font-weight: 900;
+  font-weight: 600;
   line-height: 1;
   white-space: nowrap;
 }
@@ -6207,7 +6102,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
 .org-admin-v2 .booking-day-row__chevron {
   color: var(--oa-muted);
   font-size: 0.95rem;
-  font-weight: 900;
+  font-weight: 600;
   transition: transform 160ms ease;
 }
 
@@ -6263,8 +6158,8 @@ body.dashboard-perf-mode .btn-ghost:hover {
   white-space: nowrap;
 }
 
-.org-admin-v2 .booking-day-row__expanded .space-y-6 > div p.text-\[10px\] {
-  letter-spacing: 0.12em;
+.org-admin-v2 .booking-day-row__expanded .space-y-6 > div p.text-\[10px\]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
+  letter-spacing: 0.025em;
 }
 
 .org-admin-v2 .booking-inline-actions {
@@ -6280,7 +6175,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   border-radius: 8px;
   color: var(--oa-text);
   font-size: 0.92rem;
-  font-weight: 850;
+  font-weight: 600;
   transition: background 160ms ease, border-color 160ms ease;
 }
 
@@ -6313,7 +6208,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   border-radius: 999px;
   padding: 0.18rem 0.62rem;
   font-size: 0.76rem;
-  font-weight: 900;
+  font-weight: 600;
   line-height: 1;
   white-space: nowrap;
 }
@@ -6365,8 +6260,8 @@ body.dashboard-perf-mode .btn-ghost:hover {
 .org-admin-v2 .booking-calendar-day__more {
   color: var(--oa-muted);
   font-size: 0.62rem;
-  font-weight: 900;
-  letter-spacing: 0.12em;
+  font-weight: 600;
+  letter-spacing: 0.025em;
   text-transform: uppercase;
 }
 
@@ -6392,7 +6287,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   background: var(--oa-panel-muted);
   color: var(--oa-muted);
   font-size: 0.62rem;
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -6414,7 +6309,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   padding: 0.45rem 0.55rem;
   color: var(--oa-text);
   font-size: 0.78rem;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .org-admin-v2 .booking-calendar-mini-row span:last-child {
@@ -6454,8 +6349,8 @@ body.dashboard-perf-mode .btn-ghost:hover {
   margin: 0;
   color: var(--oa-muted);
   font-size: 0.68rem;
-  font-weight: 900;
-  letter-spacing: 0.14em;
+  font-weight: 600;
+  letter-spacing: 0.025em;
   text-transform: uppercase;
 }
 
@@ -6489,7 +6384,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   background: var(--oa-panel);
   color: var(--oa-muted);
   font-size: 0.76rem;
-  font-weight: 900;
+  font-weight: 600;
   line-height: 1;
   transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
 }
@@ -6518,7 +6413,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   color: var(--oa-brand);
   padding: 0 0.9rem;
   font-size: 0.82rem;
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .org-admin-v2 .booking-management-stack {
@@ -6541,10 +6436,10 @@ body.dashboard-perf-mode .btn-ghost:hover {
   min-height: 2.45rem;
   border-radius: 10px;
   background: var(--oa-brand, #0f766e);
-  color: #ffffff;
+  color: var(--theme-on-brand);
   padding: 0 0.95rem;
   font-size: 0.86rem;
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .org-admin-v2 .booking-management-editor-hint,
@@ -6563,7 +6458,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
 .org-admin-v2 .booking-management-editor-hint p {
   color: var(--oa-text, #17211f);
   font-size: 0.92rem;
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .org-admin-v2 .booking-management-editor-hint span {
@@ -6601,7 +6496,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   display: block;
   color: var(--oa-text, #17211f);
   font-size: 0.98rem;
-  font-weight: 850;
+  font-weight: 600;
 }
 
 .org-admin-v2 .booking-management-row small {
@@ -6618,8 +6513,8 @@ body.dashboard-perf-mode .btn-ghost:hover {
   padding: 0.35rem 0.65rem;
   font-size: 0.64rem;
   font-style: normal;
-  font-weight: 900;
-  letter-spacing: 0.12em;
+  font-weight: 600;
+  letter-spacing: 0.025em;
   text-transform: uppercase;
 }
 
@@ -6663,7 +6558,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   color: var(--oa-text, #17211f);
   padding: 0.62rem 0.78rem;
   font-size: 0.84rem;
-  font-weight: 850;
+  font-weight: 600;
 }
 
 .org-admin-v2 .booking-assignment-picker__tables button {
@@ -6810,14 +6705,14 @@ body.dashboard-perf-mode .btn-ghost:hover {
   .org-admin-v2 .booking-mobile-day-rail__item span,
   .org-admin-v2 .booking-mobile-day-rail__item small {
     font-size: 0.62rem;
-    font-weight: 850;
+    font-weight: 600;
     text-transform: uppercase;
   }
 
   .org-admin-v2 .booking-mobile-day-rail__item strong {
     margin-block: 0.12rem;
     font-size: 1.25rem;
-    font-weight: 900;
+    font-weight: 600;
   }
 
   .org-admin-v2 .booking-mobile-day-rail__item em,
@@ -6825,7 +6720,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
     position: absolute;
     border-radius: 999px;
     font-style: normal;
-    font-weight: 900;
+    font-weight: 600;
     line-height: 1;
   }
 
@@ -6869,7 +6764,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
     background: rgba(255, 255, 255, 0.12);
     color: #ffffff;
     font-size: 0.92rem;
-    font-weight: 900;
+    font-weight: 600;
   }
 
   .org-admin-v2 .booking-mobile-day-switcher__button {
@@ -7013,8 +6908,8 @@ body.dashboard-perf-mode .btn-ghost:hover {
   .org-admin-v2 .booking-request-mobile-card__eyebrow {
     color: var(--oa-muted);
     font-size: 0.62rem;
-    font-weight: 900;
-    letter-spacing: 0.12em;
+    font-weight: 600;
+    letter-spacing: 0.025em;
     text-transform: uppercase;
   }
 
@@ -7022,14 +6917,14 @@ body.dashboard-perf-mode .btn-ghost:hover {
     margin-top: 0.16rem;
     color: var(--oa-text);
     font-size: 1rem;
-    font-weight: 900;
+    font-weight: 600;
     line-height: 1.15;
   }
 
   .org-admin-v2 .booking-request-mobile-card p {
     color: var(--oa-muted);
     font-size: 0.78rem;
-    font-weight: 750;
+    font-weight: 600;
   }
 
   .org-admin-v2 .booking-request-mobile-card__facts,
@@ -7060,8 +6955,8 @@ body.dashboard-perf-mode .btn-ghost:hover {
     display: block;
     color: var(--oa-muted);
     font-size: 0.58rem;
-    font-weight: 900;
-    letter-spacing: 0.12em;
+    font-weight: 600;
+    letter-spacing: 0.025em;
     text-transform: uppercase;
   }
 
@@ -7071,7 +6966,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
     margin-top: 0.22rem;
     color: var(--oa-text);
     font-size: 0.86rem;
-    font-weight: 850;
+    font-weight: 600;
     line-height: 1.35;
   }
 
@@ -7081,7 +6976,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
     padding: 0.7rem;
     color: #8a1f1a;
     font-size: 0.84rem;
-    font-weight: 800;
+    font-weight: 600;
     line-height: 1.45;
   }
 
@@ -7094,7 +6989,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
 
   .org-admin-v2 .booking-request-mobile-card__reason.is-unread-note span {
     color: inherit;
-    font-weight: 750;
+    font-weight: 600;
   }
 
   .org-admin-v2 .booking-request-mobile-card__reason.is-unread-note button {
@@ -7103,7 +6998,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
     background: #854d0e;
     color: #ffffff;
     font-size: 0.8rem;
-    font-weight: 900;
+    font-weight: 600;
   }
 
   .org-admin-v2 .booking-request-mobile-card__actions {
@@ -7128,7 +7023,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
     border-radius: 8px;
     padding-inline: 0.75rem;
     font-size: 0.88rem;
-    font-weight: 900;
+    font-weight: 600;
   }
 
   .org-admin-v2 .booking-request-mobile-card__confirm {
@@ -7174,7 +7069,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
     justify-content: center;
     border-radius: 8px;
     font-size: 0.82rem;
-    font-weight: 900;
+    font-weight: 600;
   }
 
   .org-admin-v2 .booking-request-mobile-card__assignment-head button {
@@ -7197,8 +7092,8 @@ body.dashboard-perf-mode .btn-ghost:hover {
   .org-admin-v2 .booking-request-mobile-card__assignment-grid label > span {
     color: var(--oa-muted);
     font-size: 0.62rem;
-    font-weight: 900;
-    letter-spacing: 0.12em;
+    font-weight: 600;
+    letter-spacing: 0.025em;
     text-transform: uppercase;
   }
 
@@ -7208,7 +7103,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
     border-radius: 8px !important;
     padding-inline: 0.75rem;
     font-size: 0.9rem;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   .org-admin-v2 .booking-request-mobile-card__assignment-save {
@@ -7247,15 +7142,15 @@ body.dashboard-perf-mode .btn-ghost:hover {
   .org-admin-v2 .booking-mobile-managed-section__header p {
     color: var(--oa-muted);
     font-size: 0.68rem;
-    font-weight: 900;
-    letter-spacing: 0.12em;
+    font-weight: 600;
+    letter-spacing: 0.025em;
     text-transform: uppercase;
   }
 
   .org-admin-v2 .booking-mobile-managed-section__header h2 {
     color: var(--oa-text);
     font-size: 1.08rem;
-    font-weight: 900;
+    font-weight: 600;
     line-height: 1.1;
   }
 
@@ -7266,7 +7161,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
     padding: 0.35rem 0.65rem;
     color: var(--oa-text);
     font-size: 0.72rem;
-    font-weight: 900;
+    font-weight: 600;
   }
 
   .org-admin-v2 .booking-mobile-managed-section__empty,
@@ -7280,7 +7175,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
     padding: 0.9rem;
     color: var(--oa-muted);
     font-size: 0.88rem;
-    font-weight: 750;
+    font-weight: 600;
   }
 
   .org-admin-v2 .booking-mobile-managed-section__list {
@@ -7319,7 +7214,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
     overflow: hidden;
     color: var(--oa-text);
     font-size: 1.1rem;
-    font-weight: 900;
+    font-weight: 600;
     line-height: 1.15;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -7333,7 +7228,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
     overflow: hidden;
     color: var(--oa-muted);
     font-size: 0.76rem;
-    font-weight: 800;
+    font-weight: 600;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -7347,7 +7242,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   .org-admin-v2 .booking-mobile-managed-card__side > span:last-child {
     color: var(--oa-muted);
     font-size: 0.76rem;
-    font-weight: 900;
+    font-weight: 600;
     white-space: nowrap;
   }
 
@@ -7496,13 +7391,13 @@ body.dashboard-perf-mode .btn-ghost:hover {
   background: #172923;
 }
 
-:root[data-theme="dark"] .org-admin-v2 .booking-day-row__expanded .bg-amber-50\/50 {
+:root[data-theme="dark"] .org-admin-v2 .booking-day-row__expanded .bg-amber-50\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   background: #2f2920 !important;
   color: #f7d8a8 !important;
 }
 
-:root[data-theme="dark"] .org-admin-v2 .booking-day-row__expanded .text-amber-700,
-:root[data-theme="dark"] .org-admin-v2 .booking-day-row__expanded .text-amber-900 {
+:root[data-theme="dark"] .org-admin-v2 .booking-day-row__expanded .text-amber-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .booking-day-row__expanded .text-amber-900:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: #f7d8a8 !important;
 }
 
@@ -7566,13 +7461,13 @@ body.dashboard-perf-mode .btn-ghost:hover {
   color: var(--fb-text) !important;
 }
 
-.org-admin-v2 .form-builder-shell p,
-.org-admin-v2 .form-builder-item__muted,
-.org-admin-v2 .form-builder-item__hint,
-.org-admin-v2 .form-builder-properties-empty,
-.org-admin-v2 .form-builder-shell .text-slate-500,
-.org-admin-v2 .form-builder-shell .text-slate-400,
-.org-admin-v2 .form-builder-shell .text-neutral-500 {
+.org-admin-v2 .form-builder-shell p:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 .form-builder-item__muted:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 .form-builder-item__hint:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 .form-builder-properties-empty:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 .form-builder-shell .text-slate-500:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 .form-builder-shell .text-slate-400:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+.org-admin-v2 .form-builder-shell .text-neutral-500:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: var(--fb-muted) !important;
 }
 
@@ -7825,21 +7720,21 @@ body.dashboard-perf-mode .btn-ghost:hover {
   }
 }
 
-:root[data-theme="dark"] .org-admin-v2 .form-settings-tab section,
-:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .bg-white,
-:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .bg-neutral-50,
-:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .bg-emerald-50,
-:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .bg-emerald-50\/60,
-:root[data-theme="dark"] .org-admin-v2 .form-settings-tab [class*="bg-[#fc"],
-:root[data-theme="dark"] .org-admin-v2 .form-settings-tab [class*="bg-[#f"] {
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab section:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .bg-white:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .bg-neutral-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .bg-emerald-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .bg-emerald-50\/60:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab [class*="bg-[#fc"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab [class*="bg-[#f"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   background-color: var(--fb-surface) !important;
   background-image: none !important;
   color: var(--fb-text) !important;
 }
 
-:root[data-theme="dark"] .org-admin-v2 .form-settings-tab [class*="border-[#"],
-:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .border-neutral-200,
-:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .border-emerald-200 {
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab [class*="border-[#"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .border-neutral-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .border-emerald-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   border-color: var(--fb-border) !important;
 }
 
@@ -7856,24 +7751,24 @@ body.dashboard-perf-mode .btn-ghost:hover {
   color: color-mix(in srgb, var(--fb-muted) 72%, transparent) !important;
 }
 
-:root[data-theme="dark"] .org-admin-v2 .form-settings-tab label,
-:root[data-theme="dark"] .org-admin-v2 .form-settings-tab h3,
-:root[data-theme="dark"] .org-admin-v2 .form-settings-tab p,
-:root[data-theme="dark"] .org-admin-v2 .form-settings-tab span,
-:root[data-theme="dark"] .org-admin-v2 .form-settings-tab [class*="text-[#"],
-:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-neutral-900,
-:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-neutral-800,
-:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-neutral-700,
-:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-neutral-600,
-:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-emerald-800 {
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab label:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab h3:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab p:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab span:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab [class*="text-[#"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-neutral-900:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-neutral-800:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-neutral-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-neutral-600:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-emerald-800:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: var(--fb-text) !important;
 }
 
-:root[data-theme="dark"] .org-admin-v2 .form-settings-tab label > span:first-child,
-:root[data-theme="dark"] .org-admin-v2 .form-settings-tab [class*="tracking-[0.14em]"],
-:root[data-theme="dark"] .org-admin-v2 .form-settings-tab [class*="tracking-[0.2em]"],
-:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-neutral-500,
-:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-neutral-400 {
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab label > span:first-child:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab [class*="tracking-[0.14em]"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab [class*="tracking-[0.2em]"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-neutral-500:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .form-settings-tab .text-neutral-400:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: var(--fb-muted) !important;
 }
 
@@ -7918,8 +7813,8 @@ body.dashboard-perf-mode .btn-ghost:hover {
 .org-admin-v2 .whatsapp-variable-library__header p {
   color: var(--oa-muted);
   font-size: 0.68rem;
-  font-weight: 900;
-  letter-spacing: 0.14em;
+  font-weight: 600;
+  letter-spacing: 0.025em;
   text-transform: uppercase;
 }
 
@@ -7927,7 +7822,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   margin-top: 0.18rem;
   color: var(--oa-text);
   font-size: 1rem;
-  font-weight: 900;
+  font-weight: 600;
   line-height: 1.2;
 }
 
@@ -7938,7 +7833,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   padding: 0.35rem 0.62rem;
   color: var(--oa-text);
   font-size: 0.78rem;
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .org-admin-v2 .whatsapp-variable-library__groups {
@@ -7959,7 +7854,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
 .org-admin-v2 .whatsapp-variable-library__group-head strong {
   color: var(--oa-text);
   font-size: 0.9rem;
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .org-admin-v2 .whatsapp-variable-library__group-head small {
@@ -7998,7 +7893,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   overflow: hidden;
   color: var(--oa-text);
   font-size: 0.78rem;
-  font-weight: 900;
+  font-weight: 600;
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -8009,7 +7904,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   color: color-mix(in srgb, var(--oa-brand) 82%, var(--oa-text));
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 0.72rem;
-  font-weight: 850;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -8031,21 +7926,21 @@ body.dashboard-perf-mode .btn-ghost:hover {
   color: var(--oa-text, #f8fafc) !important;
 }
 
-:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel h3,
-:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel label,
-:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel .text-slate-950,
-:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel .text-slate-800,
-:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel .text-slate-700 {
+:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel h3:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel label:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel .text-slate-950:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel .text-slate-800:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel .text-slate-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: var(--oa-text, #f8fafc) !important;
 }
 
-:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel p,
-:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel .text-slate-600,
-:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel .text-slate-500 {
+:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel p:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel .text-slate-600:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel .text-slate-500:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: var(--oa-muted, #c3cfdb) !important;
 }
 
-:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel .text-emerald-700 {
+:root[data-theme="dark"] .org-admin-v2 .whatsapp-automations-hub .whatsapp-reminder-panel .text-emerald-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: #5eead4 !important;
 }
 
@@ -8257,7 +8152,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   justify-self: end;
   border-radius: 8px;
   background: var(--oa-brand, #0f766e);
-  color: #ffffff;
+  color: var(--theme-on-brand);
   padding: 0 0.95rem;
   font-size: 0.84rem;
   font-weight: 900;
@@ -8318,7 +8213,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   white-space: nowrap;
   border-radius: 10px;
   background: var(--oa-brand, #0f766e);
-  color: #fff;
+  color: var(--theme-on-brand);
   padding: 0 0.9rem;
   font-size: 0.82rem;
   font-weight: 900;
@@ -8434,7 +8329,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
     color: var(--oa-muted);
     padding: 0.55rem 0.68rem;
     font-size: 0.72rem;
-    font-weight: 850;
+    font-weight: 600;
     line-height: 1.15;
     overflow-wrap: anywhere;
   }
@@ -8444,7 +8339,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
     display: block;
     color: var(--oa-text);
     font-size: 1rem;
-    font-weight: 950;
+    font-weight: 600;
     line-height: 1;
   }
 
@@ -8518,7 +8413,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   .org-admin-v2 .booking-map-controls label {
     min-width: 0;
     font-size: 0.68rem;
-    font-weight: 850;
+    font-weight: 600;
   }
 
   .org-admin-v2 .booking-map-controls .theme-input {
@@ -8598,8 +8493,8 @@ body.dashboard-perf-mode .btn-ghost:hover {
     margin: 0;
     color: var(--oa-muted);
     font-size: 0.68rem;
-    font-weight: 900;
-    letter-spacing: 0.14em;
+    font-weight: 600;
+    letter-spacing: 0.025em;
     text-transform: uppercase;
   }
 
@@ -8608,7 +8503,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
     margin: 0.1rem 0 0;
     color: var(--oa-text);
     font-size: 1.35rem;
-    font-weight: 850;
+    font-weight: 600;
     line-height: 1.05;
   }
 
@@ -8618,10 +8513,10 @@ body.dashboard-perf-mode .btn-ghost:hover {
     flex: 0 0 auto;
     border-radius: 9px;
     background: var(--oa-brand);
-    color: #ffffff;
+    color: var(--theme-on-brand);
     padding: 0 0.95rem;
     font-size: 0.88rem;
-    font-weight: 850;
+    font-weight: 600;
   }
 
   .org-admin-v2 .booking-admin-mobile-head__actions {
@@ -8683,7 +8578,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
     border-radius: 9px;
     padding: 0.5rem 0.78rem;
     font-size: 0.85rem;
-    font-weight: 800;
+    font-weight: 600;
   }
 
   .org-admin-v2 .booking-top-kpis {
@@ -8722,7 +8617,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   .org-admin-v2 .booking-day-panel__title {
     color: var(--oa-text);
     font-size: 1.25rem;
-    font-weight: 850;
+    font-weight: 600;
   }
 
   .org-admin-v2 .booking-mobile-day-rail {
@@ -8809,7 +8704,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
     color: var(--oa-muted);
     padding: 0.45rem 0.72rem;
     font-size: 0.8rem;
-    font-weight: 850;
+    font-weight: 600;
     white-space: nowrap;
   }
 
@@ -9074,7 +8969,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
     border-radius: 8px !important;
     padding: 0 0.72rem;
     font-size: 0.76rem;
-    font-weight: 850;
+    font-weight: 600;
   }
 
   .org-admin-v2 .booking-management-head h2 {
@@ -9354,7 +9249,7 @@ body.dashboard-perf-mode .btn-ghost:hover {
   justify-content: center;
   border-radius: 999px;
   background: var(--oa-brand, #005247);
-  color: #fff;
+  color: var(--theme-on-brand);
   box-shadow: 0 8px 24px rgba(0, 82, 71, 0.45);
   transition: transform 150ms ease, background 150ms ease;
 }
@@ -9454,11 +9349,11 @@ body.dashboard-perf-mode .btn-ghost:hover {
     margin-bottom: 1rem;
   }
 
-  .form-builder-empty p.text-sm {
+  .form-builder-empty p.text-sm:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
     font-size: 1rem;
   }
 
-  .form-builder-empty p.text-xs {
+  .form-builder-empty p.text-xs:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
     font-size: 0.875rem;
   }
 }

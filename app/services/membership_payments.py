@@ -23,6 +23,7 @@ from app.models import (
     MemberStatus,
     Organization,
     OrganizationPaymentProvider,
+    OperationLog,
 )
 from app.services.card_allocation import allocate_next_card, lock_card_allocation
 from app.services.annual_memberships import sync_annual_membership_term
@@ -286,7 +287,7 @@ def create_sumup_hosted_checkout(
     payload = {
         "checkout_reference": payment.checkout_reference,
         "amount": float(amount),
-        "currency": org.membership_fee_currency,
+        "currency": payment.currency,
         "merchant_code": merchant_code,
         "description": _build_sumup_description(org),
         "pay_to_email": getattr(member, "email", None),
@@ -456,6 +457,8 @@ def _require_latest_checkout_attempt(db: Session, payment: MembershipPayment) ->
     )
     if payment.payment_kind == "renewal":
         query = query.filter(MembershipPayment.annual_term_id == payment.annual_term_id)
+    elif payment.payment_kind == "temporary":
+        query = query.filter(MembershipPayment.temporary_purchase_id == payment.temporary_purchase_id)
     latest = query.order_by(MembershipPayment.created_at.desc(), MembershipPayment.id.desc()).first()
     if latest.id != payment.id or payment_status_is_paid(payment.status):
         raise HTTPException(status_code=409, detail="Il pagamento è stato aggiornato. Riprova tra poco.")
@@ -597,8 +600,18 @@ def maybe_fulfill_member_card(
         )
     if getattr(member, "valid_from", None) is None:
         member.valid_from = member.joined_at
+    # A temporary duration starts when the card is actually released, not
+    # at a date-only manual signup or an earlier pending payment.
+    if issued_new_card and getattr(member, "membership_type", None) == "temporary":
+        apply_membership_defaults(
+            member=member, org=org, membership_type="temporary",
+            reference_time=datetime.utcnow(),
+            membership_fee_snapshot=member.membership_fee_snapshot,
+        )
     member.status = MemberStatus.ACTIVE
     sync_annual_membership_term(db, member, source="membership_payment")
+    from app.services.member_deferred_access import queue_deferred_access
+    queue_deferred_access(db, member, request=request)
 
     if request is not None:
         try:
@@ -655,6 +668,11 @@ def apply_membership_payment_completion(
 
     if member is None:
         return FulfillmentResult(issued_card=False, reason="member_missing")
+
+    if payment.payment_kind == "temporary" and payment.temporary_purchase_id is not None:
+        from app.services.temporary_memberships import fulfill_purchase
+        issued = fulfill_purchase(db, purchase=payment.temporary_purchase, payment=payment)
+        return FulfillmentResult(issued_card=issued, reason="fulfilled" if issued else "already_fulfilled_or_waiting")
 
     if (
         getattr(payment, "payment_kind", None) == "renewal"
@@ -763,7 +781,10 @@ def apply_manual_membership_payment(
     reason: str | None,
     notes: str | None,
     request: Request | None = None,
+    paid_at: datetime | None = None,
 ) -> tuple[MembershipPayment, FulfillmentResult, bool]:
+    from app.services.member_accounting import guard_partial_manual_payment
+    guard_partial_manual_payment(db, member=member, year=int(member.card_year or datetime.utcnow().year))
     existing_paid_payment = (
         db.query(MembershipPayment)
         .filter(
@@ -796,7 +817,7 @@ def apply_manual_membership_payment(
         currency=currency,
         status=MembershipPaymentStatus.MANUAL_COMPLETED.value,
         source=MembershipPaymentSource.MANUAL.value,
-        confirmed_at=datetime.utcnow(),
+        confirmed_at=paid_at or datetime.utcnow(),
         manual_marked_paid_by_user_id=admin_id,
         notes=notes,
     )
@@ -804,7 +825,7 @@ def apply_manual_membership_payment(
 
     member.payment_required = organization_requires_membership_payment(org)
     member.payment_status = MembershipPaymentStatus.MANUAL_COMPLETED.value
-    member.payment_completed_at = datetime.utcnow()
+    member.payment_completed_at = payment.confirmed_at
     sync_member_card_payment_flags(member, org)
 
     fulfillment = maybe_fulfill_member_card(db=db, member=member, org=org, request=request)
@@ -914,7 +935,30 @@ def create_legacy_manual_member_payment(
     amount: Decimal,
     method: str,
     notes: str | None,
+    paid_at: datetime | None = None,
+    membership_payment: MembershipPayment | None = None,
 ) -> MemberPayment:
+    if membership_payment is not None:
+        existing = db.query(MemberPayment).filter(
+            MemberPayment.membership_payment_id == membership_payment.id,
+        ).first()
+        if existing is not None:
+            return existing
+        # Link a pre-migration receipt only when its audit entry identifies
+        # this exact authoritative payment; never infer a financial link from
+        # a similar amount or a nearby timestamp.
+        receipt = db.query(MemberPayment).join(
+            OperationLog, OperationLog.entity_id == MemberPayment.id,
+        ).filter(
+            MemberPayment.member_id == member.id, MemberPayment.org_id == org.id,
+            MemberPayment.membership_payment_id.is_(None),
+            OperationLog.action == "member.payment.manual",
+            OperationLog.entity_type == "member_payment",
+            OperationLog.metadata_json["membership_payment_id"].as_integer() == membership_payment.id,
+        ).order_by(MemberPayment.id).first()
+        if receipt is not None:
+            receipt.membership_payment_id = membership_payment.id
+            return receipt
     amount_cents = int((amount * Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
     legacy_payment = MemberPayment(
         member_id=member.id,
@@ -922,7 +966,8 @@ def create_legacy_manual_member_payment(
         admin_id=admin_id,
         amount_cents=amount_cents,
         method=method,
-        paid_at=datetime.utcnow(),
+        paid_at=paid_at or datetime.utcnow(),
+        membership_payment_id=membership_payment.id if membership_payment is not None else None,
         notes=notes,
     )
     db.add(legacy_payment)

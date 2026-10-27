@@ -22,6 +22,9 @@ type MembersTableProps = {
   onPageChange: (nextPage: number) => void;
   onSelectMember?: (memberId: number) => void;
   onOpenMember: (memberId: number) => void;
+  checkedMemberIds?: ReadonlySet<number>;
+  onToggleMember?: (memberId: number) => void;
+  onTogglePage?: () => void;
 };
 
 const MembersTable = memo(function MembersTable({
@@ -34,7 +37,12 @@ const MembersTable = memo(function MembersTable({
   onPageChange,
   onSelectMember,
   onOpenMember,
+  checkedMemberIds,
+  onToggleMember,
+  onTogglePage,
 }: MembersTableProps) {
+  const checkedOnPage = members.filter((member) => checkedMemberIds?.has(member.id)).length;
+  const allPageChecked = members.length > 0 && checkedOnPage === members.length;
   if (error) {
     return (
       <div className="mt-4 rounded-lg border border-red-200/60 bg-red-50 px-7 py-5 min-h-[120px]">
@@ -73,6 +81,21 @@ const MembersTable = memo(function MembersTable({
         <table className="w-full text-left">
           <thead className="border-b border-neutral-200/60 bg-slate-50/70">
             <tr>
+              {onToggleMember && (
+                <th className="w-12 px-3 py-2">
+                  <label className="inline-flex min-h-11 min-w-11 items-center justify-center">
+                    <input
+                      type="checkbox"
+                      aria-label="Seleziona tutti i soci della pagina"
+                      checked={allPageChecked}
+                      ref={(input) => { if (input) input.indeterminate = checkedOnPage > 0 && !allPageChecked; }}
+                      disabled={isLoading || members.length === 0}
+                      onChange={onTogglePage}
+                      className="h-4 w-4 accent-[var(--theme-brand)]"
+                    />
+                  </label>
+                </th>
+              )}
               <th className={thClass}>Nome</th>
               <th className={thClass}>Email</th>
               <th className={thClass}>Stato</th>
@@ -88,6 +111,7 @@ const MembersTable = memo(function MembersTable({
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i}>
+                  {onToggleMember && <td className="px-3 py-2"><Skeleton className="h-4 w-4" /></td>}
                   <td className={tdClass}>
                     <Skeleton className="h-3.5 w-32" />
                   </td>
@@ -108,7 +132,7 @@ const MembersTable = memo(function MembersTable({
             ) : members.length === 0 ? (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={onToggleMember ? 8 : 7}
                   className="px-5 py-12 text-center text-sm text-neutral-500"
                 >
                   {EMPTY_STATE_COPY.filteredResults.title}. {EMPTY_STATE_COPY.filteredResults.description}
@@ -132,6 +156,19 @@ const MembersTable = memo(function MembersTable({
                       isSelected ? "bg-emerald-50/70 ring-1 ring-inset ring-emerald-200" : i % 2 === 1 ? "bg-slate-50/50" : ""
                     }`}
                   >
+                    {onToggleMember && (
+                      <td className="px-3 py-2" onClick={(event) => event.stopPropagation()}>
+                        <label className="inline-flex min-h-11 min-w-11 items-center justify-center">
+                          <input
+                            type="checkbox"
+                            aria-label={`Seleziona ${m.name}`}
+                            checked={checkedMemberIds?.has(m.id) ?? false}
+                            onChange={() => onToggleMember(m.id)}
+                            className="h-4 w-4 accent-[var(--theme-brand)]"
+                          />
+                        </label>
+                      </td>
+                    )}
                     <td className={`${tdClass} font-medium text-neutral-900`}>
                       <div className="flex flex-wrap items-center gap-2">
                         <span>{m.name}</span>
@@ -243,6 +280,20 @@ const MembersTable = memo(function MembersTable({
                 onClick={() => onSelectMember?.(member.id)}
               >
                 <div className="flex items-start justify-between gap-3">
+                  {onToggleMember && (
+                    <label
+                      className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        aria-label={`Seleziona ${member.name}`}
+                        checked={checkedMemberIds?.has(member.id) ?? false}
+                        onChange={() => onToggleMember(member.id)}
+                        className="h-5 w-5 accent-[var(--theme-brand)]"
+                      />
+                    </label>
+                  )}
                   <div className="min-w-0">
                     <h3 className="truncate text-sm font-semibold text-neutral-900">{member.name}</h3>
                     <p className="mt-1 truncate text-xs text-neutral-500">{member.email ?? "Email non indicata"}</p>

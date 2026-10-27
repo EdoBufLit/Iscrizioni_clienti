@@ -6,14 +6,22 @@ from sqlalchemy.orm import Session, joinedload
 from datetime import datetime, timedelta
 from typing import Literal
 from app.db import get_db
-from app.models import Booking, Member, Token, TokenType, MemberDocument, MemberStatus, PaymentMethod, Organization, AdminUser, AdminRole, DocStatus, SignupSource, MemberContactChange
+from app.models import Booking, Member, TokenType, MemberDocument, MemberStatus, PaymentMethod, Organization, AdminUser, AdminRole, DocStatus, SignupSource, MemberContactChange
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
-from app.utils import generate_token, hash_token
+from app.utils import hash_token
 from app.security import MIN_MEMBER_PASSWORD_LENGTH, get_password_hash, verify_password
 from app.config import settings
 from app.middleware import get_client_ip
 from app.services.security_rate_limits import enforce_auth_rate_limit
+from app.services.member_sessions import (
+    clear_member_session,
+    consume_member_auth_token,
+    establish_member_session,
+    issue_member_auth_token,
+    replace_member_password,
+    resolve_member_session,
+)
 from app.services.card_verification import build_card_verification_token
 from app.services.google_wallet import (
     GoogleWalletApiError,
@@ -22,6 +30,7 @@ from app.services.google_wallet import (
 )
 from app.services.member_activity import get_member_inactive_reason, is_card_active, is_member_active
 from app.services.member_membership import (
+    membership_datetime_iso,
     membership_type_label,
     resolve_member_membership_type,
     resolve_member_valid_until,
@@ -157,14 +166,11 @@ def _enqueue_member_password_reset(
     *,
     now: datetime,
 ) -> None:
-    token_str = generate_token()
-    db.add(
-        Token(
-            member_id=member.id,
-            purpose=TokenType.PASSWORD_RESET,
-            token_hash=hash_token(token_str),
-            expires_at=now + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES),
-        )
+    token_str, _token = issue_member_auth_token(
+        db,
+        member=member,
+        purpose=TokenType.PASSWORD_RESET,
+        expires_at=now + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES),
     )
     db.flush()
 
@@ -199,10 +205,7 @@ def _enqueue_member_password_reset(
 
 
 def get_current_member(request: Request, db: Session):
-    member_id = request.session.get("member_id")
-    if not member_id:
-        return None
-    member = db.query(Member).filter(Member.id == member_id).first()
+    member = resolve_member_session(request, db)
     if not member:
         return None
     if not is_member_active(member, now=datetime.utcnow()):
@@ -214,10 +217,7 @@ def get_current_member(request: Request, db: Session):
 def get_authenticated_member(request: Request, db: Session):
     """Resolve an active or expired annual account without widening feature access."""
 
-    member_id = request.session.get("member_id")
-    if not member_id:
-        return None
-    member = db.query(Member).filter(Member.id == member_id).first()
+    member = resolve_member_session(request, db)
     return member if can_access_member_account(member) else None
 
 
@@ -231,42 +231,19 @@ def login_page(request: Request, org: str = None, db: Session = Depends(get_db))
 @router.get("/member/auth")
 def auth_magic_link(request: Request, token: str, db: Session = Depends(get_db)):
     enforce_auth_rate_limit(db, client_ip=get_client_ip(request))
-    token_hash = hash_token(token)
-    now = datetime.utcnow()
-
-    # Atomic token consumption: UPDATE only if unused AND not expired
-    # This prevents race conditions where two requests could use the same token
-    from sqlalchemy import update
-
-    result = db.execute(
-        update(Token)
-        .where(
-            Token.token_hash == token_hash,
-            Token.purpose == TokenType.LOGIN_MAGIC_LINK,
-            Token.expires_at > now,
-            Token.used_at.is_(None),  # Only consume if not yet used
-        )
-        .values(used_at=now)
+    member = consume_member_auth_token(
+        db, raw_token=token, purpose=TokenType.LOGIN_MAGIC_LINK
     )
-    db.commit()
-
-    # If no rows updated, token was invalid, expired, or already used
-    if result.rowcount == 0:
-        return RedirectResponse(url="/login")
-
-    # Now fetch the token to get member_id (safe since we just consumed it)
-    token_entry = db.query(Token).filter(Token.token_hash == token_hash).first()
-    if not token_entry:
-        return RedirectResponse(url="/login")
-
-    member = db.query(Member).filter(Member.id == token_entry.member_id).first()
     if not member:
+        db.rollback()
         return RedirectResponse(url="/login")
 
     if not can_access_member_account(member):
+        db.rollback()
         raise HTTPException(status_code=403, detail=_ACCOUNT_NOT_ACTIVE_DETAIL)
-    request.session["member_id"] = token_entry.member_id
-    audit.member_verified(member_id=token_entry.member_id, ip=get_client_ip(request))
+    establish_member_session(request, member)
+    db.commit()
+    audit.member_verified(member_id=member.id, ip=get_client_ip(request))
 
     return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
 
@@ -275,8 +252,7 @@ def auth_magic_link(request: Request, token: str, db: Session = Depends(get_db))
 def member_portal(request: Request, db: Session = Depends(get_db)):
     member = get_current_member(request, db)
     if not member:
-        if request.session.get("member_id"):
-            request.session.clear()
+        clear_member_session(request)
         return RedirectResponse(url="/login")
 
     return RedirectResponse(url="/dashboard")
@@ -780,31 +756,63 @@ def create_google_wallet_save_link(request: Request, db: Session = Depends(get_d
     if member.card_no is None or member.card_year is None:
         raise HTTPException(status_code=409, detail="Tessera non disponibile per Google Wallet")
 
+    from app.services.google_wallet_sync import register_wallet_pass, revoke_provisioned_pass, snapshot_wallet_member
+    from app.services.google_wallet import _build_generic_object_payload
+
+    member_id = member.id
+    snapshot = snapshot_wallet_member(db, member)
+    identity = snapshot._prepared_wallet_identity
+    if identity:
+        class_id, object_id = identity
+        payload = _build_generic_object_payload(member=snapshot, class_id=class_id, object_id=object_id)
+        record = register_wallet_pass(db, member, class_id=class_id, object_id=object_id, payload=payload,
+                                      source_member=snapshot)
+        if record.id is None:
+            record.provisioning = True
+    # Persist intent before provider I/O, so a process crash cannot orphan a remote pass.
+    db.commit()
     try:
-        result = generate_google_wallet_save_link_for_member(member)
+        result = generate_google_wallet_save_link_for_member(snapshot)
     except GoogleWalletConfigError as exc:
         safe_error = str(redact_for_log(str(exc)))
-        logger.warning("Google Wallet config error for member_id=%s: %s", member.id, safe_error)
-        member.google_wallet_last_error = str(exc)
+        logger.warning("Google Wallet config error for member_id=%s: %s", member_id, safe_error)
+        member = db.get(Member, member_id)
+        if member is not None:
+            member.google_wallet_last_error = str(exc)
         db.commit()
         raise HTTPException(status_code=500, detail=str(exc))
     except GoogleWalletApiError as exc:
         detail = f"Google Wallet API error ({exc.status_code})"
         logger.error(
-            "Google Wallet API error for member_id=%s status=%s response=%s",
-            member.id,
+            "Google Wallet API error for member_id=%s status=%s",
+            member_id,
             exc.status_code,
-            redact_for_log((exc.response_body or "")[:500]),
         )
-        member.google_wallet_last_error = f"{detail}: {str(exc)}"
+        member = db.get(Member, member_id)
+        if member is not None:
+            member.google_wallet_last_error = detail
         db.commit()
         raise HTTPException(status_code=502, detail=detail)
     except Exception:
-        logger.exception("Unexpected Google Wallet error for member_id=%s", member.id)
-        member.google_wallet_last_error = "Unexpected Google Wallet error"
+        logger.exception("Unexpected Google Wallet error for member_id=%s", member_id)
+        member = db.get(Member, member_id)
+        if member is not None:
+            member.google_wallet_last_error = "Unexpected Google Wallet error"
         db.commit()
         raise HTTPException(status_code=500, detail="Errore interno Google Wallet")
 
+    initial_payload = _build_generic_object_payload(member=snapshot, class_id=result.class_id, object_id=result.object_id)
+    member = db.get(Member, member_id)
+    if member is None:
+        revoke_provisioned_pass(db, class_id=result.class_id, object_id=result.object_id, source_member=snapshot)
+        db.commit()
+        raise HTTPException(status_code=409, detail="La tessera è cambiata. Aggiorna la pagina.")
+    record = register_wallet_pass(db, member, class_id=result.class_id, object_id=result.object_id,
+                                  payload=initial_payload, source_member=snapshot)
+    record.provisioning = False
+    if (member.card_no, member.card_year, member.membership_type) != (snapshot.card_no, snapshot.card_year, snapshot.membership_type):
+        db.commit()
+        raise HTTPException(status_code=409, detail="La tessera è cambiata. Aggiorna la pagina.")
     now = datetime.utcnow()
     member.google_wallet_class_id = result.class_id
     member.google_wallet_object_id = result.object_id
@@ -1075,20 +1083,18 @@ def api_auth_login(request: Request, email: str = Form(...), password: str = For
 
     # Password-based login
     if password and member and member.password_hash and verify_password(password, member.password_hash):
-        request.session["member_id"] = member.id
+        establish_member_session(request, member)
         audit.member_verified(member_id=member.id, ip=get_client_ip(request))
         return {"status": "ok", "message": "Login successful.", "authenticated": True}
 
     # Magic-link fallback
     if member:
-        token_str = generate_token()
-        token = Token(
-            member_id=member.id,
+        token_str, _token = issue_member_auth_token(
+            db,
+            member=member,
             purpose=TokenType.LOGIN_MAGIC_LINK,
-            token_hash=hash_token(token_str),
-            expires_at=now + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES)
+            expires_at=now + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES),
         )
-        db.add(token)
         db.flush()
 
         frontend_base = settings.FRONTEND_URL.rstrip("/")
@@ -1170,33 +1176,23 @@ def api_auth_password_reset_confirm(
     if new_password != confirm_password:
         raise HTTPException(status_code=400, detail="Le password non coincidono.")
 
-    token_hash = hash_token(token)
     now = datetime.utcnow()
-
-    result = db.execute(
-        update(Token)
-        .where(
-            Token.token_hash == token_hash,
-            Token.purpose == TokenType.PASSWORD_RESET,
-            Token.expires_at > now,
-            Token.used_at.is_(None),
-        )
-        .values(used_at=now)
+    member = consume_member_auth_token(
+        db, raw_token=token, purpose=TokenType.PASSWORD_RESET, now=now
     )
-    db.flush()
-
-    if result.rowcount == 0:
-        db.rollback()
-        raise HTTPException(status_code=400, detail="Link non valido o scaduto.")
-
-    token_entry = db.query(Token).filter(Token.token_hash == token_hash).first()
-    member = db.query(Member).filter(Member.id == token_entry.member_id).first() if token_entry else None
     if not member or not can_access_member_account(member):
         db.rollback()
         raise HTTPException(status_code=400, detail="Link non valido o scaduto.")
 
-    member.password_hash = get_password_hash(new_password)
+    replace_member_password(
+        db,
+        member_id=member.id,
+        expected_version=member.auth_version,
+        password_hash=get_password_hash(new_password),
+        now=now,
+    )
     db.commit()
+    clear_member_session(request)
     return {"status": "ok", "message": "Password aggiornata. Ora puoi accedere con la nuova password."}
 
 
@@ -1254,23 +1250,28 @@ def api_auth_register(
             member_id=existing.id,
         )
         if continuation is not None:
-            consume_result = db.execute(
-                update(Token)
-                .where(
-                    Token.member_id == existing.id,
-                    Token.token_hash == hash_token(continuation),
-                    Token.purpose == TokenType.REGISTRATION_CONTINUATION,
-                    Token.expires_at > now,
-                    Token.used_at.is_(None),
-                )
-                .values(used_at=now)
+            proved_member = consume_member_auth_token(
+                db,
+                raw_token=continuation,
+                purpose=TokenType.REGISTRATION_CONTINUATION,
+                member_id=existing.id,
+                now=now,
             )
-            if consume_result.rowcount == 1:
-                existing.password_hash = get_password_hash(password)
+            if proved_member is not None:
+                existing = replace_member_password(
+                    db,
+                    member_id=proved_member.id,
+                    expected_version=proved_member.auth_version,
+                    password_hash=get_password_hash(password),
+                    now=now,
+                )
                 if not existing.signup_source:
                     existing.signup_source = SignupSource.ASSONAM_FORM.value
                 if normalized_payment_method is not None:
                     existing.payment_method = normalized_payment_method
+                authenticate = is_member_active(existing, now=now)
+                if authenticate:
+                    establish_member_session(request, existing)
                 db.commit()
                 _remove_registration_continuation(
                     request,
@@ -1278,8 +1279,7 @@ def api_auth_register(
                     expected_token=continuation,
                 )
 
-                if is_member_active(existing, now=now):
-                    request.session["member_id"] = existing.id
+                if authenticate:
                     audit.member_verified(
                         member_id=existing.id,
                         ip=get_client_ip(request),
@@ -1331,7 +1331,16 @@ def api_auth_change_password(
         raise HTTPException(status_code=401, detail="Not authenticated")
     if len(new_password) < MIN_MEMBER_PASSWORD_LENGTH:
         raise HTTPException(status_code=400, detail=f"La password deve avere almeno {MIN_MEMBER_PASSWORD_LENGTH} caratteri.")
-    member.password_hash = get_password_hash(new_password)
+    # Capture the authenticated epoch before acquiring the credential-write
+    # lock: a concurrent reset must not upgrade this old request's authority.
+    expected_version = request.session.get("member_auth_version")
+    member = replace_member_password(
+        db,
+        member_id=member.id,
+        expected_version=expected_version,
+        password_hash=get_password_hash(new_password),
+    )
+    establish_member_session(request, member)
     db.commit()
     return {"status": "ok", "message": "Password aggiornata."}
 
@@ -1383,7 +1392,7 @@ def api_auth_me(request: Request, db: Session = Depends(get_db)):
         "card_year": card_year,
         "membership_type": membership_type,
         "membership_type_label": membership_type_label(membership_type),
-        "valid_until": valid_until.isoformat() if valid_until else None,
+        "valid_until": membership_datetime_iso(valid_until),
         "card_verification_url": verification_url,
         "card": {
             "number": member.card_no,
@@ -1419,10 +1428,8 @@ def api_auth_whoami(request: Request, db: Session = Depends(get_db)):
         return {"authenticated": True, "role": "org_admin", "redirect_to": "/org-admin"}
 
     # 3. Member
-    member_id = request.session.get("member_id")
-    if member_id:
-        member = db.query(Member).filter(Member.id == member_id).first()
-        if can_access_member_account(member):
-            return {"authenticated": True, "role": "member", "redirect_to": "/dashboard"}
+    member = get_authenticated_member(request, db)
+    if member:
+        return {"authenticated": True, "role": "member", "redirect_to": "/dashboard"}
 
     return {"authenticated": False}

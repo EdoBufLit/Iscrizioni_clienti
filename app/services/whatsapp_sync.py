@@ -215,13 +215,22 @@ def serialize_message(message: WhatsAppMessage) -> dict[str, Any]:
     }
 
 
-def list_chats_for_connection(db: Session, *, connection: WhatsAppConnection) -> list[WhatsAppChat]:
-    return (
-        db.query(WhatsAppChat)
-        .filter(WhatsAppChat.connection_id == connection.id)
-        .order_by(WhatsAppChat.last_message_at.desc(), WhatsAppChat.id.desc())
-        .all()
-    )
+def chats_for_connection_query(db: Session, *, connection: WhatsAppConnection, search: str | None = None):
+    query = db.query(WhatsAppChat).filter(WhatsAppChat.connection_id == connection.id)
+    if search:
+        from sqlalchemy import or_, func
+        query = query.filter(or_(func.lower(WhatsAppChat.display_name).contains(search.lower(), autoescape=True),
+                                 WhatsAppChat.external_chat_id.contains(search, autoescape=True)))
+    return query
+
+
+def list_chats_for_connection(db: Session, *, connection: WhatsAppConnection, search: str | None = None,
+                               limit: int | None = None, offset: int = 0) -> list[WhatsAppChat]:
+    query = chats_for_connection_query(db, connection=connection, search=search).order_by(
+        WhatsAppChat.last_message_at.desc(), WhatsAppChat.id.desc()).offset(offset)
+    if limit is not None:
+        query = query.limit(limit)
+    return query.all()
 
 
 def get_chat_for_connection(
@@ -416,13 +425,15 @@ def get_messages_for_chat(
     *,
     chat: WhatsAppChat,
     mark_as_read: bool = True,
+    limit: int | None = None,
+    offset: int = 0,
 ) -> list[WhatsAppMessage]:
-    messages = (
-        db.query(WhatsAppMessage)
-        .filter(WhatsAppMessage.chat_id == chat.id)
-        .order_by(WhatsAppMessage.created_at.asc(), WhatsAppMessage.id.asc())
-        .all()
-    )
+    query = db.query(WhatsAppMessage).filter(WhatsAppMessage.chat_id == chat.id)
+    if limit is None:
+        messages = query.order_by(WhatsAppMessage.created_at.asc(), WhatsAppMessage.id.asc()).offset(offset).all()
+    else:
+        messages = list(reversed(query.order_by(WhatsAppMessage.created_at.desc(), WhatsAppMessage.id.desc())
+                                 .offset(offset).limit(limit).all()))
     if mark_as_read and int(chat.unread_count or 0) > 0:
         chat.unread_count = 0
     return messages

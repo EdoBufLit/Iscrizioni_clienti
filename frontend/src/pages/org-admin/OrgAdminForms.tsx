@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   buildOrgAdminFormSubmissionsExportUrl,
@@ -9,7 +9,7 @@ import {
   deleteOrgAdminFormField,
   fetchOrgAdminBookingEventSeries,
   fetchOrgAdminForm,
-  fetchOrgAdminForms,
+  fetchOrgAdminFormSummaries,
   fetchOrgAdminFormSubmission,
   fetchOrgAdminFormSubmissions,
   setOrgAdminFormActive,
@@ -19,6 +19,10 @@ import {
   updateOrgAdminForm,
   updateOrgAdminFormField,
   type AssociationForm,
+  type AssociationFormSummary,
+  type FormSubmissionSummary,
+  type SurveyStatistics,
+  fetchOrgAdminFormStatistics,
   type AssociationFormField,
   type AssociationFormFieldType,
   type AssociationFormType,
@@ -566,7 +570,7 @@ export function OrgAdminFormsWorkspace({
   const isMobile = useMediaQuery("(max-width: 1023px)");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [forms, setForms] = useState<AssociationForm[]>([]);
+  const [forms, setForms] = useState<AssociationFormSummary[]>([]);
   const [localTemplates, setLocalTemplates] = useState<OrgAdminEmailTemplate[]>(availableTemplates);
   const [selectedFormId, setSelectedFormId] = useState<number | null>(null);
   const [isCreatingForm, setIsCreatingForm] = useState(false);
@@ -601,6 +605,14 @@ export function OrgAdminFormsWorkspace({
 
   const [submissions, setSubmissions] = useState<AssociationFormSubmission[]>([]);
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
+  const [submissionPage, setSubmissionPage] = useState(0);
+  const [submissionTotal, setSubmissionTotal] = useState(0);
+  const submissionsGeneration = useRef(0);
+  const submissionsController = useRef<AbortController | null>(null);
+  const formEditorController = useRef<AbortController | null>(null);
+  const submissionDetailGeneration = useRef(0);
+  const [submissionSummary, setSubmissionSummary] = useState<FormSubmissionSummary>({ total: 0, pending: 0, confirmed: 0, rejected: 0, booking: 0 });
+  const [surveyStats, setSurveyStats] = useState<SurveyStatistics>({ total: 0, ratingAverage: null, npsAverage: null, scaleStats: [], choiceStats: [], comments: [], commentCount: 0, responseRateLabel: "" });
   const [selectedSubmission, setSelectedSubmission] = useState<AssociationFormSubmission | null>(null);
   const [submissionActionState, setSubmissionActionState] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [submissionActionError, setSubmissionActionError] = useState<string | null>(null);
@@ -717,7 +729,12 @@ export function OrgAdminFormsWorkspace({
       return;
     }
     void loadSubmissions(selectedFormId);
-  }, [activeTab, selectedFormId]);
+    return () => {
+      submissionsController.current?.abort();
+      submissionsGeneration.current += 1;
+      submissionDetailGeneration.current += 1;
+    };
+  }, [activeTab, selectedFormId, submissionPage]);
 
   const orgSlug = admin?.organization?.slug || "";
   const publicPath = useMemo(() => {
@@ -896,89 +913,6 @@ export function OrgAdminFormsWorkspace({
       }),
     [selectedSubmissionEntries],
   );
-  const submissionSummary = useMemo(
-    () =>
-      submissions.reduce(
-        (accumulator, submission) => {
-          const status = (submission.status || "pending").toLowerCase();
-          accumulator.total += 1;
-          if (status === "confirmed") accumulator.confirmed += 1;
-          else if (status === "rejected") accumulator.rejected += 1;
-          else accumulator.pending += 1;
-          if (submission.booking) accumulator.booking += 1;
-          return accumulator;
-        },
-        { total: 0, pending: 0, confirmed: 0, rejected: 0, booking: 0 },
-      ),
-    [submissions],
-  );
-  const surveyStats = useMemo(() => {
-    const fields = selectedForm?.fields || [];
-    const decodedFields = fields.map((field) => ({ raw: field, decoded: decodeField(field) }));
-    const scaleFields = decodedFields.filter(
-      (item) => item.decoded.type === "rating_1_5" || item.decoded.type === "nps_0_10",
-    );
-    const choiceFields = decodedFields.filter((item) => ["radio", "checkbox", "select"].includes(item.decoded.type));
-    const textFields = decodedFields.filter((item) => item.decoded.type === "long_text" || item.decoded.type === "short_text");
-    const numericValues = (kind: "rating_1_5" | "nps_0_10") =>
-      scaleFields
-        .filter((item) => item.decoded.type === kind)
-        .flatMap((item) =>
-          submissions
-            .map((submission) => Number(submission.payload_json?.[item.raw.field_key]))
-            .filter((value) => Number.isFinite(value)),
-        );
-    const average = (values: number[]) =>
-      values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
-    const scaleStats = scaleFields.map((item) => {
-      const options = item.decoded.optionsText.split(",").map((option) => option.trim()).filter(Boolean);
-      const counts = new Map(options.map((option) => [option, 0]));
-      let total = 0;
-      for (const submission of submissions) {
-        const value = submission.payload_json?.[item.raw.field_key];
-        if (value == null || value === "") continue;
-        const key = String(value);
-        counts.set(key, (counts.get(key) || 0) + 1);
-        total += 1;
-      }
-      const values = Array.from(counts.values());
-      const max = values.length ? Math.max(...values) : 0;
-      return { key: item.raw.field_key, label: item.raw.label, options, counts, total, max };
-    });
-    const choiceStats = choiceFields.map((item) => {
-      const options = item.decoded.optionsText.split(",").map((option) => option.trim()).filter(Boolean);
-      const counts = new Map(options.map((option) => [option, 0]));
-      for (const submission of submissions) {
-        const value = submission.payload_json?.[item.raw.field_key];
-        const values = Array.isArray(value) ? value.map(String) : value ? [String(value)] : [];
-        for (const option of values) counts.set(option, (counts.get(option) || 0) + 1);
-      }
-      const total = Array.from(counts.values()).reduce((sum, value) => sum + value, 0);
-      const max = Math.max(0, ...Array.from(counts.values()));
-      return { key: item.raw.field_key, label: item.raw.label, options, counts, total, max };
-    });
-    const comments = submissions.flatMap((submission) =>
-      textFields
-        .map((item) => ({
-          key: `${submission.id}-${item.raw.field_key}`,
-          label: item.raw.label,
-          value: String(submission.payload_json?.[item.raw.field_key] || "").trim(),
-          submittedAt: submission.submitted_at,
-        }))
-        .filter((item) => item.value.length > 0),
-    );
-    const ratingValues = numericValues("rating_1_5");
-    const npsValues = numericValues("nps_0_10");
-    return {
-      total: submissions.length,
-      ratingAverage: average(ratingValues),
-      npsAverage: average(npsValues),
-      scaleStats,
-      choiceStats,
-      comments,
-      responseRateLabel: submissions.length === 1 ? "1 risposta ricevuta" : `${submissions.length} risposte ricevute`,
-    };
-  }, [selectedForm?.fields, submissions]);
   const selectedSubmissionStatus = submissionStatusLabel(selectedSubmission?.status);
   const deleteFieldTarget = selectedForm?.fields.find((field) => field.id === deleteFieldConfirmId) || null;
   const hasUnsavedFormWorkspaceChanges = useMemo(() => {
@@ -1052,7 +986,22 @@ export function OrgAdminFormsWorkspace({
     formId: number,
     options?: { initialTab?: EditorTab; syncQuery?: boolean },
   ) {
-    const detail = await fetchOrgAdminForm(formId);
+    formEditorController.current?.abort();
+    const controller = new AbortController();
+    formEditorController.current = controller;
+    submissionsController.current?.abort();
+    submissionsGeneration.current += 1;
+    submissionDetailGeneration.current += 1;
+    let detail;
+    try { detail = await fetchOrgAdminForm(formId, controller.signal); }
+    catch (reason) {
+      if (!controller.signal.aborted) showToast({ tone: "error", title: "Form non disponibile",
+        message: reason instanceof Error ? reason.message : "Errore caricamento form." });
+      return null;
+    }
+    if (controller.signal.aborted) return null;
+    setSubmissionPage(0);
+    submissionsGeneration.current += 1;
     const initialTab = options?.initialTab ?? "builder";
     setIsCreatingForm(false);
     setSelectedFormId(detail.form.id);
@@ -1075,7 +1024,7 @@ export function OrgAdminFormsWorkspace({
     setLoading(true);
     setError("");
     try {
-      const response = await fetchOrgAdminForms();
+      const response = await fetchOrgAdminFormSummaries();
       setForms(response.items);
       if (typeof nextSelectedId === "number") {
         await openFormEditor(nextSelectedId);
@@ -1092,9 +1041,21 @@ export function OrgAdminFormsWorkspace({
   }
 
   async function loadSubmissions(formId: number) {
+    const generation = ++submissionsGeneration.current;
+    submissionsController.current?.abort();
+    const controller = new AbortController();
+    submissionsController.current = controller;
     setSubmissionsLoading(true);
     try {
-      const response = await fetchOrgAdminFormSubmissions(formId);
+      const response = await fetchOrgAdminFormSubmissions(formId, { limit: 25, offset: submissionPage * 25, signal: controller.signal });
+      if (generation !== submissionsGeneration.current) return;
+      setSubmissionTotal(response.total);
+      setSubmissionSummary(response.summary);
+      if (mode === "surveys") {
+        const statistics = await fetchOrgAdminFormStatistics(formId, controller.signal);
+        if (generation !== submissionsGeneration.current) return;
+        setSurveyStats(statistics);
+      }
       setSubmissions(response.items);
       setSelectedForm(response.form);
       setBuilderDraftFields(decodeBuilderFields(response.form));
@@ -1105,18 +1066,19 @@ export function OrgAdminFormsWorkspace({
         const detail = await fetchOrgAdminFormSubmission(formId, preferredSubmission.id).catch(() => ({
           submission: preferredSubmission,
         }));
-        setSelectedSubmission(detail.submission);
+        if (generation === submissionsGeneration.current) setSelectedSubmission(detail.submission);
       } else {
         setSelectedSubmission(null);
       }
     } catch (err) {
+      if (generation !== submissionsGeneration.current || controller.signal.aborted) return;
       showToast({
         tone: "error",
         title: "Risposte non disponibili",
         message: err instanceof Error ? err.message : "Errore caricamento risposte.",
       });
     } finally {
-      setSubmissionsLoading(false);
+      if (generation === submissionsGeneration.current) setSubmissionsLoading(false);
     }
   }
 
@@ -1638,7 +1600,7 @@ export function OrgAdminFormsWorkspace({
           item.id === selectedFormId
             ? {
                 ...item,
-                fields: upsertAssociationFormField(item.fields || [], response.field),
+                field_count: item.field_count + (selectedForm?.fields.some((field) => field.id === response.field.id) ? 0 : 1),
               }
             : item,
         ),
@@ -1666,7 +1628,7 @@ export function OrgAdminFormsWorkspace({
           item.id === selectedFormId
             ? {
                 ...item,
-                fields: removeAssociationFormField(item.fields || [], id),
+                field_count: Math.max(0, item.field_count - 1),
               }
             : item,
         ),
@@ -1713,12 +1675,13 @@ export function OrgAdminFormsWorkspace({
 
   async function openSubmissionDetail(submission: AssociationFormSubmission) {
     if (!selectedFormId) return;
+    const generation = ++submissionDetailGeneration.current;
     setSelectedSubmission(submission);
     try {
       const response = await fetchOrgAdminFormSubmission(selectedFormId, submission.id);
-      syncSubmissionState(response.submission);
+      if (generation === submissionDetailGeneration.current) syncSubmissionState(response.submission);
     } catch {
-      setSelectedSubmission(submission);
+      if (generation === submissionDetailGeneration.current) setSelectedSubmission(submission);
     }
   }
 
@@ -2411,7 +2374,7 @@ export function OrgAdminFormsWorkspace({
           tone="warning"
         />
         <KpiCard label="Scale attive" value={surveyStats.scaleStats.length} hint="Rating e NPS nel builder" tone="muted" />
-        <KpiCard label="Commenti" value={surveyStats.comments.length} hint="Risposte testuali compilate" tone="info" />
+        <KpiCard label="Commenti" value={surveyStats.commentCount} hint="Risposte testuali compilate" tone="info" />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)] xl:items-start">
@@ -2434,7 +2397,7 @@ export function OrgAdminFormsWorkspace({
                     </div>
                     <div className="mt-4 grid gap-2">
                       {stat.options.map((option) => {
-                        const count = stat.counts.get(option) || 0;
+                        const count = stat.counts[option] || 0;
                         const width = stat.max > 0 ? Math.max(7, Math.round((count / stat.max) * 100)) : 0;
                         return (
                           <div key={option} className="grid grid-cols-[2.5rem_minmax(0,1fr)_2.5rem] items-center gap-3 text-sm">
@@ -2466,7 +2429,7 @@ export function OrgAdminFormsWorkspace({
                     <h4 className="text-sm font-semibold text-neutral-950">{stat.label}</h4>
                     <div className="mt-4 space-y-3">
                       {stat.options.map((option) => {
-                        const count = stat.counts.get(option) || 0;
+                        const count = stat.counts[option] || 0;
                         const percent = stat.total > 0 ? Math.round((count / stat.total) * 100) : 0;
                         return (
                           <div key={option}>
@@ -2861,7 +2824,14 @@ export function OrgAdminFormsWorkspace({
     </div>
   );
 
-  const responsesTab = mode === "surveys" ? surveyResponsesTab : formResponsesTab;
+  const responsesTab = <>
+    <nav className="flex items-center justify-end gap-3" aria-label="Pagine risposte">
+      <span className="text-sm">{submissionTotal} risposte · pagina {submissionPage + 1}</span>
+      <button type="button" className="btn-secondary" disabled={submissionsLoading || submissionPage === 0} onClick={() => setSubmissionPage((page) => page - 1)}>Precedente</button>
+      <button type="button" className="btn-secondary" disabled={submissionsLoading || (submissionPage + 1) * 25 >= submissionTotal} onClick={() => setSubmissionPage((page) => page + 1)}>Successiva</button>
+    </nav>
+    {mode === "surveys" ? surveyResponsesTab : formResponsesTab}
+  </>;
 
   return (
     <div className={embedded ? "" : (isEditorOpen ? "w-full" : "container-shell py-8 md:py-10")}>

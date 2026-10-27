@@ -100,6 +100,48 @@ def _column_type_name(conn, table: str, column: str) -> str:
     return ""
 
 
+def _ensure_member_auth_columns(conn) -> None:
+    """Upgrade local/test legacy auth once, without re-authorizing old proofs."""
+    _add_column_if_missing(
+        conn, "members", "auth_version", "INTEGER NOT NULL DEFAULT 1"
+    )
+    token_columns = {column["name"] for column in inspect(conn).get_columns("tokens")}
+    if "auth_version" not in token_columns:
+        _add_column_if_missing(conn, "tokens", "auth_version", "INTEGER")
+        conn.execute(text("""
+            UPDATE tokens
+               SET auth_version = (
+                   SELECT members.auth_version FROM members
+                    WHERE members.id = tokens.member_id
+               )
+             WHERE purpose IN (
+                 'LOGIN_MAGIC_LINK', 'PASSWORD_RESET', 'REGISTRATION_CONTINUATION',
+                 'login_magic_link', 'password_reset', 'registration_continuation'
+             )
+        """))
+
+
+def _backfill_legacy_temporary_cards(conn) -> None:
+    """Retain issued legacy card snapshots, without creating payments/orders."""
+    from app.models import TemporaryMembershipPurchase
+    TemporaryMembershipPurchase.__table__.create(bind=conn, checkfirst=True)
+    conn.execute(text("""
+        INSERT INTO temporary_membership_purchases
+          (member_id,org_id,status,method,amount,currency,source,card_no,card_year,
+           batch_id,numbering_scope_id,issued_at,valid_from,valid_until,created_at,updated_at)
+        SELECT m.id,m.org_id,
+          CASE WHEN lower(CAST(m.status AS TEXT))='active' AND m.valid_until > CURRENT_TIMESTAMP THEN 'active' ELSE 'expired' END,
+          'legacy',m.membership_fee_snapshot,COALESCE(o.membership_fee_currency,'EUR'),'legacy',
+          m.card_no,m.card_year,m.batch_id,m.numbering_scope_id,COALESCE(m.valid_from,m.joined_at),
+          m.valid_from,m.valid_until,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP
+        FROM members m JOIN organizations o ON o.id=m.org_id
+        WHERE m.membership_type='temporary' AND m.card_no IS NOT NULL AND m.card_year IS NOT NULL
+          AND m.deleted_at IS NULL AND NOT EXISTS
+          (SELECT 1 FROM temporary_membership_purchases t WHERE t.member_id=m.id
+           AND t.card_no=m.card_no AND t.card_year=m.card_year)
+    """))
+
+
 def _deployed_schema_mode() -> bool:
     return bool(SKIP_CREATE_ALL or settings.IS_DEPLOYED_ENV)
 
@@ -498,6 +540,7 @@ def _run_legacy_column_migrations() -> None:
         _add_column_if_missing(conn, "card_movements", "paid_ref", "TEXT")
         # Add password_hash column for members (password-based login)
         _add_column_if_missing(conn, "members", "password_hash", "TEXT")
+        _ensure_member_auth_columns(conn)
         # Add decision / soft-delete columns for members
         _add_column_if_missing(conn, "members", "decision_at", "DATETIME")
         _add_column_if_missing(
@@ -521,6 +564,11 @@ def _run_legacy_column_migrations() -> None:
         _add_column_if_missing(conn, "members", "member_type", "TEXT")
         _add_column_if_missing(conn, "members", "internal_notes", "TEXT")
         _add_column_if_missing(conn, "members", "is_manual", "INTEGER DEFAULT 0")
+        _add_column_if_missing(conn, "members", "access_email_requested", "BOOLEAN NOT NULL DEFAULT FALSE")
+        _add_column_if_missing(conn, "membership_payments", "temporary_purchase_id", "INTEGER REFERENCES temporary_membership_purchases(id)")
+        _add_column_if_missing(conn, "member_payments", "membership_payment_id", "INTEGER REFERENCES membership_payments(id)")
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_member_payments_membership_payment_id ON member_payments(membership_payment_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_membership_payments_temporary_purchase_id ON membership_payments(temporary_purchase_id)"))
         _add_column_if_missing(conn, "members", "payment_method", "TEXT")
         _add_column_if_missing(conn, "members", "payment_required", "INTEGER DEFAULT 0")
         _add_column_if_missing(
@@ -1190,6 +1238,15 @@ def _run_legacy_column_migrations() -> None:
                 "wallet_title_override": "Golden Age Club - Speakeasy",
             },
         )
+
+        _backfill_legacy_temporary_cards(conn)
+        for name, table, columns in (
+            ("ix_form_submissions_form_date_id", "form_submissions", "form_id, submitted_at, id"),
+            ("ix_bookings_org_date_id", "bookings", "association_id, booking_date, id"),
+            ("ix_membership_payments_term_created_id", "membership_payments", "annual_term_id, created_at, id"),
+        ):
+            conn.execute(text(f"CREATE INDEX IF NOT EXISTS {name} ON {table} ({columns})"))
+
 
 def _seed_database() -> None:
     db = SessionLocal()

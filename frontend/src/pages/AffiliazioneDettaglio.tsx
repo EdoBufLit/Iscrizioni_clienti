@@ -68,7 +68,7 @@ const AffiliazioneDettaglio = () => {
           <div className="surface max-w-2xl p-7">
             <h1 className="text-lg font-semibold text-neutral-900">Associazione non trovata</h1>
             <p className="mt-3 text-sm leading-7 text-neutral-600">
-              L'associazione richiesta non è disponibile oppure il collegamento non ? corretto.
+              L'associazione richiesta non è disponibile oppure il collegamento non è corretto.
             </p>
             <div className="mt-6">
               <Link className="btn-primary" to="/associazioni">
@@ -144,7 +144,7 @@ const AffiliazioneDettaglio = () => {
           <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3" data-reveal="stagger">
             {fullAddress && (
               <article className="surface p-6" data-reveal-item>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-neutral-500">
+                <p className="text-sm font-semibold text-neutral-500">
                   Sede
                 </p>
                 <p className="mt-3 text-sm leading-7 text-neutral-700">{fullAddress}</p>
@@ -153,7 +153,7 @@ const AffiliazioneDettaglio = () => {
 
             {(data.email || data.phone || data.website) && (
               <article className="surface p-6" data-reveal-item>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-neutral-500">
+                <p className="text-sm font-semibold text-neutral-500">
                   Contatti
                 </p>
                 <ul className="mt-3 space-y-2 text-sm leading-7 text-neutral-700">

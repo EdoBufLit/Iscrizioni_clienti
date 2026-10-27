@@ -135,7 +135,6 @@ const PienissimoThankYouPage = () => {
   const verifyUrl =
     successData?.verify_url ??
     (token ? `/api/cards/verify/${token}` : successData?.card_verification_url ?? null);
-  const walletAppleUrl = successData?.card_wallet_apple_url ?? null;
   const walletGoogleUrl =
     successData?.card_wallet_google_url ??
     (queryWalletEnabled ? "/wallet/google/add" : null);
@@ -221,18 +220,8 @@ const PienissimoThankYouPage = () => {
               )}
 
               {/* Wallet links — only show if actually enabled */}
-              {effectiveWalletEnabled && (walletAppleUrl || walletGoogleUrl) && (
+              {effectiveWalletEnabled && walletGoogleUrl && (
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {walletAppleUrl && (
-                    <a
-                      className="inline-flex min-h-11 items-center justify-center rounded-xl border border-brand/40 bg-white px-3 py-2 text-xs font-semibold text-brand hover:bg-brand/5"
-                      href={walletAppleUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Aggiungi a Apple Wallet
-                    </a>
-                  )}
                   {walletGoogleUrl && (
                     <a
                       className="inline-flex min-h-11 items-center justify-center rounded-xl border border-brand/40 bg-white px-3 py-2 text-xs font-semibold text-brand hover:bg-brand/5"

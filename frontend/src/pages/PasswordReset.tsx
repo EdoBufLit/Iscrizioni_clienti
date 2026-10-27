@@ -4,7 +4,7 @@ import { confirmPasswordReset, requestPasswordReset } from "../lib/api";
 import { applySeo } from "../lib/seo";
 
 const GENERIC_MESSAGE =
-  "Se l'email e associata a un account, riceverai un link per reimpostare la password.";
+  "Se l'email è associata a un account, riceverai un link per reimpostare la password.";
 
 const PasswordReset = () => {
   const [searchParams] = useSearchParams();
@@ -76,10 +76,10 @@ const PasswordReset = () => {
         <div className="container-shell w-full">
           <div className="auth-shell mx-auto max-w-3xl p-8 md:p-10">
             <p className="section-title">Area riservata</p>
-            <h1 className="section-heading auth-title">
+            <h1 className="auth-title text-3xl font-semibold tracking-tight">
               {completed ? "Password aggiornata" : "Controlla la tua email"}
             </h1>
-            <p className="auth-copy mt-5 max-w-2xl text-sm leading-7">
+            <p className="auth-copy mt-5 max-w-2xl text-sm leading-7" role="status">
               {completed
                 ? "Ora puoi accedere con la nuova password."
                 : GENERIC_MESSAGE}
@@ -109,22 +109,22 @@ const PasswordReset = () => {
       <div className="container-shell w-full">
         <div className="auth-shell mx-auto max-w-3xl p-8 md:p-10">
           <p className="section-title">Area riservata</p>
-          <h1 className="section-heading auth-title">
+          <h1 className="auth-title text-3xl font-semibold tracking-tight">
             {isConfirmMode ? "Scegli una nuova password" : "Recupera password"}
           </h1>
           <p className="auth-copy mt-4 text-sm leading-7">
             {isConfirmMode
               ? "Inserisci una nuova password per il tuo account socio."
-              : "Ti invieremo un link one-time per reimpostare la password, se l'email appartiene a un account socio attivo."}
+              : "Se l'email appartiene a un account socio attivo, riceverai un link utilizzabile una sola volta per reimpostare la password."}
           </p>
 
           {error ? (
-            <div className="auth-alert mt-6 px-4 py-3 text-sm" role="alert">
+            <div id="reset-error" className="auth-alert mt-6 px-4 py-3 text-sm" role="alert">
               {error}
             </div>
           ) : null}
 
-          <form className="mt-7 space-y-4" onSubmit={handleSubmit}>
+          <form className="mt-7 space-y-4" onSubmit={handleSubmit} aria-describedby={error ? "reset-error" : undefined}>
             {isConfirmMode ? (
               <>
                 <div>
@@ -133,7 +133,7 @@ const PasswordReset = () => {
                   </label>
                   <input
                     id="reset-password"
-                    className="auth-input mt-2 w-full rounded-xl px-4 py-2.5 text-sm"
+                    className="auth-input theme-input mt-2 w-full rounded-xl px-4 py-3 text-base"
                     type="password"
                     autoComplete="new-password"
                     minLength={8}
@@ -153,7 +153,7 @@ const PasswordReset = () => {
                   </label>
                   <input
                     id="reset-password-confirm"
-                    className="auth-input mt-2 w-full rounded-xl px-4 py-2.5 text-sm"
+                    className="auth-input theme-input mt-2 w-full rounded-xl px-4 py-3 text-base"
                     type="password"
                     autoComplete="new-password"
                     minLength={8}
@@ -175,7 +175,7 @@ const PasswordReset = () => {
                 </label>
                 <input
                   id="reset-email"
-                  className="auth-input mt-2 w-full rounded-xl px-4 py-2.5 text-sm"
+                  className="auth-input theme-input mt-2 w-full rounded-xl px-4 py-3 text-base"
                   type="email"
                   autoComplete="email"
                   placeholder="nome@esempio.it"
@@ -187,9 +187,10 @@ const PasswordReset = () => {
             )}
 
             <button
-              className="btn-primary mt-2 w-full py-2.5 text-sm"
+              className="btn-primary mt-2 w-full py-3 text-base"
               type="submit"
               disabled={!canSubmit}
+              aria-busy={submitting}
             >
               {submitting
                 ? "Invio in corso..."

@@ -17,8 +17,8 @@ type ThemeContextValue = {
 };
 
 const STORAGE_KEY = "assonam-theme";
-const LIGHT_THEME_COLOR = "#0f2326";
-const DARK_THEME_COLOR = "#0f1722";
+const LIGHT_THEME_COLOR = "#0f3d3a";
+const DARK_THEME_COLOR = "#101a1c";
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 

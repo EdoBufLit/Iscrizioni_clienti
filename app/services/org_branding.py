@@ -12,6 +12,9 @@ logger = logging.getLogger(__name__)
 _SUBJECT_FALLBACK_TEMPLATE = "La tua tessera {org_name}"
 _EMAIL_LIKE_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 GOLDEN_AGE_CARD_LOGO_URL = "/static/card-logos/golden-age-20260921.png"
+GOLDEN_AGE_WALLET_BG_COLOR = "#3A0015"
+GOLDEN_AGE_WALLET_LOGO_URL = "/static/card-logos/golden-age-wallet-20260921.png"
+GOLDEN_AGE_WALLET_HERO_URL = "/static/wallet-heroes/golden-age-20260921.png"
 _CLUB_DISPLAY_NAME_BY_SLUG_OVERRIDE = {
     # Customer-facing naming override requested for card rendering.
     "oasi-2": "Golden Age Club - Speakeasy",
@@ -23,12 +26,13 @@ _CARD_LOGO_BY_SLUG_FALLBACK = {
     "golden-age-club": GOLDEN_AGE_CARD_LOGO_URL,
 }
 _WALLET_BRANDING_BY_SLUG_FALLBACK = {
-    "oasi-2": {
-        "bg_color": "#0B3C75",
-        "logo_url": GOLDEN_AGE_CARD_LOGO_URL,
-        "hero_image_url": "/static/wallet-heroes/oasi-2-hero.png",
+    slug: {
+        "bg_color": GOLDEN_AGE_WALLET_BG_COLOR,
+        "logo_url": GOLDEN_AGE_WALLET_LOGO_URL,
+        "hero_image_url": GOLDEN_AGE_WALLET_HERO_URL,
         "title_override": "Golden Age Club - Speakeasy",
     }
+    for slug in ("oasi-2", "golden-age-club")
 }
 _DEFAULT_WALLET_BG_COLOR = "#0B3C75"
 _DEFAULT_WALLET_HERO_IMAGE_URL = "/static/wallet-heroes/assonam-default-hero.png"

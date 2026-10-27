@@ -70,6 +70,7 @@ class MembershipPaymentSource(str, enum.Enum):
 class MembershipPaymentKind(str, enum.Enum):
     INITIAL = "initial"
     RENEWAL = "renewal"
+    TEMPORARY = "temporary"
 
 
 class MembershipType(str, enum.Enum):
@@ -1850,6 +1851,7 @@ class FormField(Base):
 
 class FormSubmission(Base):
     __tablename__ = "form_submissions"
+    __table_args__ = (Index("ix_form_submissions_form_date_id", "form_id", "submitted_at", "id"),)
 
     id = Column(Integer, primary_key=True, index=True)
     form_id = Column(Integer, ForeignKey("forms.id"), nullable=False, index=True)
@@ -1883,6 +1885,7 @@ class FormSubmission(Base):
 
 class Booking(Base):
     __tablename__ = "bookings"
+    __table_args__ = (Index("ix_bookings_org_date_id", "association_id", "booking_date", "id"),)
 
     id = Column(Integer, primary_key=True, index=True)
     association_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
@@ -2181,6 +2184,7 @@ class Member(Base):
     )
     payment_completed_at = Column(DateTime(timezone=True), nullable=True)
     password_hash = Column(String, nullable=True)
+    auth_version = Column(Integer, nullable=False, default=1, server_default="1")
     status = Column(SafeMemberStatusType(), default=MemberStatus.PENDING_DOCS.value)
 
     card_no = Column(Integer, nullable=True)
@@ -2195,6 +2199,7 @@ class Member(Base):
     )
     card_email_sent_at = Column(DateTime, nullable=True)
     card_delivered_at = Column(DateTime, nullable=True)
+    access_email_requested = Column(Boolean, nullable=False, default=False, server_default=sa.false())
     google_wallet_class_id = Column(String, nullable=True)
     google_wallet_object_id = Column(String, nullable=True)
     google_wallet_added_at = Column(DateTime, nullable=True)
@@ -2325,6 +2330,43 @@ class Member(Base):
             ),
         ),
         Index("ix_members_card_year_deleted", "card_year", "deleted_at"),
+    )
+
+
+class TemporaryMembershipPurchase(Base):
+    """Immutable offer and issued-card history for repeat temporary memberships."""
+
+    __tablename__ = "temporary_membership_purchases"
+
+    id = Column(Integer, primary_key=True)
+    member_id = Column(Integer, ForeignKey("members.id", ondelete="CASCADE"), nullable=False, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    status = Column(String(32), nullable=False, default="payment_pending", index=True)
+    method = Column(String(16), nullable=False)
+    amount = Column(Numeric(10, 2), nullable=True)
+    currency = Column(String(3), nullable=False, default="EUR")
+    duration_value = Column(Integer, nullable=True)
+    duration_unit = Column(String(8), nullable=True)
+    source = Column(String(24), nullable=False, default="member_area")
+    card_no = Column(Integer, nullable=True)
+    card_year = Column(Integer, nullable=True)
+    batch_id = Column(Integer, ForeignKey("card_batches.id", ondelete="SET NULL"), nullable=True, index=True)
+    numbering_scope_id = Column(Integer, ForeignKey("numbering_scopes.id"), nullable=True, index=True)
+    issued_at = Column(DateTime(timezone=True), nullable=True)
+    valid_from = Column(DateTime(timezone=True), nullable=True)
+    valid_until = Column(DateTime(timezone=True), nullable=True, index=True)
+    issue_reason = Column(String(80), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow_aware)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=utcnow_aware, onupdate=utcnow_aware)
+
+    member = relationship("Member", foreign_keys=[member_id])
+    organization = relationship("Organization", foreign_keys=[org_id])
+
+    __table_args__ = (
+        Index("uq_temporary_purchase_open_member", "member_id", unique=True,
+              sqlite_where=sa.text("status IN ('payment_pending','manual_pending','paid_waiting_card')"),
+              postgresql_where=sa.text("status IN ('payment_pending','manual_pending','paid_waiting_card')")),
+        Index("ix_temporary_purchase_card", "org_id", "card_year", "card_no"),
     )
 
 
@@ -2731,6 +2773,7 @@ class MemberPayment(Base):
     __tablename__ = "member_payments"
 
     id = Column(Integer, primary_key=True, index=True)
+    membership_payment_id = Column(Integer, ForeignKey("membership_payments.id", ondelete="SET NULL"), nullable=True, unique=True)
     member_id = Column(Integer, ForeignKey("members.id"), nullable=False)
     org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
     admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
@@ -2756,6 +2799,10 @@ class MembershipPayment(Base):
         ForeignKey("annual_membership_terms.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
+    )
+    temporary_purchase_id = Column(
+        Integer, ForeignKey("temporary_membership_purchases.id", ondelete="SET NULL"),
+        nullable=True, index=True,
     )
     membership_year = Column(Integer, nullable=True, index=True)
     payment_kind = Column(
@@ -2825,10 +2872,12 @@ class MembershipPayment(Base):
         back_populates="membership_payments",
         foreign_keys=[annual_term_id],
     )
+    temporary_purchase = relationship("TemporaryMembershipPurchase", foreign_keys=[temporary_purchase_id])
     manual_marked_paid_by = relationship("AdminUser")
 
     __table_args__ = (
         Index("ix_membership_payments_org_member_status", "org_id", "socio_id", "status"),
+        Index("ix_membership_payments_term_created_id", "annual_term_id", "created_at", "id"),
         Index(
             "uq_membership_payments_held_org_card",
             "org_id", "reserved_card_no",
@@ -2950,6 +2999,7 @@ class Token(Base):
     member_id = Column(Integer, ForeignKey("members.id"))
     purpose = Column(Enum(TokenType))
     token_hash = Column(String, index=True)
+    auth_version = Column(Integer, nullable=True)
     expires_at = Column(DateTime)
     used_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -3399,3 +3449,9 @@ class VideoJob(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     application = relationship("AffiliationApplication", back_populates="video_jobs")
+
+
+# Register durable delivery models and their transaction-local change tracking.
+from app.models_wallet import GoogleWalletPass, GoogleWalletSyncJob  # noqa: E402,F401
+from app.models_accounting import AccountingAllocation, AccountingEvent, AccountingMutation, AccountingReceipt  # noqa: E402,F401
+from app.models_member_bulk import MemberBulkItem, MemberBulkRequest, MemberBulkRun  # noqa: E402,F401

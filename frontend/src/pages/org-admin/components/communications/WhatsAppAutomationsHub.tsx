@@ -4,11 +4,13 @@ import {
   createOrgAdminWhatsAppAutomation,
   deleteOrgAdminWhatsAppAutomation,
   fetchOrgAdminCommunicationSettings,
-  fetchOrgAdminForms,
+  fetchOrgAdminFormSummaries,
   fetchOrgAdminWhatsAppAutomations,
   putOrgAdminCommunicationSettings,
   updateOrgAdminWhatsAppAutomation,
   type AssociationForm,
+  type AssociationFormSummary,
+  fetchOrgAdminForm,
   type OrgAdminCommunicationSettings,
   type OrgAdminWhatsAppAutomation,
 } from "../../../../lib/api";
@@ -261,7 +263,7 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
   const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
-  const [forms, setForms] = useState<AssociationForm[]>([]);
+  const [forms, setForms] = useState<AssociationFormSummary[]>([]);
   const [automations, setAutomations] = useState<OrgAdminWhatsAppAutomation[]>([]);
   const [settings, setSettings] = useState<OrgAdminCommunicationSettings | null>(null);
   const [settingsSaving, setSettingsSaving] = useState(false);
@@ -270,10 +272,17 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
   const [deleteAutomationTarget, setDeleteAutomationTarget] = useState<OrgAdminWhatsAppAutomation | null>(null);
   const templateTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const selectedForm = useMemo(
-    () => forms.find((form) => form.id === draft.form_id) ?? null,
-    [forms, draft.form_id],
-  );
+  const [selectedForm, setSelectedForm] = useState<AssociationForm | null>(null);
+  useEffect(() => {
+    let active = true;
+    setSelectedForm(null);
+    if (draft.form_id) {
+      fetchOrgAdminForm(draft.form_id).then(({ form }) => {
+        if (active) setSelectedForm(form);
+      }).catch(() => undefined);
+    }
+    return () => { active = false; };
+  }, [draft.form_id]);
   const phoneFieldOptions = useMemo(
     () => (selectedForm?.fields || []).filter((field) => field.field_type === "phone"),
     [selectedForm],
@@ -327,7 +336,7 @@ export function WhatsAppAutomationsHub({ communicationsLocked }: Props) {
     setLoading(true);
     try {
       const [formsData, automationData] = await Promise.all([
-        fetchOrgAdminForms(),
+        fetchOrgAdminFormSummaries(),
         fetchOrgAdminWhatsAppAutomations({ formId: preselectedFormId || undefined }),
       ]);
       setForms(formsData.items);

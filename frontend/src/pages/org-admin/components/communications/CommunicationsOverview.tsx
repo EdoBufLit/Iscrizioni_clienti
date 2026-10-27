@@ -4,7 +4,7 @@ import {
   fetchOrgAdminCommunicationSettings,
   fetchOrgAdminCommunicationUsage,
   fetchOrgAdminEmailCampaigns,
-  fetchOrgAdminForms,
+  fetchOrgAdminFormSummaries,
   type OrgAdminCommunicationUsage,
 } from "../../../../lib/api";
 import { useOrgAdmin } from "../../OrgAdminLayout";
@@ -201,7 +201,7 @@ export function CommunicationsOverview({
       fetchOrgAdminCommunicationSettings().catch(() => null),
       fetchOrgAdminCommunicationUsage().catch(() => null),
       fetchOrgAdminEmailCampaigns().catch(() => ({ items: [] })),
-      fetchOrgAdminForms().catch(() => ({ items: [] })),
+      fetchOrgAdminFormSummaries().catch(() => ({ items: [] })),
     ])
       .then(([settingsData, usageData, campaignData, formData]) => {
         if (cancelled) return;

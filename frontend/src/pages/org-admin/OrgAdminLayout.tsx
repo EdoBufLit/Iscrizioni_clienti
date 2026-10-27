@@ -310,6 +310,7 @@ const OrgAdminLayout = () => {
       {
         label: "Contabilità",
         items: [
+          { to: "/org-admin/incassi", label: "Incassi e riconciliazione", match: ["/org-admin/incassi"], icon: "accounting" },
           { to: "/org-admin/contabilita", label: "Movimenti", match: ["/org-admin/contabilita"], icon: "accounting", hidden: !accountingEnabled },
           { to: "/org-admin/documenti", label: "Documenti", match: ["/org-admin/documenti"], icon: "documents" },
           { to: "/org-admin/billing", label: "Billing demo", match: ["/org-admin/billing"], icon: "billing", hidden: !stripeEnabled },
@@ -344,6 +345,7 @@ const OrgAdminLayout = () => {
       { key: "documents", label: "Documenti", to: "/org-admin/documenti", activeMatch: ["/org-admin/documenti"], icon: "docs" as const },
       { key: "invites", label: "Inviti", to: "/org-admin/inviti", activeMatch: ["/org-admin/inviti"], icon: "book" as const },
       { key: "quote", label: "Quote e rinnovi", to: "/org-admin/quote", activeMatch: ["/org-admin/quote"], icon: "chart" as const },
+      { key: "receipts", label: "Incassi e riconciliazione", to: "/org-admin/incassi", activeMatch: ["/org-admin/incassi"], icon: "chart" as const },
       { key: "association", label: "Associazione", to: "/org-admin/associazione", activeMatch: ["/org-admin/associazione"], icon: "building" as const },
       { key: "security", label: "Sicurezza", to: "/org-admin/sicurezza", activeMatch: ["/org-admin/sicurezza"], icon: "building" as const },
       { key: "audit", label: "Registro attività", to: "/org-admin/registro-attivita", activeMatch: ["/org-admin/registro-attivita"], icon: "book" as const },

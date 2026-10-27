@@ -37,6 +37,15 @@ services:
     volumes:
       - ./secrets/google-wallet-sa.json:/run/secrets/google_wallet_sa.json:ro
 
+  google-wallet-sync-worker:
+    environment:
+      PYTHONUNBUFFERED: "1"
+      APP_ENV: production
+      GOOGLE_WALLET_ISSUER_ID: ${GOOGLE_WALLET_ISSUER_ID}
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google_wallet_sa.json
+    volumes:
+      - ./secrets/google-wallet-sa.json:/run/secrets/google_wallet_sa.json:ro
+
   migrate:
     environment:
       APP_ENV: production

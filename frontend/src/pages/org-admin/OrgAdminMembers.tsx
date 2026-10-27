@@ -12,6 +12,8 @@ import {
 import { useOrgAdmin } from "./OrgAdminLayout";
 import CreateMemberModal from "./components/CreateMemberModal";
 import MemberImportModal from "./components/MemberImportModal";
+import MemberBulkActions from "./components/MemberBulkActions";
+import useMemberSelection from "../../hooks/useMemberSelection";
 import DebouncedSearchInput from "./components/DebouncedSearchInput";
 import MembersTable from "./components/MembersTable";
 import { DetailPanel, EmptyState, KpiCard, PageHeader, SectionPanel, StatusChip } from "./components/OrgAdminPrimitives";
@@ -110,6 +112,11 @@ const OrgAdminMembers = () => {
   const [successMessage, setSuccessMessage] = useState("");
   const [createdMemberId, setCreatedMemberId] = useState<number | null>(null);
   const [selectedMemberId, setSelectedMemberId] = useState<number | null>(null);
+  const bulkSelection = useMemberSelection(
+    { q: debouncedSearch || undefined, status, access: access || undefined, source: source || undefined, docs: docs || undefined, order },
+    members.map((member) => member.id),
+    total,
+  );
 
   const loadMembershipSettings = useCallback(async () => {
     if (adminLoading || !admin) return;
@@ -215,18 +222,9 @@ const OrgAdminMembers = () => {
     () => members.find((member) => member.id === selectedMemberId) || members[0] || null,
     [members, selectedMemberId],
   );
-  const expiringSoonCount = useMemo(() => {
-    const now = new Date();
-    const limit = new Date(now);
-    limit.setDate(limit.getDate() + 30);
-    return members.filter((member) => {
-      if (!member.valid_until) return false;
-      const validUntil = new Date(member.valid_until);
-      return validUntil >= now && validUntil <= limit;
-    }).length;
-  }, [members]);
-  const missingDocumentsCount = metrics?.documents_pending_review ?? members.filter((member) => (member.docs_count ?? 0) === 0).length;
-  const activeMembersCount = metrics?.active_members_count ?? total;
+  const expiringSoonCount = metrics?.expiring_members_count ?? 0;
+  const missingDocumentsCount = metrics?.documents_pending_review ?? 0;
+  const activeMembersCount = metrics?.active_members_count ?? 0;
 
   const onFilterChange = useCallback((setter: (value: string) => void, value: string) => {
     setter(value);
@@ -249,7 +247,9 @@ const OrgAdminMembers = () => {
       setShowModal(false);
       setSuccessMessage(
         `Socio ${created.first_name} ${created.last_name} creato con successo.${
-          created.email_status === "queued"
+          created.email_status === "deferred"
+            ? " Accesso previsto dopo attivazione."
+            : created.email_status === "queued"
             ? " Accesso accodato."
             : created.email_sent
               ? " Accesso inviato via email."
@@ -366,9 +366,9 @@ const OrgAdminMembers = () => {
       </div>
 
       <div className="org-admin-desktop-kpi-grid grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Soci attivi" value={activeMembersCount} hint="+3% questo mese" tone="success" />
+        <KpiCard label="Soci attivi" value={activeMembersCount} hint="Soci con tessera attiva" tone="success" />
         <KpiCard label="Da approvare" value={metrics?.pending_requests_count ?? 0} hint="Richieste in verifica" tone="warning" />
-        <KpiCard label="Documenti mancanti" value={missingDocumentsCount} hint="Da completare o rivedere" tone={missingDocumentsCount ? "danger" : "muted"} />
+        <KpiCard label="Documenti da verificare" value={missingDocumentsCount} hint="In attesa di verifica" tone={missingDocumentsCount ? "danger" : "muted"} />
         <KpiCard label="Rinnovi in scadenza" value={expiringSoonCount} hint="Nei prossimi 30 giorni" tone="info" />
       </div>
 
@@ -438,6 +438,22 @@ const OrgAdminMembers = () => {
         </div>
       </SectionPanel>
 
+      {!adminLoading && admin && (
+        <MemberBulkActions
+          selection={bulkSelection.selection}
+          count={bulkSelection.count}
+          total={total}
+          pageCount={members.length}
+          allPageChecked={bulkSelection.allVisibleChecked}
+          disabled={isLoading || error}
+          storageKey={`assonam-member-bulk:${admin.org_id}:${admin.id}`}
+          onTogglePage={bulkSelection.togglePage}
+          onSelectAll={bulkSelection.selectAllFiltered}
+          onClear={bulkSelection.clear}
+          onCompleted={() => { void loadMembers(); }}
+        />
+      )}
+
       <div className="org-admin-mobile-master-detail grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
         <MembersTable
           error={error}
@@ -449,6 +465,9 @@ const OrgAdminMembers = () => {
           onPageChange={setPage}
           onSelectMember={setSelectedMemberId}
           onOpenMember={handleOpenMember}
+          checkedMemberIds={bulkSelection.checkedIds}
+          onToggleMember={bulkSelection.toggle}
+          onTogglePage={bulkSelection.togglePage}
         />
         <MemberSidePanel member={selectedMember} onOpenMember={handleOpenMember} />
       </div>

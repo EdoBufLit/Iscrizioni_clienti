@@ -4,21 +4,21 @@ module.exports = {
   theme: {
     extend: {
       fontSize: {
-        base: ["0.9375rem", { lineHeight: "1.625" }],
+        base: ["1rem", { lineHeight: "1.625" }],
       },
       fontFamily: {
-        sans: ["\"Source Sans 3\"", "system-ui", "sans-serif"],
-        display: ["\"Source Serif 4\"", "serif"],
+        sans: ["var(--font-ui)"],
+        display: ["var(--font-ui)"],
       },
       colors: {
         brand: {
-          DEFAULT: "#0f3d3a",
-          light: "#1e6f67",
-          dark: "#0a2a27",
+          DEFAULT: "rgb(var(--color-brand) / <alpha-value>)",
+          light: "rgb(var(--color-brand-light) / <alpha-value>)",
+          dark: "rgb(var(--color-brand-dark) / <alpha-value>)",
         },
         accent: {
-          DEFAULT: "#c6a04f",
-          light: "#f5efe2",
+          DEFAULT: "rgb(var(--color-accent) / <alpha-value>)",
+          light: "#eef3f1",
         },
         ember: {
           DEFAULT: "#d2705a",
@@ -29,17 +29,17 @@ module.exports = {
           100: "#f4efe7",
         },
         neutral: {
-          25: "#fdfcf9",
-          50: "#f6f3ee",
-          100: "#ece6dc",
-          200: "#d7cfc1",
-          300: "#b9ae9d",
-          400: "#9a8f7f",
-          500: "#7b7265",
-          600: "#5c564c",
-          700: "#403c35",
-          800: "#2b2722",
-          900: "#191612",
+          25: "#f8faf9",
+          50: "#f3f6f5",
+          100: "#e9eeec",
+          200: "#d4dfdc",
+          300: "#b0c1bc",
+          400: "#7c938b",
+          500: "#607471",
+          600: "#4b605f",
+          700: "#344b47",
+          800: "#243b36",
+          900: "#182c2b",
         },
       },
       borderRadius: {

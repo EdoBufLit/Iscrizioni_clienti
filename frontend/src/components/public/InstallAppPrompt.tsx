@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import "./InstallAppPrompt.css";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -145,18 +146,18 @@ const InstallAppPrompt = ({ hidden = false }: Props) => {
       }`}
       aria-hidden={hidden}
     >
-      <div className="pointer-events-auto flex w-full max-w-[28rem] items-start gap-3 rounded-[1.15rem] border border-white/70 bg-[rgba(246,250,250,0.92)] px-3 py-3 text-left shadow-[0_18px_44px_rgba(15,35,38,0.14)] backdrop-blur-xl">
-        <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[rgba(15,61,58,0.12)] text-[0.7rem] font-semibold uppercase tracking-[0.24em] text-brand">
+      <div className="install-app-prompt pointer-events-auto flex w-full max-w-[28rem] items-start gap-3 rounded-[1.15rem] border px-3 py-3 text-left">
+        <div className="install-app-prompt__badge mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[0.7rem] font-semibold uppercase tracking-[0.24em]">
           App
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-slate-900">{title}</p>
-          <p className="mt-1 text-xs leading-5 text-slate-600 sm:text-sm">{copy}</p>
+          <p className="install-app-prompt__title text-sm font-semibold">{title}</p>
+          <p className="install-app-prompt__copy mt-1 text-xs leading-5 sm:text-sm">{copy}</p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {variant === "install" ? (
               <button
                 type="button"
-                className="inline-flex min-h-10 items-center justify-center rounded-full bg-slate-900 px-4 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-wait disabled:opacity-70"
+                className="install-app-prompt__install inline-flex min-h-10 items-center justify-center rounded-full px-4 text-sm font-semibold transition hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-70"
                 onClick={handleInstall}
                 disabled={installing}
               >
@@ -165,7 +166,7 @@ const InstallAppPrompt = ({ hidden = false }: Props) => {
             ) : null}
             <button
               type="button"
-              className="inline-flex min-h-10 items-center justify-center rounded-full border border-slate-200 bg-white/80 px-4 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+              className="install-app-prompt__dismiss inline-flex min-h-10 items-center justify-center rounded-full border px-4 text-sm font-medium transition"
               onClick={dismiss}
             >
               Non ora
@@ -175,7 +176,7 @@ const InstallAppPrompt = ({ hidden = false }: Props) => {
         <button
           type="button"
           aria-label="Chiudi suggerimento installazione app"
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-white/70 hover:text-slate-700"
+          className="install-app-prompt__close inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition"
           onClick={dismiss}
         >
           ×

@@ -1,15 +1,15 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { applySeo } from "../../lib/seo";
 import { fetchOrgAdminCommunicationSettings } from "../../lib/api";
 import Skeleton from "../../components/ui/Skeleton";
 
-import { CommunicationsOverview } from "./components/communications/CommunicationsOverview";
-import { MessagesHub } from "./components/communications/MessagesComposerHub";
-import { PublicFormsHub } from "./components/communications/PublicFormsHub";
-import { EmailSendingSettings } from "./components/communications/EmailSendingSettings";
-import { WhatsAppHub } from "./components/communications/WhatsAppHub";
-import { WhatsAppAutomationsHub } from "./components/communications/WhatsAppAutomationsHub";
+const CommunicationsOverview = lazy(() => import("./components/communications/CommunicationsOverview").then((module) => ({ default: module.CommunicationsOverview })));
+const MessagesHub = lazy(() => import("./components/communications/MessagesComposerHub").then((module) => ({ default: module.MessagesHub })));
+const PublicFormsHub = lazy(() => import("./components/communications/PublicFormsHub").then((module) => ({ default: module.PublicFormsHub })));
+const EmailSendingSettings = lazy(() => import("./components/communications/EmailSendingSettings").then((module) => ({ default: module.EmailSendingSettings })));
+const WhatsAppHub = lazy(() => import("./components/communications/WhatsAppHub").then((module) => ({ default: module.WhatsAppHub })));
+const WhatsAppAutomationsHub = lazy(() => import("./components/communications/WhatsAppAutomationsHub").then((module) => ({ default: module.WhatsAppAutomationsHub })));
 import { PageHeader, StatusChip } from "./components/OrgAdminPrimitives";
 
 type WhatsAppView = "inbox" | "automazioni";
@@ -273,6 +273,7 @@ export default function OrgAdminCommunications() {
         </div>
 
         <div className="px-5 py-6 md:px-6">
+          <Suspense fallback={<Skeleton className="h-96 w-full rounded-xl" />} >
           {activeTab === "panoramica" && (
             <CommunicationsOverview
               communicationsLocked={communicationsLocked}
@@ -351,6 +352,7 @@ export default function OrgAdminCommunications() {
           {activeTab === "email" && (
             <EmailSendingSettings communicationsLocked={communicationsLocked} />
           )}
+          </Suspense>
         </div>
       </section>
     </div>

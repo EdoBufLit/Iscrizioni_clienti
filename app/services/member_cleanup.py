@@ -14,8 +14,10 @@ from app.models import (
     MembershipPayment,
     OperationLog,
     Token,
+    TemporaryMembershipPurchase,
 )
 from app.services.card_allocation import release_card_number
+from app.services.member_sessions import replace_member_password
 
 
 def _normalize_email(value: str | None) -> str | None:
@@ -109,6 +111,14 @@ def cleanup_deleted_member_traces(
     candidates = query.all()
     cleaned = 0
     for member in candidates:
+        credentials_cleared = member.password_hash is not None
+        if credentials_cleared:
+            member = replace_member_password(
+                db,
+                member_id=member.id,
+                expected_version=member.auth_version,
+                password_hash=None,
+            )
         release_card_number(
             db,
             org_id=member.org_id,
@@ -116,7 +126,7 @@ def cleanup_deleted_member_traces(
             card_no=member.card_no,
             batch_id=member.batch_id,
         )
-        if purge_deleted_member_identifiers(member):
+        if purge_deleted_member_identifiers(member) or credentials_cleared:
             cleaned += 1
 
     if cleaned:
@@ -164,11 +174,17 @@ def purge_deleted_members_permanently(
     if filters:
         query = query.filter(or_(*filters))
 
-    members = query.all()
+    # Bulk operations lock the profile before its per-member outcome. Acquire
+    # the same locks before deletion hooks detach those outcome references.
+    members = query.order_by(Member.id).with_for_update(of=Member).populate_existing().all()
     if not members:
         return 0
 
     member_ids = [member.id for member in members]
+    from app.services.google_wallet_sync import revoke_member_wallet_passes
+    for member in members:
+        revoke_member_wallet_passes(db, member)
+    db.flush()
 
     db.query(OperationLog).filter(OperationLog.actor_member_id.in_(member_ids)).update(
         {OperationLog.actor_member_id: None},
@@ -203,6 +219,15 @@ def purge_deleted_members_permanently(
     )
     db.query(AnnualMembershipTerm).filter(
         AnnualMembershipTerm.member_id.in_(member_ids)
+    ).delete(synchronize_session=False)
+    purchase_ids = db.query(TemporaryMembershipPurchase.id).filter(
+        TemporaryMembershipPurchase.member_id.in_(member_ids)
+    )
+    db.query(MembershipPayment).filter(
+        MembershipPayment.temporary_purchase_id.in_(purchase_ids)
+    ).update({MembershipPayment.temporary_purchase_id: None}, synchronize_session=False)
+    db.query(TemporaryMembershipPurchase).filter(
+        TemporaryMembershipPurchase.member_id.in_(member_ids)
     ).delete(synchronize_session=False)
     db.query(Booking).filter(Booking.member_id.in_(member_ids)).update(
         {Booking.member_id: None},

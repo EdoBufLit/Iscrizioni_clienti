@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, case
 from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
@@ -1125,9 +1125,8 @@ def build_bookings_query(db: Session, *, association_id: int):
     return (
         db.query(Booking)
         .options(
-            joinedload(Booking.form),
-            joinedload(Booking.submission),
-            joinedload(Booking.events),
+            joinedload(Booking.form).selectinload(Form.fields),
+            joinedload(Booking.submission).joinedload(FormSubmission.reviewed_by_admin),
             joinedload(Booking.room),
             joinedload(Booking.table),
         )
@@ -1169,19 +1168,45 @@ def agenda_day_payload(
     agenda_date: date,
     status: str | None = None,
     form_id: int | None = None,
+    limit: int | None = None,
+    offset: int = 0,
 ) -> dict[str, Any]:
-    items = list_bookings(
-        db,
-        association_id=association_id,
-        anchor_date=agenda_date,
-        status=status,
-        form_id=form_id,
-    )
+    query = build_bookings_query(db, association_id=association_id).filter(Booking.booking_date == agenda_date)
+    if status:
+        query = query.filter(Booking.status == status)
+    if form_id:
+        query = query.filter(Booking.form_id == form_id)
+    total = query.count()
+    query = query.order_by(Booking.booking_time.asc().nulls_last(), Booking.created_at.asc(), Booking.id.asc()).offset(offset)
+    if limit is not None:
+        query = query.limit(limit)
+    items = query.all()
     return {
         "date": agenda_date.isoformat(),
         "items": [serialize_booking(item) for item in items],
-        "total": len(items),
+        "total": total,
     }
+
+
+def agenda_period_summary(db: Session, *, association_id: int, date_from: date, date_to: date,
+                          status: str | None = None, form_id: int | None = None) -> dict[str, Any]:
+    if date_to < date_from or (date_to - date_from).days >= 62:
+        raise HTTPException(status_code=422, detail="Seleziona un periodo di massimo 62 giorni.")
+    count_if = lambda expression: func.sum(case((expression, 1), else_=0))
+    query = db.query(
+        Booking.booking_date, func.count(Booking.id),
+        count_if(Booking.status.in_(["new", "pending"])), count_if(Booking.status == "confirmed"),
+        count_if(Booking.status.in_(["completed", "seated"])), func.coalesce(func.sum(Booking.party_size), 0),
+        count_if(or_(Booking.status.in_(["new", "pending"]), FormSubmission.status.in_(["new", "pending"]))),
+    ).outerjoin(FormSubmission, FormSubmission.id == Booking.submission_id).filter(
+        Booking.association_id == association_id, Booking.booking_date >= date_from, Booking.booking_date <= date_to)
+    if status:
+        query = query.filter(Booking.status == status)
+    if form_id:
+        query = query.filter(Booking.form_id == form_id)
+    return {"days": [{"date": row[0].isoformat(), "total": row[1], "pending": row[2], "confirmed": row[3],
+                       "completed": row[4], "party_size": row[5], "request_pending": row[6]}
+                      for row in query.group_by(Booking.booking_date).order_by(Booking.booking_date)]}
 
 
 def agenda_week_payload(

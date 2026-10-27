@@ -1,9 +1,14 @@
-﻿- Se una nuova UI di configurazione mostra automazioni WhatsApp come attive o collegate al form, il backend deve gia eseguirle davvero sul submit pubblico: non va mai rilasciata una UX che sembra operativa ma e solo CRUD. Inoltre il resolver del numero deve usare i veri campi phone del form, non un elenco rigido di field_key legacy.
+- Se una nuova UI di configurazione mostra automazioni WhatsApp come attive o collegate al form, il backend deve gia eseguirle davvero sul submit pubblico: non va mai rilasciata una UX che sembra operativa ma e solo CRUD. Inoltre il resolver del numero deve usare i veri campi phone del form, non un elenco rigido di field_key legacy.
 - Quando introduco un flusso pagamenti con redirect frontend, il redirect o il polling non devono mai fare fulfillment: webhook provider + verify server-side devono restare l'unica fonte autorevole per `completed`, mentre il polling serve solo a mostrare stato e retry.
 - Quando il cliente chiede fedelta esatta a mockup admin, non basta un re-skin: prima della consegna servono screenshot viewport-to-viewport delle superfici critiche, inclusi drawer/modali fixed. Inoltre le integrazioni esistenti nel dettaglio (es. SumUp) vanno preservate esplicitamente nella nuova IA e verificate nello screenshot.
 # Lessons
 
+- Sep 21, 2026: per allineare il marchio su Google Wallet verificare anche i valori espliciti salvati nell'organizzazione, non solo i fallback. Nei popup pubblici abbinare testo e sfondo allo stesso tema: un pannello chiaro fisso rompe gli override globali del testo in dark mode.
+
 - Sep 21, 2026: nella conferma tesseramento Golden Age il logo deve essere libero da riquadri neri/grigi. Per un marchio oro trasparente verificare separatamente il contrasto su tema chiaro e scuro; eventuali adattamenti cromatici della pagina non devono modificare l'asset o le tessere gia approvate.
+
+- Sep 12, 2026: dark form-control overrides in the super-admin stylesheet include root/theme specificity and hardcoded text fill. Page-scoped fixes must override both color and WebKit text fill with sufficient specificity; verify computed contrast in the actual browser after theme switching, including the production build.
+- Sep 12, 2026: when disposable PostgreSQL QA containers use an anonymous data volume, remove that exact test volume with the container and verify Docker volume counts afterward; do not use a general prune against production storage.
 
 - Sep 12, 2026: when card orders from a second channel are added to association totals, inspect the super-admin receivables ledger as well. The user requires WhatsApp and portal orders in the same accounting workflow, with payment actions and filtered totals. Historical WhatsApp orders are unpaid and debt starts on request, as explicitly confirmed; do not preserve the previous portal-only exclusion.
 
@@ -208,7 +213,8 @@
 
 - Se il cliente segnala che una UI rimossa gli piaceva, non sostituirla con un editor piu povero solo per semplificare il layout: bisogna ripristinare il flusso apprezzato oppure offrire subito un wizard equivalente o migliore, mantenendo le affordance chiave.
 
-- Se il deploy usa un checkout persistente con artefatti runtime generati da container (es. data/videos/welcome), il workflow deve escluderli esplicitamente da git status e git clean; altrimenti basta un owner diverso (oot vs deploy) per bloccare il deploy anche se il push GitHub e corretto.
+- Se il deploy usa un checkout persistente con artefatti runtime generati da container (es. data/videos/welcome), il workflow deve escluderli esplicitamente da git status e git clean; altrimenti basta un owner diverso (
+oot vs deploy) per bloccare il deploy anche se il push GitHub e corretto.
 
 - Mar 20, 2026: su UX sensibile non devo sostituire un wizard gia approvato con una shell nuova senza riallinearmi esplicitamente al riferimento migliore del prodotto. Se esiste un wizard canonico forte (qui Iscrizione), va riusato come grammatica primaria prima di provare varianti.
 
@@ -216,7 +222,8 @@
 - Mar 20, 2026: quando integro un editor terzo pesante (es. GrapesJS) in un flusso business-critical, devo prima ancorarlo a una grammatica UX gia validata dal prodotto e verificare desktop/mobile prima di dichiarare il wizard accettabile. La potenza del builder non giustifica una UX piu tecnica o piu fragile del flusso precedente.
 
 - Mar 21, 2026: nei flussi numerici shared non devo mai introdurre fallback o domini di calcolo impliciti. Prima verifico il pool reale, la query esatta e la semantica dei campi esistenti (
-ext_no, storico eleased_at), poi implemento solo regole esplicite e dimostrabili dal dominio.
+ext_no, storico
+eleased_at), poi implemento solo regole esplicite e dimostrabili dal dominio.
 
 - Mar 21, 2026: quando il dominio numerico shared dipende dal DB reale, prima di difendere la query devo verificare se lo scope ufficiale e stato contaminato da org/batch di test in produzione. In quel caso il bug puo essere di dato, non di formula, e la correzione deve ripristinare il perimetro ufficiale prima di cambiare codice.
 
@@ -319,3 +326,25 @@ Do not interpret "date without slots" as closed when a default booking schedule 
 - User correction: a single transaction must never block the entire service for hours. A restart restores availability but does not finish prevention work.
 - Never execute blocking PostgreSQL allocation locks directly in an async request handler, especially when the lock holder subsequently awaits upload I/O. Keep blocking business work off the event loop and bound lock/idle-transaction lifetimes.
 - Verify concurrent requests and runtime safeguards before release; healthy containers alone do not prove application responsiveness.
+
+## Oct 14, 2026 - Verificare tutto lo storico email quando mancano data o oggetto
+
+- Se l'utente chiede di verificare una mail segnalata da un club senza conoscerne data o oggetto, controllare prima l'intero storico di tutti gli indirizzi registrati del club, senza LIMIT o filtri temporali; non dedurre l'assenza dalla sola lista degli invii piu recenti.
+- Distinguere contenuto email verificato, tipo/oggetto conservati e corpi rimossi. Cercare importi con confini numerici: una ricerca di 50 euro non deve confondere 150 euro.
+- Uno stato unpaid attribuito da migrazione di ordini storici non prova il mancato pagamento: controllare la provenienza nell'audit prima di presentarlo come debito accertato.
+
+## Oct 17, 2026 - Rispettare il perimetro dopo un audit
+
+- Se l'utente esclude webhook, endpoint legacy, dipendenze, CI o pulizia P3, mantenerli fuori dalla correzione approvata; separare chiaramente implementazioni, bozza UI/UX e funzionalita future.
+- Gli acquisti temporanei di soci esistenti conservano account e storico. Durata dal rilascio, conferma manuale dell'incasso prima dell'emissione e una sola richiesta aperta tra temporanea/annuale.
+- Un pass annuale salvato si aggiorna mantenendo l'identita; ogni temporanea conserva l'identita della propria emissione. La revoca deve sopravvivere sia alla cancellazione concorrente con il provider sia alle purghe bulk che bypassano gli hook ORM.
+
+## Oct 17, 2026 - Separare tema interfaccia e branding delle tessere
+
+- Quando l'utente approva un tema uniforme ma chiede di conservare le tessere, isolare l'artwork dai bridge globali di font e colori. Preservare anche i canvas dei form personalizzati.
+- Verificare light/dark e confrontare font, sfondi e colori effettivi: gli override di utility come bg-white possono scurire anche il fondo del QR.
+- Un colore brand chiaro in dark richiede il proprio foreground scuro. Controllare anche pulsanti locali, guide in portali e navigazione mobile, non soltanto il componente button principale.
+## Oct 26, 2026 - Le modali lunghe devono poter scorrere a ogni breakpoint
+
+- Se una shell modale blocca lo scroll del body, garantire nella shell stessa un pannello con altezza massima rispetto al viewport e scroll interno. Non demandare questo requisito ai singoli form o a un override mobile.
+- Per moduli lunghi verificare anche portatili bassi, tablet sopra il breakpoint mobile e orientamento orizzontale: provare lo scroll reale fino a Salva, errori di validazione, textarea ingrandita e ripristino dello scroll alla chiusura. Usare dvh con fallback vh per l'altezza disponibile.

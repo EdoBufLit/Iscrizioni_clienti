@@ -29,6 +29,8 @@ tasks/
 test-results/
 marketing/
 *.png
+!app/static/**/*.png
+!frontend/public/**/*.png
 *.mp4
 video-renderer/**/.cache/
 video-renderer/**/.tmp/

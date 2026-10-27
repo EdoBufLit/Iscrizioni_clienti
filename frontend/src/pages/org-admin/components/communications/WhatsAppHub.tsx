@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AuthError,
   connectOrgAdminWhatsApp,
   disconnectOrgAdminWhatsApp,
   fetchOrgAdminWhatsAppChats,
-  fetchOrgAdminWhatsAppContacts,
   fetchOrgAdminWhatsAppConnection,
   fetchOrgAdminWhatsAppMessages,
   fetchOrgAdminWhatsAppQr,
@@ -14,10 +13,10 @@ import {
   startOrgAdminWhatsAppChat,
   type OrgAdminWhatsAppChat,
   type OrgAdminWhatsAppConnection,
-  type OrgAdminWhatsAppContact,
   type OrgAdminWhatsAppMessage,
 } from "../../../../lib/api";
 import { useToast } from "../../../../components/ui/ToastProvider";
+import { startVisiblePolling } from "../../../../lib/visiblePolling";
 import Skeleton from "../../../../components/ui/Skeleton";
 
 type WhatsAppHubProps = {
@@ -128,14 +127,43 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
   const [threadLoading, setThreadLoading] = useState(false);
   const [connection, setConnection] = useState<OrgAdminWhatsAppConnection>(emptyConnection());
   const [chats, setChats] = useState<OrgAdminWhatsAppChat[]>([]);
-  const [contacts, setContacts] = useState<OrgAdminWhatsAppContact[]>([]);
+  const contacts = useMemo(() => chats.map((chat) => ({ remote_jid: chat.external_chat_id, display_name: chat.display_name,
+    phone_number: chat.external_chat_id.split("@")[0], profile_pic_url: null, updated_at: chat.last_message_at })), [chats]);
+  const [selectedChatDetails, setSelectedChatDetails] = useState<OrgAdminWhatsAppChat | null>(null);
+  const [chatPage, setChatPage] = useState(0);
+  const [chatTotal, setChatTotal] = useState(0);
+  const [messagePage, setMessagePage] = useState(0);
+  const [messageTotal, setMessageTotal] = useState(0);
+  const selectedIdRef = useRef<number | null>(null);
+  const pageRef = useRef(0);
+  pageRef.current = messagePage;
+  const messagesController = useRef<AbortController | null>(null);
+  const chatsGeneration = useRef(0);
+  const draftByChat = useRef<Record<number, string>>({});
   const [messages, setMessages] = useState<OrgAdminWhatsAppMessage[]>([]);
   const [selectedChatId, setSelectedChatId] = useState<number | null>(null);
-  const [composerText, setComposerText] = useState("");
+  const [composerText, setComposerTextState] = useState("");
+  const setComposerText = (value: string) => {
+    if (selectedIdRef.current) draftByChat.current[selectedIdRef.current] = value;
+    setComposerTextState(value);
+  };
+  const selectChat = (id: number | null) => {
+    messagesController.current?.abort();
+    selectedIdRef.current = id;
+    pageRef.current = 0;
+    setMessagePage(0);
+    setMessages([]);
+    setMessageTotal(0);
+    setSelectedChatId(id);
+    setSelectedChatDetails(chats.find((chat) => chat.id === id) ?? null);
+    setComposerTextState(id ? draftByChat.current[id] || "" : "");
+  };
   const [newChatNumber, setNewChatNumber] = useState("");
   const [newChatName, setNewChatName] = useState("");
   const [newChatText, setNewChatText] = useState("");
   const [sidebarQuery, setSidebarQuery] = useState("");
+  const sidebarRequest = useRef({ page: chatPage, query: sidebarQuery });
+  sidebarRequest.current = { page: chatPage, query: sidebarQuery };
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>("all");
   const [showNewChatPanel, setShowNewChatPanel] = useState(false);
   const [mobileThreadOpen, setMobileThreadOpen] = useState(false);
@@ -147,8 +175,8 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
   );
 
   const selectedChat = useMemo(
-    () => chats.find((chat) => chat.id === selectedChatId) ?? null,
-    [chats, selectedChatId],
+    () => chats.find((chat) => chat.id === selectedChatId) ?? (selectedChatDetails?.id === selectedChatId ? selectedChatDetails : null),
+    [chats, selectedChatId, selectedChatDetails],
   );
 
   const selectedContact = useMemo(() => {
@@ -221,38 +249,45 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
     return connection.status === "connected" && digits.length >= 5;
   }, [connection.status, sidebarQuery]);
 
-  async function loadConnection(options?: { preferQr?: boolean }) {
-    const next = options?.preferQr ? await fetchOrgAdminWhatsAppQr() : await fetchOrgAdminWhatsAppConnection();
-    setConnection(next);
+  async function loadConnection(options?: { preferQr?: boolean; signal?: AbortSignal }) {
+    const next = options?.preferQr ? await fetchOrgAdminWhatsAppQr(options.signal) : await fetchOrgAdminWhatsAppConnection(options?.signal);
+    if (!options?.signal?.aborted) setConnection(next);
     return next;
   }
 
-  async function loadChats() {
-    const response = await fetchOrgAdminWhatsAppChats();
-    setChats(response.items);
-    return response.items;
-  }
-
-  async function loadContacts(_options?: { connected?: boolean; hydrateSidebar?: boolean }) {
-    if (connection.status !== "connected" && !_options?.connected) {
-      setContacts([]);
-      return [];
+  async function loadChats(signal?: AbortSignal) {
+    const generation = ++chatsGeneration.current;
+    const request = sidebarRequest.current;
+    const response = await fetchOrgAdminWhatsAppChats({ limit: 50, offset: request.page * 50, q: request.query.trim(), signal });
+    if (!signal?.aborted && generation === chatsGeneration.current && request.page === sidebarRequest.current.page
+        && request.query === sidebarRequest.current.query) {
+      setChats(response.items);
+      setChatTotal(response.total);
     }
-    const response = await fetchOrgAdminWhatsAppContacts();
-    setContacts(response.items);
     return response.items;
   }
 
-  async function loadMessages(chatId: number, options?: { silent?: boolean }) {
+  async function loadMessages(chatId: number, options?: { silent?: boolean; signal?: AbortSignal }) {
+    messagesController.current?.abort();
+    const controller = new AbortController();
+    messagesController.current = controller;
+    const abort = () => controller.abort();
+    options?.signal?.addEventListener("abort", abort, { once: true });
+    if (options?.signal?.aborted) controller.abort();
+    const page = pageRef.current;
     if (!options?.silent) setThreadLoading(true);
     try {
-      const response = await fetchOrgAdminWhatsAppMessages(chatId);
+      const response = await fetchOrgAdminWhatsAppMessages(chatId, { limit: 100, offset: page * 100, signal: controller.signal });
+      if (controller.signal.aborted || selectedIdRef.current !== chatId || pageRef.current !== page) return;
       setMessages(response.items);
-      setChats((prev) =>
-        prev.map((chat) => (chat.id === response.chat.id ? { ...chat, ...response.chat, unread_count: 0 } : chat)),
-      );
+      setMessageTotal(response.total);
+      setSelectedChatDetails(response.chat);
+      setChats((prev) => prev.map((chat) => chat.id === chatId ? { ...chat, ...response.chat, unread_count: 0 } : chat));
+    } catch (reason) {
+      if (!controller.signal.aborted) throw reason;
     } finally {
-      if (!options?.silent) setThreadLoading(false);
+      options?.signal?.removeEventListener("abort", abort);
+      if (messagesController.current === controller && !controller.signal.aborted) setThreadLoading(false);
     }
   }
 
@@ -260,13 +295,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
     setError(null);
     try {
       const nextConnection = await loadConnection();
-      let nextChats = await loadChats();
-      if (nextConnection.status === "connected") {
-        await loadContacts({ connected: true, hydrateSidebar: true });
-        nextChats = await loadChats();
-      } else {
-        setContacts([]);
-      }
+      const nextChats = await loadChats();
       if (nextConnection.status === "qr_required" && !nextConnection.has_qr) {
         await loadConnection({ preferQr: true });
       }
@@ -275,10 +304,10 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
           selectedChatId && nextChats.some((chat) => chat.id === selectedChatId)
             ? selectedChatId
             : nextChats[0].id;
-        setSelectedChatId(initialChatId);
+        selectChat(initialChatId);
         await loadMessages(initialChatId);
       } else {
-        setSelectedChatId(null);
+        selectChat(null);
         setMessages([]);
       }
     } catch (err) {
@@ -297,51 +326,36 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
   }, []);
 
   useEffect(() => {
-    if (!selectedChatId && chats.length > 0) {
-      setSelectedChatId(chats[0].id);
-      void loadMessages(chats[0].id);
-      return;
-    }
-    if (selectedChatId && !chats.some((chat) => chat.id === selectedChatId)) {
-      const fallbackChat = chats[0] ?? null;
-      setSelectedChatId(fallbackChat?.id ?? null);
-      if (fallbackChat) {
-        void loadMessages(fallbackChat.id);
-      } else {
-        setMessages([]);
+    return () => { messagesController.current?.abort(); chatsGeneration.current += 1; };
+  }, []);
+
+  useEffect(() => {
+    if (loading || connection.status !== "connected" && connection.status !== "qr_required") return;
+    let lastConnectionCheck = 0;
+    return startVisiblePolling(async (signal) => {
+      if (connection.status === "qr_required") {
+        await loadConnection({ preferQr: true, signal });
+      } else if (Date.now() - lastConnectionCheck >= 20000) {
+        await loadConnection({ signal });
+        lastConnectionCheck = Date.now();
       }
-    }
-  }, [chats, selectedChatId]);
+      if (signal.aborted) return;
+      await loadChats(signal);
+      if (selectedIdRef.current && !signal.aborted) await loadMessages(selectedIdRef.current, { silent: true, signal });
+    }, connection.status === "qr_required" ? 5000 : 4000);
+  }, [loading, connection.status, selectedChatId, messagePage, chatPage, sidebarQuery]);
 
   useEffect(() => {
-    if (connection.status !== "qr_required") return undefined;
-    const interval = window.setInterval(() => {
-      void loadConnection({ preferQr: true }).catch(() => undefined);
-      void loadChats().catch(() => undefined);
-    }, 5000);
-    return () => window.clearInterval(interval);
-  }, [connection.status]);
+    if (loading) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => { void loadChats(controller.signal).catch(() => undefined); }, 300);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [chatPage, sidebarQuery]);
 
+  useEffect(() => { setChatPage(0); }, [sidebarQuery]);
   useEffect(() => {
-    if (connection.status !== "connected") return undefined;
-    const interval = window.setInterval(() => {
-      void loadConnection().catch(() => undefined);
-      void loadChats().catch(() => undefined);
-      if (selectedChatId) {
-        void loadMessages(selectedChatId, { silent: true }).catch(() => undefined);
-      }
-    }, 4000);
-    return () => window.clearInterval(interval);
-  }, [connection.status, selectedChatId]);
-
-  useEffect(() => {
-    if (connection.status !== "connected") return undefined;
-    void loadContacts({ connected: true, hydrateSidebar: true }).catch(() => undefined);
-    const interval = window.setInterval(() => {
-      void loadContacts({ connected: true, hydrateSidebar: true }).catch(() => undefined);
-    }, 20000);
-    return () => window.clearInterval(interval);
-  }, [connection.status]);
+    if (selectedIdRef.current) void loadMessages(selectedIdRef.current).catch(() => undefined);
+  }, [messagePage]);
 
   async function handleConnect() {
     setBusy("connect");
@@ -355,7 +369,6 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
       }
       await loadChats();
       if (response.connection.status === "connected") {
-        await loadContacts({ connected: true, hydrateSidebar: true });
       }
       showToast({ title: "WhatsApp", message: "Connessione pronta. Se serve, scansiona il QR.", tone: "success" });
     } catch (err) {
@@ -368,12 +381,13 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
   }
 
   async function handleDisconnect() {
+    selectChat(null);
+    chatsGeneration.current += 1;
     setBusy("disconnect");
     setError(null);
     try {
       const response = await disconnectOrgAdminWhatsApp();
       setConnection(response.connection);
-      setContacts([]);
       setMessages([]);
       showToast({ title: "WhatsApp", message: "Connessione disconnessa.", tone: "success" });
     } catch (err) {
@@ -396,7 +410,8 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
         display_name: input.displayName?.trim() || undefined,
       });
       setChats((prev) => [response.chat, ...prev.filter((chat) => chat.id !== response.chat.id)]);
-      setSelectedChatId(response.chat.id);
+      selectChat(response.chat.id);
+      setSelectedChatDetails(response.chat);
       setMessages([]);
       setShowNewChatPanel(false);
       setMobileThreadOpen(true);
@@ -425,7 +440,8 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
         text: newChatText.trim(),
       });
       setChats((prev) => [response.chat, ...prev.filter((chat) => chat.id !== response.chat.id)]);
-      setSelectedChatId(response.chat.id);
+      selectChat(response.chat.id);
+      setSelectedChatDetails(response.chat);
       setMessages([response.message]);
       setNewChatNumber("");
       setNewChatName("");
@@ -443,27 +459,30 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
   }
 
   async function handleSendMessage() {
-    if (!selectedChatId || !composerText.trim()) return;
+    const chatId = selectedIdRef.current;
+    const text = chatId ? (draftByChat.current[chatId] || "").trim() : "";
+    if (!chatId || !text) return;
     setBusy("send");
     setError(null);
     try {
-      await sendOrgAdminWhatsAppMessage(selectedChatId, composerText.trim());
-      setComposerText("");
+      await sendOrgAdminWhatsAppMessage(chatId, text);
+      if ((draftByChat.current[chatId] || "").trim() === text) {
+        draftByChat.current[chatId] = "";
+        if (selectedIdRef.current === chatId) setComposerTextState("");
+      }
       await loadChats();
-      await loadMessages(selectedChatId);
+      if (selectedIdRef.current === chatId) await loadMessages(chatId);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Errore invio messaggio WhatsApp.";
       setError(message);
       showToast({ title: "WhatsApp", message, tone: "error" });
-    } finally {
-      setBusy("");
-    }
+    } finally { setBusy(""); }
   }
 
   async function handleSelectSidebarItem(item: SidebarItem) {
     setSidebarQuery("");
     if (item.chatId) {
-      setSelectedChatId(item.chatId);
+      selectChat(item.chatId);
       await loadMessages(item.chatId);
       setMobileThreadOpen(true);
       return;
@@ -484,12 +503,13 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
   }
 
   async function handleResetConnection() {
+    selectChat(null);
+    chatsGeneration.current += 1;
     setBusy("reset");
     setError(null);
     try {
       const response = await resetOrgAdminWhatsApp();
       setConnection(response.connection);
-      setContacts([]);
       setMessages([]);
       showToast({
         title: "WhatsApp",
@@ -721,6 +741,11 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
                 ) : null}
               </div>
 
+              <nav className="flex justify-between gap-2 px-4 py-2 text-sm text-white" aria-label="Pagine chat">
+                <button type="button" disabled={chatPage === 0} onClick={() => setChatPage((page) => page - 1)}>Precedenti</button>
+                <span>{chatTotal} chat</span>
+                <button type="button" disabled={(chatPage + 1) * 50 >= chatTotal} onClick={() => setChatPage((page) => page + 1)}>Successive</button>
+              </nav>
               <div className="min-h-0 flex-1 overflow-y-auto">
                 {sidebarItems.length === 0 ? (
                   <div className="px-5 py-8 text-sm text-[#8696a0]">
@@ -838,6 +863,11 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
                     backgroundSize: "28px 28px, 100% 100%",
                   }}
                 >
+                  <nav className="mb-4 flex justify-between gap-3 text-sm text-white" aria-label="Cronologia messaggi">
+                    <button type="button" disabled={threadLoading || (messagePage + 1) * 100 >= messageTotal} onClick={() => setMessagePage((page) => page + 1)}>Messaggi precedenti</button>
+                    {messagePage > 0 ? <button type="button" onClick={() => setMessagePage(0)}>Torna ai recenti</button> : null}
+                    <span>{messageTotal} messaggi</span>
+                  </nav>
                   {threadLoading ? (
                     <div className="space-y-4">
                       <Skeleton className="h-20 w-3/5 rounded-lg" />
@@ -880,6 +910,7 @@ export function WhatsAppHub({ communicationsLocked }: WhatsAppHubProps) {
                 <div className="shrink-0 border-t border-[#203239] bg-[#202c33] px-5 py-4">
                   <div className="flex items-end gap-3">
                     <textarea
+                      aria-label="Scrivi un messaggio"
                       value={composerText}
                       onChange={(event) => setComposerText(event.target.value)}
                       onKeyDown={(event) => {
