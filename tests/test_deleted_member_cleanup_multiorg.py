@@ -5,6 +5,8 @@ import pytest
 
 from app.db import SessionLocal
 from app.models import (
+    EmailCampaign, EmailCampaignRecipient, Form, FormSubmission,
+    MemberImportBatch, MemberImportRow, MemberNotification, MemberContactChange,
     Member,
     MemberStatus,
     MembershipPayment,
@@ -130,6 +132,39 @@ def test_purge_deleted_members_preserves_membership_payments_without_fk(db):
     preserved_payment = db.query(MembershipPayment).filter(MembershipPayment.id == payment_id).one()
     assert preserved_payment.socio_id is None
     assert preserved_payment.org_id == org.id
+
+
+def test_purge_preserves_communication_history_and_removes_private_profile_state(db):
+    suffix = uuid.uuid4().hex[:8]
+    org = _create_org(db, f"cleanup-history-{suffix}")
+    member = _create_legacy_deleted_member(db, org_id=org.id,
+        email=f"deleted-{suffix}@example.com", fiscal_code=f"HIST{suffix.upper()}", card_no=93001)
+    member_id = member.id
+    campaign = EmailCampaign(association_id=org.id, subject="Synthetic history", audience_type="all_members")
+    form = Form(association_id=org.id, title="Synthetic form", public_slug=f"cleanup-{suffix}")
+    batch = MemberImportBatch(org_id=org.id, file_sha256="a"*64, delimiter=",")
+    db.add_all([campaign, form, batch]); db.flush()
+    recipient = EmailCampaignRecipient(association_id=org.id, campaign_id=campaign.id,
+        user_id=member_id, recipient_email=member.email, delivery_status="sent")
+    submission = FormSubmission(association_id=org.id, form_id=form.id,
+        submitted_by_user_id=member_id, payload_json={"synthetic": True})
+    imported = MemberImportRow(batch_id=batch.id, row_number=1, payload_encrypted="synthetic",
+        row_sha256="b"*64, member_id=member_id)
+    notification = MemberNotification(org_id=org.id, member_id=member_id, type="renewal",
+        title="Synthetic", body="Synthetic", href="/dashboard", dedupe_key=uuid.uuid4().hex)
+    change = MemberContactChange(org_id=org.id, member_id=member_id, field="email",
+        new_value_encrypted="synthetic", token_hash=uuid.uuid4().hex,
+        expires_at=datetime(2027,1,1))
+    db.add_all([recipient, submission, imported, notification, change]); db.commit()
+    notification_id, change_id = notification.id, change.id
+    assert purge_deleted_members_permanently(db, org_id=org.id) == 1
+    db.commit(); db.expire_all()
+    assert db.get(Member, member_id) is None
+    assert db.get(MemberNotification, notification_id) is None
+    assert db.get(MemberContactChange, change_id) is None
+    assert recipient.user_id is None and recipient.delivery_status == "sent"
+    assert submission.submitted_by_user_id is None and submission.payload_json == {"synthetic": True}
+    assert imported.member_id is None
 
 
 def test_join_submit_cleans_deleted_legacy_traces_per_association(client, db):

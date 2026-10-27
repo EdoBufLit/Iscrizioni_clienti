@@ -7,10 +7,15 @@ from app.models import (
     AnnualMembershipTerm,
     Booking,
     CardMovement,
+    EmailCampaignRecipient,
+    FormSubmission,
     Member,
     MemberAttendance,
+    MemberContactChange,
     MemberDocument,
     MemberPayment,
+    MemberImportRow,
+    MemberNotification,
     MembershipPayment,
     OperationLog,
     Token,
@@ -195,6 +200,18 @@ def purge_deleted_members_permanently(
         synchronize_session=False,
     )
     db.query(Token).filter(Token.member_id.in_(member_ids)).delete(synchronize_session=False)
+    # Keep campaign/submission history while removing its live profile link.
+    # These legacy foreign keys predate database-level ON DELETE SET NULL.
+    for model, column in (
+        (EmailCampaignRecipient, EmailCampaignRecipient.user_id),
+        (FormSubmission, FormSubmission.submitted_by_user_id),
+        (MemberImportRow, MemberImportRow.member_id),
+    ):
+        db.query(model).filter(column.in_(member_ids)).update({column: None}, synchronize_session=False)
+    # Also detach private profile state on old SQLite deployments without FK
+    # enforcement, where the native PostgreSQL CASCADE is unavailable.
+    for model in (MemberContactChange, MemberNotification):
+        db.query(model).filter(model.member_id.in_(member_ids)).delete(synchronize_session=False)
     doc_ids = [
         doc_id
         for (doc_id,) in db.query(MemberDocument.id).filter(MemberDocument.member_id.in_(member_ids)).all()

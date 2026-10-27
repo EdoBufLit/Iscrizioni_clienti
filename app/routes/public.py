@@ -212,38 +212,25 @@ def _render_signup_spa_html(
     return document
 
 
-# ── Legacy HTML redirects ─────────────────────────────────────────
+# ── Public SPA entry points ──────────────────────────────────────
 
 
 @router.get("/associazioni")
-def list_associazioni(request: Request, q: str = None, db: Session = Depends(get_db)):
-    display_name_order = func.lower(
-        func.coalesce(Organization.club_display_name, Organization.name)
-    )
-    query = db.query(Organization).order_by(display_name_order, Organization.id)
-
-    if q:
-        # Simple case-insensitive search
-        search = f"%{q}%"
-        query = query.filter(
-            or_(
-                Organization.name.ilike(search),
-                Organization.club_display_name.ilike(search),
-            )
-        )
-
-    orgs = query.all()
-
-    return RedirectResponse(url="/associazioni")
+def list_associazioni():
+    return HTMLResponse(_load_spa_index_html(), headers={"Cache-Control": "no-cache"})
 
 
 @router.get("/associazioni/{slug}")
 def associazioni_detail(request: Request, slug: str, db: Session = Depends(get_db)):
-    org = db.query(Organization).filter(Organization.slug == slug).first()
+    org = db.query(Organization).filter(
+        Organization.slug == slug,
+        Organization.is_active.is_(True),
+        Organization.deleted_at.is_(None),
+    ).first()
     if not org:
         return RedirectResponse(url="/associazioni")
 
-    return RedirectResponse(url=f"/associazioni/{slug}")
+    return HTMLResponse(_load_spa_index_html(), headers={"Cache-Control": "no-cache"})
 
 
 @router.get("/associazioni/{slug}/iscrizione", response_class=HTMLResponse)
