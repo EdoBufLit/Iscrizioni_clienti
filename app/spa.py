@@ -53,6 +53,13 @@ class SPAStaticFiles(StaticFiles):
     def _set_cache_headers(path: str, response) -> None:
         filename = PurePosixPath(path).name
         normalized_path = path.lstrip("/").replace("\\", "/")
+        if normalized_path == "sw.js":
+            # A stable worker URL must revalidate on every update check.
+            # CDN/browser defaults for JavaScript otherwise delay new releases.
+            response.headers["Cache-Control"] = "no-cache, max-age=0, must-revalidate"
+            response.headers["CDN-Cache-Control"] = "no-store"
+            response.headers["Cloudflare-CDN-Cache-Control"] = "no-store"
+            return
         if path == "index.html" or not filename or "." not in filename:
             response.headers["Cache-Control"] = "no-cache"
             return

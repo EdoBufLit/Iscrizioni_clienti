@@ -21,6 +21,7 @@ def _build_spa_client(tmp_path: Path) -> TestClient:
         encoding="utf-8",
     )
     (assets_dir / "main.js").write_text("console.log('ok');", encoding="utf-8")
+    (dist_dir / "sw.js").write_text("self.skipWaiting();", encoding="utf-8")
     (assets_dir / "index-currenthash.js").write_text(
         "console.log('current-index-js');",
         encoding="utf-8",
@@ -50,6 +51,20 @@ def test_missing_asset_returns_404_not_index(tmp_path: Path):
     response = client.get("/assets/chunk-Wjd0D21K.js")
 
     assert response.status_code == 404
+
+
+def test_service_worker_revalidates_without_cdn_caching(tmp_path: Path):
+    client = _build_spa_client(tmp_path)
+    response = client.get("/sw.js?release=check")
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-cache, max-age=0, must-revalidate"
+    assert response.headers["cdn-cache-control"] == "no-store"
+    assert response.headers["cloudflare-cdn-cache-control"] == "no-store"
+
+    conditional = client.get("/sw.js", headers={"If-None-Match": response.headers["etag"]})
+    assert conditional.status_code == 304
+    assert conditional.headers["cache-control"] == response.headers["cache-control"]
+    assert conditional.headers["cdn-cache-control"] == "no-store"
 
 
 def test_existing_asset_is_served_normally(tmp_path: Path):

@@ -6261,3 +6261,8 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Il backend restituisce note/data/autore decisione. Modifiche non correlate conservano comuni storici senza codice; i comuni cambiati restano validati e isolati per associazione. Nessuna migrazione.
 - 175 test frontend / 39 file e build TypeScript/Vite/PWA riusciti; 12 test backend pertinenti superati. Review indipendente funzionale e componenti conclusa.
 - Browser reale su dati sintetici: 24 casi schede/viewport/tema (320x568,390x844,810x900,1280x600,1440x900); nessun overflow o form aperto. Pagamento30 euro con residuo0, modifica note su profilo storico, approvazione/rigetto documenti di socio attivo, conferma eliminazione annullata, download PDF e QR verificati. Nessuna modifica o invio reale per il collaudo. Evidenze in output/member-detail-20261028/.
+
+### Completamento rilascio e cache
+- a84b850 pubblicato; pipeline40775023780 completata con Final canary passed. 27 controlli HTTPS e hash asset riusciti; sette servizi runtime healthy, zero restart/OOM, schema invariato. Browser pubblico utilizzabile senza errori.
+- Rilevata cache Cloudflare preesistente di sw.js con TTL14400 secondi, che ritarda la sostituzione della shell PWA. Correzione limitata alle intestazioni di quel file: rivalidazione browser e no-store CDN, conservando la cache degli asset con hash. 18 test backend pertinenti superati, inclusi risposta200 e304 del worker.
+- [ ] Pubblicare la correzione cache e verificare origine/CDN e canary. La copia CDN gia esistente richiede purge del solo sw.js oppure scadenza; credenziali purge non configurate, scelta richiesta all'utente mentre il rilascio continua.
