@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import OrgAdminAttendancePage from "./OrgAdminAttendance";
 
@@ -142,5 +142,64 @@ describe("OrgAdminAttendance camera startup", () => {
       await screen.findByText(/Il browser non ha autorizzato la fotocamera/),
     ).toBeInTheDocument();
     expect(screen.getByText(/impostazioni del telefono/)).toBeInTheDocument();
+  });
+
+  it("keeps hardware stations out of the Live flow until opened from settings and shows immediate scan outcome", async () => {
+    mocks.fetchAttendances.mockResolvedValue({
+      total: 2,
+      items: [
+        {
+          id: 101,
+          member_id: 1,
+          member_name: "Mario Rossi",
+          card_no: 42,
+          card_year: 2026,
+          membership_type: "annual",
+          attendance_date: "2026-10-28",
+          checked_in_at: "2026-10-28T20:15:00Z",
+          source: "qr",
+          scanner_station_id: null,
+          scanner_station_name: null,
+        },
+      ],
+    });
+    mocks.checkIn.mockResolvedValue({
+      created: true,
+      item: {
+        id: 102,
+        member_id: 2,
+        member_name: "Laura Bianchi",
+        card_no: 43,
+        card_year: 2026,
+        membership_type: "annual",
+        attendance_date: "2026-10-28",
+        checked_in_at: "2026-10-28T20:41:00Z",
+        source: "qr",
+        scanner_station_id: null,
+        scanner_station_name: null,
+      },
+    });
+
+    render(<OrgAdminAttendancePage />);
+
+    // Hardware station setup is not cluttering the main view
+    expect(screen.queryByText("Nessuna postazione collegata")).not.toBeInTheDocument();
+    expect(await screen.findByText("2 soci")).toBeInTheDocument();
+    expect(screen.getByText("Mario Rossi")).toBeInTheDocument();
+
+    // Scan QR and verify immediate feedback banner right below camera
+    fireEvent.click(screen.getByRole("button", { name: "Avvia fotocamera" }));
+    await screen.findByRole("button", { name: "Ferma fotocamera" });
+    const decoded = mocks.decodeFromStream.mock.calls[0][2];
+    await act(async () => {
+      decoded({ getText: () => "https://assonam.it/api/cards/verify/abcdefghijklmnopqrstuvwxyz1234567890" });
+    });
+
+    expect(await screen.findByText("Ingresso registrato")).toBeInTheDocument();
+    expect(screen.getByText("Laura Bianchi")).toBeInTheDocument();
+
+    // Open hardware stations modal via gear button
+    fireEvent.click(screen.getByRole("button", { name: "Postazioni scanner" }));
+    expect(await screen.findByRole("dialog", { name: "Postazioni scanner" })).toBeInTheDocument();
   });
 });
