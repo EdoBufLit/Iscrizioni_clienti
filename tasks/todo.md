@@ -6224,7 +6224,12 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - [x] Review indipendente funzionale e accessibilita delle modifiche lasciate da Gemini.
 - [x] Completare interfaccia e correzioni emerse, con regressioni mirate dove servono.
 - [x] Suite frontend, typecheck/build e browser con dati sintetici; verifiche backend pertinenti se necessarie.
-- [ ] Review finale, commit/push Main, deploy e controlli post-rilascio; aggiornare rapporto con prove e limiti.
+- [x] Review finale, commit/push Main, deploy e controlli post-rilascio; aggiornare rapporto con prove e limiti.
 
 ### Review
-- In corso.
+- Completato e pubblicato b96a799 su Main, pipeline 40732109356 build/deploy riuscita e Final canary passed verificato nei log. Sei modifiche Gemini preservate e completate con le correzioni funzionali/accessibilita emerse.
+- Mobile: intestazione/ricerca compatti, pannelli inferiori condivisi con focus/scroll/Escape e chiusura su resize; filtri rapidi e pill, righe dense e selezione esplicita. Primo schermo 390x844 con sette righe complete nel set sintetico; temi chiaro/scuro e nessun overflow. Verificati anche 320x568, 810x900 e 1440x900.
+- Corretti In scadenza che apriva gli scaduti, Da verificare che contava documenti invece di soci, falsi badge di documenti/debito, checkbox che apriva il profilo e termina selezione senza azzeramento. Filtri condivisi lista/bulk/export, date aware/Rome, tenant e deduplicazione verificati; nessuna migrazione o nuovo invio.
+- Backend completo 971 passed / 13 skipped; mirati finali 42 passed. Frontend 143 passed / 36 file; build/typecheck/compileall/diff check riusciti. Review indipendenti concluse senza blocker.
+- Dopo deploy: 24 controlli HTTPS riusciti, hash asset effettivi corrispondenti, nuove query eseguite su PostgreSQL reale in sola lettura per tre associazioni; sette servizi runtime healthy con zero restart/OOM, schema invariato, Wallet351completati. Backup protetto verificato, disco50%, circa19GB liberi. Server QA fermato, browser ripristinato, nessun dato reale modificato per collaudo.
+- Rapporto docs/members_mobile_release_2026-10-28.md; evidenze private in output/members-mobile-20261028/. Limite: viewport Chromium simulati, nessun dispositivo Safari/iOS fisico. Branding tessere e regole dei solleciti preservati.

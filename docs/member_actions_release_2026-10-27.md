@@ -1,5 +1,7 @@
 # Azioni Soci e calendario solleciti — 27 ottobre 2026
 
+Il successivo [completamento mobile del 28 ottobre](members_mobile_release_2026-10-28.md) aggiunge ricerca e filtri compatti, pannelli accessibili e righe socio più dense, preservando le regole sui solleciti descritte qui.
+
 ## Correzione richiesta
 
 Semplificare il blocco delle azioni multiple in Org Admin → Soci e togliere i solleciti quota dalla lista. Mantenerli in Quote e rinnovi a partire dal 2027, senza sollecitare adesso annualità future mentre le tessere sono ancora valide.
