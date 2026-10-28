@@ -6253,7 +6253,7 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - [x] Verificare contratti e componenti esistenti; implementare layout, schede e pannelli accessibili.
 - [x] Verificare regressioni finanziarie/documentali, test frontend e build; review indipendente.
 - [x] Collaudare pagina e azioni con dati sintetici su mobile e desktop, chiaro/scuro; conservare screenshot.
-- [ ] Pubblicare su Main e controllare deploy, asset e salute; documentare risultati e limiti.
+- [x] Pubblicare su Main e controllare deploy, asset e salute; documentare risultati e limiti.
 
 ### Review prima del rilascio
 - Quattro schede, hero unica, azioni rapide, pagamento/modifica/decisione pendente nei pannelli inferiori. Decisioni concluse readonly e note persistenti; eliminazione discreta con conferma esplicita. Contenitore tessera segue il tema, artwork e QR conservati.
@@ -6265,4 +6265,13 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 ### Completamento rilascio e cache
 - a84b850 pubblicato; pipeline40775023780 completata con Final canary passed. 27 controlli HTTPS e hash asset riusciti; sette servizi runtime healthy, zero restart/OOM, schema invariato. Browser pubblico utilizzabile senza errori.
 - Rilevata cache Cloudflare preesistente di sw.js con TTL14400 secondi, che ritarda la sostituzione della shell PWA. Correzione limitata alle intestazioni di quel file: rivalidazione browser e no-store CDN, conservando la cache degli asset con hash. 18 test backend pertinenti superati, inclusi risposta200 e304 del worker.
-- [ ] Pubblicare la correzione cache e verificare origine/CDN e canary. La copia CDN gia esistente richiede purge del solo sw.js oppure scadenza; credenziali purge non configurate, scelta richiesta all'utente mentre il rilascio continua.
+- [x] Pubblicare la correzione cache e verificare origine/CDN e canary. c338439 pubblicato con pipeline40776534028 riuscita e Final canary passed. 27 controlli HTTPS/asset e sette servizi runtime healthy, zero restart/OOM. Origine con nuovi header; due richieste CDN nuove in BYPASS e contenuto worker effettivo corrispondente, senza Age. La copia CDN gia esistente resta HIT: l'utente ha scelto esplicitamente la scadenza naturale, senza purge. Server QA fermato, schede temporanee chiuse, viewport ripristinato. Rapporto docs/member_detail_release_2026-10-28.md.
+
+## Plan (Tessere: magazzino, ordini e configurazione separati - Oct 28, 2026)
+
+- Applicare il testo fornito dall'utente: tre schede Stato e magazzino, Movimenti e ordini, Configurazione e design. Uso frequente prima, impostazioni separate. Branding delle tessere preservato.
+- Magazzino: metriche2x2, disponibilita/progress calcolati, rifornimento solo da pulsante con bottom sheet. Ordini: sintesi contabile, filtri compatti, righe touch su mobile. Design: una sola anteprima fronte/retro con flip, quattro colori compatti, avanzate richiudibili e salvataggio esplicito.
+- [ ] Esaminare dati, azioni e test esistenti; definire responsabilita dei componenti senza cambiare le regole di business.
+- [ ] Implementare tre schede, pannelli e liste responsive, builder compatto accessibile; conservare filtri/salvataggi e gestione errori.
+- [ ] Test pertinenti, build, review indipendente e collaudo browser chiaro/scuro su mobile/tablet/desktop con dati sintetici.
+- [ ] Pubblicare su Main, verificare deploy/canary/asset/servizi e documentare risultati e limiti.

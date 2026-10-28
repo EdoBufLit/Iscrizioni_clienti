@@ -361,3 +361,8 @@ Do not interpret "date without slots" as closed when a default booking schedule 
 - Correzione utente: separare Profilo, Pagamenti, Documenti e note, Attivita; i form operativi si aprono su richiesta. Una decisione conclusa mostra stato e note readonly, con revisione documenti indipendente.
 - Il flag di pagamento online non prova che la quota sia gratuita. Usare il saldo contabile e non sommare rappresentazioni legacy dello stesso pagamento; dopo un POST riuscito preservare l'esito anche se il refresh fallisce.
 - Un profilo importato con comune senza codice deve consentire modifiche non correlate senza perdere dati. Validare i dati cambiati e preservare quelli storici invariati.
+
+## Oct 28, 2026 - Separare operazioni quotidiane e configurazione Tessere
+
+- Correzione utente: magazzino, storico ordini, regole economiche e builder grafico non devono essere un'unica pagina lunga. Separare per frequenza d'uso, spostare il rifornimento in un pannello contestuale e usare righe leggibili su telefono.
+- Nel builder mostrare una sola faccia alla volta e comprimere le opzioni avanzate, conservando il progetto salvato. Gli importi e le percentuali degli esempi sono illustrativi: calcolarli sempre dai dati reali.
