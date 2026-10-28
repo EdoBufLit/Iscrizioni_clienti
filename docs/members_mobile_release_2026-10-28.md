@@ -36,3 +36,11 @@ Commit `b96a79930da9f0eee94d96b457cee042612cae73` su Main, [pipeline 40732109356
 Controlli sulla versione aggiornata: 24 verifiche HTTPS riuscite, hash JS/CSS/chunk Soci corrispondenti alla build locale. Filtri review/expiring eseguiti in sola lettura sul PostgreSQL reale per tre associazioni, con controlli di isolamento e record eliminati. Sette servizi runtime sulla versione b96a799, tutti healthy, zero riavvii/OOM; schema invariato e 351 job Wallet completati al controllo. Disco 50%, circa 19 GB liberi; checkout deploy:deploy. Server QA locale fermato e browser ripristinato.
 
 Limite: browser Chromium con viewport simulati, senza prove su Safari/iOS fisici. Eventuali export globali continuano a comprendere l'elenco completo; l'export dei selezionati mantiene il filtro della selezione.
+
+## Seconda rifinitura Gemini, stesso giorno
+
+Pubblicato su Main `e2cc1df48e88cd27b818d55b393be786db56f507`: intestazione mobile ridotta con nome associazione, toggle tema compatto, chip attenzione nascosti quando vuoti salvo filtro attivo, righe piu dense e meno badge ripetuti. Comportamento di filtri, selezione e collegamento al profilo conservato.
+
+Review senza blocker; 143 test frontend in 36 file e build/typecheck riusciti. Browser 390x844 scuro/chiaro e 320x568: nessun overflow, pannello filtri/Escape e ripristino scroll riusciti. Ambiente sintetico chiuso, nessun invio reale. Evidenze private in `output/members-refinement-20261028/`.
+
+[Pipeline 40758703512](https://github.com/EdoBufLit/Iscrizioni_clienti/actions/runs/40758703512): build e deploy riusciti, canary finale superato e confermato nei log. Controlli effettivi: 24 richieste HTTPS riuscite, hash asset uguali alla build, sette servizi sulla versione e2cc1df con zero riavvii/OOM, schema invariato. Nessuna modifica backend o migrazione.

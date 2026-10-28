@@ -6238,8 +6238,10 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 
 - Pubblicare le cinque modifiche frontend locali verificate nella richiesta precedente: intestazione mobile, comandi piu compatti, chip contestuali e righe soci con meno badge ripetuti. Preservare branding, filtri reali e regole solleciti.
 - [x] Review del diff, test frontend/build e controllo visivo mirato light/dark; correggere eventuali regressioni bloccanti.
-- [ ] Commit e push Main, monitorare deploy automatico.
-- [ ] Verificare versione/asset/servizi/canary e registrare risultati. Nessun invio o modifica di dati reali per il collaudo.
+- [x] Commit e push Main, monitorare deploy automatico.
+- [x] Verificare versione/asset/servizi/canary e registrare risultati. Nessun invio o modifica di dati reali per il collaudo.
 
 ### Review
-- In corso.
+- Pubblicate le cinque modifiche Gemini su Main con e2cc1df; pipeline 40758703512 build/deploy riuscita e Final canary passed verificato nei log.
+- 143 test frontend / 36 file e build TypeScript/Vite/PWA riusciti; review senza blocker. Browser build reale 390x844 light/dark e 320x568: nessun overflow, tema/filtri/Escape/scroll corretti. Server QA fermato, tab chiusa e viewport ripristinato.
+- 24 controlli HTTPS superati e hash asset corrispondenti; sette servizi runtime aggiornati e healthy, zero restart/OOM. Schema invariato, nessuna migrazione/backend modificato o invio reale. Dettagli in docs/members_mobile_release_2026-10-28.md; evidenze private output/members-refinement-20261028/.
