@@ -6233,3 +6233,13 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Backend completo 971 passed / 13 skipped; mirati finali 42 passed. Frontend 143 passed / 36 file; build/typecheck/compileall/diff check riusciti. Review indipendenti concluse senza blocker.
 - Dopo deploy: 24 controlli HTTPS riusciti, hash asset effettivi corrispondenti, nuove query eseguite su PostgreSQL reale in sola lettura per tre associazioni; sette servizi runtime healthy con zero restart/OOM, schema invariato, Wallet351completati. Backup protetto verificato, disco50%, circa19GB liberi. Server QA fermato, browser ripristinato, nessun dato reale modificato per collaudo.
 - Rapporto docs/members_mobile_release_2026-10-28.md; evidenze private in output/members-mobile-20261028/. Limite: viewport Chromium simulati, nessun dispositivo Safari/iOS fisico. Branding tessere e regole dei solleciti preservati.
+
+## Plan (Push seconda rifinitura Gemini Soci - Oct 28, 2026)
+
+- Pubblicare le cinque modifiche frontend locali verificate nella richiesta precedente: intestazione mobile, comandi piu compatti, chip contestuali e righe soci con meno badge ripetuti. Preservare branding, filtri reali e regole solleciti.
+- [x] Review del diff, test frontend/build e controllo visivo mirato light/dark; correggere eventuali regressioni bloccanti.
+- [ ] Commit e push Main, monitorare deploy automatico.
+- [ ] Verificare versione/asset/servizi/canary e registrare risultati. Nessun invio o modifica di dati reali per il collaudo.
+
+### Review
+- In corso.

@@ -8468,12 +8468,55 @@ body.dashboard-perf-mode .surface-strong:hover {
     padding: 0.85rem !important;
   }
 
+  .org-admin-v2 .org-admin-topbar {
+    min-height: 3.4rem;
+    gap: 0.5rem;
+    padding: 0.45rem 0.75rem;
+  }
+
+  .org-admin-v2 .org-admin-topbar__profile {
+    padding-left: 0.45rem;
+  }
+
+  .org-admin-v2 .org-admin-topbar .theme-toggle {
+    flex: 0 0 2.35rem;
+    width: 2.35rem;
+    min-width: 2.35rem;
+    height: 2.35rem;
+    min-height: 2.35rem;
+    padding: 0;
+  }
+
+  .org-admin-v2 .org-admin-topbar .theme-toggle__track {
+    height: 100%;
+    background: transparent;
+  }
+
+  .org-admin-v2 .org-admin-topbar .theme-toggle__thumb {
+    display: none;
+  }
+
+  .org-admin-v2 .org-admin-topbar .theme-toggle__glyph {
+    left: 50%;
+    right: auto;
+    height: 1rem;
+    width: 1rem;
+    color: #ffffff !important;
+    transform: translate(-50%, -50%);
+  }
+
+  .org-admin-v2 .org-admin-topbar .theme-toggle:not(.is-dark) .theme-toggle__glyph--moon,
+  .org-admin-v2 .org-admin-topbar .theme-toggle.is-dark .theme-toggle__glyph--sun {
+    opacity: 0;
+    pointer-events: none;
+  }
+
   .org-admin-v2 .org-admin-members-page {
-    padding: 0.65rem 0.75rem calc(5.5rem + env(safe-area-inset-bottom, 0px)) !important;
+    padding: 0.55rem 0.75rem calc(5.5rem + env(safe-area-inset-bottom, 0px)) !important;
   }
 
   .org-admin-v2 .org-admin-members-page > :not([hidden]) ~ :not([hidden]) {
-    margin-top: 0.55rem !important;
+    margin-top: 0.45rem !important;
   }
 
   .org-admin-v2 .org-admin-members-header {
@@ -8486,13 +8529,13 @@ body.dashboard-perf-mode .surface-strong:hover {
 
   .org-admin-v2 .org-admin-members-header .org-page-header__title {
     margin: 0 !important;
-    font-size: 1.35rem !important;
+    font-size: 1.3rem !important;
     line-height: 1.15 !important;
   }
 
   .org-admin-v2 .org-admin-members-header__count {
     color: var(--oa-muted);
-    font-size: 0.92rem;
+    font-size: 0.9rem;
     font-weight: 600;
   }
 
@@ -8504,21 +8547,21 @@ body.dashboard-perf-mode .surface-strong:hover {
   }
 
   .org-admin-v2 .org-admin-members-header__add {
-    min-height: 2.75rem !important;
-    border-radius: 0.65rem !important;
-    padding: 0 0.8rem !important;
-    font-size: 0.82rem !important;
+    min-height: 2.25rem !important;
+    border-radius: 0.6rem !important;
+    padding: 0 0.75rem !important;
+    font-size: 0.8rem !important;
     font-weight: 600 !important;
   }
 
   .org-admin-v2 .org-admin-members-header__more {
     display: inline-flex !important;
-    min-height: 2.75rem !important;
-    width: 2.75rem !important;
+    min-height: 2.25rem !important;
+    width: 2.25rem !important;
     flex-shrink: 0;
     align-items: center;
     justify-content: center;
-    border-radius: 0.65rem !important;
+    border-radius: 0.6rem !important;
     padding: 0 !important;
   }
 
@@ -8532,16 +8575,16 @@ body.dashboard-perf-mode .surface-strong:hover {
 
   .org-admin-v2 .org-admin-members-filter-trigger {
     display: inline-flex;
-    min-height: 2.75rem;
+    min-height: 2.35rem;
     flex-shrink: 0;
     align-items: center;
-    gap: 0.35rem;
+    gap: 0.32rem;
     border: 1px solid var(--oa-line-strong);
-    border-radius: 0.65rem;
+    border-radius: 0.6rem;
     background: var(--oa-panel);
     color: var(--oa-text);
-    padding: 0 0.72rem;
-    font-size: 0.8rem;
+    padding: 0 0.68rem;
+    font-size: 0.78rem;
     font-weight: 600;
     white-space: nowrap;
   }
@@ -8557,16 +8600,16 @@ body.dashboard-perf-mode .surface-strong:hover {
   }
 
   .org-admin-v2 .org-admin-members-active-pill {
-    min-height: 2.75rem;
+    min-height: 1.85rem;
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
+    gap: 0.32rem;
     border: 1px solid color-mix(in srgb, var(--oa-brand) 42%, var(--oa-line));
     border-radius: 999px;
     background: color-mix(in srgb, var(--oa-brand) 11%, var(--oa-panel));
     color: var(--oa-brand-strong);
-    padding: 0.22rem 0.6rem;
-    font-size: 0.72rem;
+    padding: 0.18rem 0.55rem;
+    font-size: 0.7rem;
     font-weight: 600;
   }
 
@@ -8576,16 +8619,16 @@ body.dashboard-perf-mode .surface-strong:hover {
 
   .org-admin-v2 .org-admin-members-quick-chip {
     display: inline-flex;
-    min-height: 2.75rem;
+    min-height: 1.95rem;
     flex-shrink: 0;
     align-items: center;
-    gap: 0.28rem;
+    gap: 0.24rem;
     border: 1px solid var(--oa-line);
     border-radius: 999px;
     background: var(--oa-panel);
     color: var(--oa-muted);
-    padding: 0.24rem 0.68rem;
-    font-size: 0.75rem;
+    padding: 0.18rem 0.56rem;
+    font-size: 0.72rem;
     font-weight: 600;
     white-space: nowrap;
     transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
@@ -8618,8 +8661,8 @@ body.dashboard-perf-mode .surface-strong:hover {
   }
 
   .org-admin-v2 .org-admin-members-quick-chip__dot {
-    width: 0.42rem;
-    height: 0.42rem;
+    width: 0.36rem;
+    height: 0.36rem;
     border-radius: 999px;
     background: currentColor;
   }

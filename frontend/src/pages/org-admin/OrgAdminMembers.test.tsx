@@ -167,10 +167,13 @@ describe("OrgAdminMembers search", () => {
       </MemoryRouter>,
     );
 
+    const activeRow = await screen.findByTestId("member-mobile-row-1");
+    expect(within(activeRow).queryByText("Attivo")).not.toBeInTheDocument();
+
     const mobileRow = await screen.findByTestId("member-mobile-row-2");
     expect(within(mobileRow).getByText("#2")).toBeInTheDocument();
     expect(within(mobileRow).getByText("Doc in verifica")).toBeInTheDocument();
-    expect(within(mobileRow).getByText("Quota da verificare")).toBeInTheDocument();
+    expect(within(mobileRow).queryByText("Quota da verificare")).not.toBeInTheDocument();
 
     const quickGroup = screen.getByRole("group", { name: "Filtri rapidi stato soci" });
     fireEvent.click(within(quickGroup).getByRole("button", { name: /Da verificare/ }));

@@ -438,22 +438,22 @@ const OrgAdminLayout = () => {
 
           <div className="min-w-0">
             <header className="org-admin-topbar">
-              <div className="flex min-w-0 items-center gap-4">
-                <Link to="/org-admin" className="flex items-center lg:hidden">
-                  <img src={`${import.meta.env.BASE_URL}assonam-logo.svg`} alt="ASSONAM" className="h-9 w-auto" />
+              <div className="flex min-w-0 items-center gap-2.5 md:gap-4">
+                <Link to="/org-admin" className="flex shrink-0 items-center lg:hidden">
+                  <img src={`${import.meta.env.BASE_URL}assonam-logo.svg`} alt="ASSONAM" className="h-8 w-auto md:h-9" />
                 </Link>
                 <div className="hidden h-12 w-px bg-white/12 lg:block" />
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="hidden items-center gap-2 md:flex">
                     <h1 className="truncate text-base font-bold tracking-tight text-white">Area Riservata</h1>
                   </div>
-                  <p className="truncate text-xs font-medium text-white/72">
+                  <p className="truncate text-sm font-semibold text-white md:text-xs md:font-medium md:text-white/72">
                     {loading ? "Sistema di gestione per associazioni" : admin?.organization?.name ?? "Sistema di gestione per associazioni"}
                   </p>
                 </div>
               </div>
 
-              <div className="flex shrink-0 items-center gap-3">
+              <div className="flex shrink-0 items-center gap-1.5 md:gap-3">
                 <ThemeToggle />
                 {!loading && admin && <OrgAdminNotificationBell />}
                 {!loading && admin && <ReviewGuideButton className="hidden xl:flex" />}

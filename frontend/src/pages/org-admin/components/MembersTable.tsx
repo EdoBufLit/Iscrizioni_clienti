@@ -18,6 +18,7 @@ type MembersTableProps = {
   members: OrgAdminMember[];
   totalPages: number;
   page: number;
+  statusFilter?: string;
   selectedMemberId?: number | null;
   onPageChange: (nextPage: number) => void;
   onSelectMember?: (memberId: number) => void;
@@ -34,6 +35,7 @@ const MembersTable = memo(function MembersTable({
   members,
   totalPages,
   page,
+  statusFilter = "active",
   selectedMemberId,
   onPageChange,
   onSelectMember,
@@ -295,20 +297,29 @@ const MembersTable = memo(function MembersTable({
             } else if (member.document_status === "pending") {
               docAttentionLabel = "Doc in verifica";
             } else if (member.workflow_status === "pending_docs") {
-              docAttentionLabel = "Documenti da completare";
+              docAttentionLabel = "Doc da completare";
             }
+
+            const isStandardActive =
+              String(member.status || "").toUpperCase() === "ACTIVE" && !hasPendingWorkflow;
+            const showStatusBadge = !isStandardActive || statusFilter === "all";
+            const topPill = docAttentionLabel
+              ? { label: docAttentionLabel, tone: docAttentionTone }
+              : showStatusBadge
+                ? badgeMeta
+                : null;
 
             return (
               <article
                 key={member.id}
-                className={`org-admin-member-mobile-row flex cursor-pointer items-center gap-2.5 px-3.5 py-2.5 transition-colors ${
+                className={`org-admin-member-mobile-row flex cursor-pointer items-center gap-2 px-3 py-2 transition-colors ${
                   isSelected ? "bg-[var(--theme-surface-muted)]" : "bg-[var(--theme-surface-solid)]"
                 }`}
                 data-testid={`member-mobile-row-${member.id}`}
               >
                 {showMobileCheckboxes && onToggleMember && (
                   <label
-                    className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center"
+                    className="inline-flex min-h-10 min-w-10 shrink-0 items-center justify-center"
                     onClick={(event) => event.stopPropagation()}
                   >
                     <input
@@ -320,40 +331,35 @@ const MembersTable = memo(function MembersTable({
                     />
                   </label>
                 )}
-                <a className="flex min-h-11 min-w-0 flex-1 flex-col justify-center rounded-sm" href={`/org-admin/soci/${member.id}`}
+                <a
+                  className="flex min-h-10 min-w-0 flex-1 items-center justify-between gap-2.5 rounded-sm"
+                  href={`/org-admin/soci/${member.id}`}
                   aria-label={`Apri profilo di ${member.name}`}
                   onClick={(event) => {
                     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                     event.preventDefault();
                     onSelectMember?.(member.id);
                     onOpenMember(member.id);
-                  }}>
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="truncate text-sm font-bold text-neutral-900">{member.name}</h3>
-                    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold leading-4 ${badgeMeta.tone}`}>
-                      {badgeMeta.label}
-                    </span>
-                  </div>
-                  <div className="mt-1 flex items-center justify-between gap-2 text-xs text-neutral-500">
-                    <div className="min-w-0 flex flex-1 flex-wrap items-center gap-x-1.5 gap-y-1">
+                  }}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="truncate text-sm font-semibold text-neutral-900">{member.name}</h3>
+                      {topPill ? (
+                        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-tight ${topPill.tone}`}>
+                          {topPill.label}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-neutral-500">
                       <span className="shrink-0 font-medium text-neutral-700 tabular-nums">
                         {cardNo != null ? `#${cardNo}` : "Senza tessera"}
                       </span>
                       {member.email ? (
                         <>
-                          <span aria-hidden="true">·</span>
-                          <span className="truncate max-w-[155px] sm:max-w-[220px]">{member.email}</span>
+                          <span aria-hidden="true" className="shrink-0">·</span>
+                          <span className="min-w-0 flex-1 truncate">{member.email}</span>
                         </>
-                      ) : null}
-                      {docAttentionLabel ? (
-                        <span className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-tight ${docAttentionTone}`}>
-                          {docAttentionLabel}
-                        </span>
-                      ) : null}
-                      {member.is_paid === false && Number(member.membership_fee_snapshot ?? 0) > 0 ? (
-                        <span className="inline-flex shrink-0 items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold leading-tight text-amber-800">
-                          Quota da verificare
-                        </span>
                       ) : null}
                       {member.search_match === "similar" && (
                         <span className="inline-flex shrink-0 items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold leading-tight text-amber-800">
@@ -361,17 +367,17 @@ const MembersTable = memo(function MembersTable({
                         </span>
                       )}
                     </div>
-                    <svg
-                      className="h-4 w-4 shrink-0 text-neutral-400"
-                      viewBox="0 0 20 20"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                      aria-hidden="true"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="m7.5 5 5 5-5 5" />
-                    </svg>
                   </div>
+                  <svg
+                    className="h-4 w-4 shrink-0 text-neutral-400"
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    aria-hidden="true"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m7.5 5 5 5-5 5" />
+                  </svg>
                 </a>
               </article>
             );

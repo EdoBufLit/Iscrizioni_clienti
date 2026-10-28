@@ -515,7 +515,7 @@ const OrgAdminMembers = () => {
           )}
 
           <div
-            className="org-admin-members-quick-chips flex items-center gap-1.5 overflow-x-auto scrollbar-none md:hidden"
+            className="org-admin-members-quick-chips flex items-center gap-1 overflow-x-auto scrollbar-none md:hidden"
             role="group"
             aria-label="Filtri rapidi stato soci"
           >
@@ -534,54 +534,50 @@ const OrgAdminMembers = () => {
               <span className="org-admin-members-quick-chip__sep" aria-hidden="true">·</span>
               <strong>{activeMembersCount}</strong>
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                setStatus(status === "review" ? "active" : "review");
-                setDocs("");
-                setPage(1);
-              }}
-              aria-pressed={status === "review"}
-              className={`org-admin-members-quick-chip ${
-                status === "review"
-                  ? "is-active is-warning"
-                  : toVerifyCount > 0
-                    ? "has-attention"
-                    : "is-muted"
-              }`}
-            >
-              {(status === "review") && (
-                <span className="org-admin-members-quick-chip__dot" aria-hidden="true" />
-              )}
-              <span>Da verificare</span>
-              <span className="org-admin-members-quick-chip__sep" aria-hidden="true">·</span>
-              <strong>{toVerifyCount}</strong>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (status === "expiring") {
-                  setStatus("active");
-                } else {
-                  setStatus("expiring");
+            {(toVerifyCount > 0 || status === "review") && (
+              <button
+                type="button"
+                onClick={() => {
+                  setStatus(status === "review" ? "active" : "review");
                   setDocs("");
-                }
-                setPage(1);
-              }}
-              aria-pressed={status === "expiring"}
-              className={`org-admin-members-quick-chip ${
-                status === "expiring"
-                  ? "is-active"
-                  : expiringSoonCount > 0
-                    ? "has-attention"
-                    : "is-muted"
-              }`}
-            >
-              {status === "expiring" && <span className="org-admin-members-quick-chip__dot" aria-hidden="true" />}
-              <span>In scadenza</span>
-              <span className="org-admin-members-quick-chip__sep" aria-hidden="true">·</span>
-              <strong>{expiringSoonCount}</strong>
-            </button>
+                  setPage(1);
+                }}
+                aria-pressed={status === "review"}
+                className={`org-admin-members-quick-chip ${
+                  status === "review" ? "is-active is-warning" : "has-attention"
+                }`}
+              >
+                {status === "review" && (
+                  <span className="org-admin-members-quick-chip__dot" aria-hidden="true" />
+                )}
+                <span>Da verificare</span>
+                <span className="org-admin-members-quick-chip__sep" aria-hidden="true">·</span>
+                <strong>{toVerifyCount}</strong>
+              </button>
+            )}
+            {(expiringSoonCount > 0 || status === "expiring") && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (status === "expiring") {
+                    setStatus("active");
+                  } else {
+                    setStatus("expiring");
+                    setDocs("");
+                  }
+                  setPage(1);
+                }}
+                aria-pressed={status === "expiring"}
+                className={`org-admin-members-quick-chip ${
+                  status === "expiring" ? "is-active" : "has-attention"
+                }`}
+              >
+                {status === "expiring" && <span className="org-admin-members-quick-chip__dot" aria-hidden="true" />}
+                <span>In scadenza</span>
+                <span className="org-admin-members-quick-chip__sep" aria-hidden="true">·</span>
+                <strong>{expiringSoonCount}</strong>
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {
@@ -676,6 +672,7 @@ const OrgAdminMembers = () => {
           members={members}
           totalPages={totalPages}
           page={page}
+          statusFilter={status}
           selectedMemberId={selectedMember?.id ?? null}
           onPageChange={setPage}
           onSelectMember={setSelectedMemberId}
