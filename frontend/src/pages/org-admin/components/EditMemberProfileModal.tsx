@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import ModalShell from "../../../components/ui/ModalShell";
 import {
   type OrgAdminMembershipSettings,
@@ -106,12 +106,21 @@ const EditMemberProfileModal = memo(function EditMemberProfileModal({
   onClose,
   onSubmit,
 }: EditMemberProfileModalProps) {
+  const formId = useId();
+  const closeStateRef = useRef({ saving, onClose });
+  closeStateRef.current = { saving, onClose };
+  const handleClose = useCallback(() => {
+    if (!closeStateRef.current.saving) closeStateRef.current.onClose();
+  }, []);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [fieldErrors, setFieldErrors] = useState<FormErrors>({});
   const [municipalitySuggestions, setMunicipalitySuggestions] = useState<MunicipalitySearchItem[]>([]);
   const [municipalityLoading, setMunicipalityLoading] = useState(false);
   const [municipalityError, setMunicipalityError] = useState("");
   const [showMunicipalitySuggestions, setShowMunicipalitySuggestions] = useState(false);
+  const birthPlaceUnchanged =
+    form.birth_place.trim() === (member?.birth_place ?? "").trim() &&
+    form.birth_place_code.trim() === (member?.birth_place_code ?? "").trim();
 
   useEffect(() => {
     if (!open) {
@@ -129,7 +138,7 @@ const EditMemberProfileModal = memo(function EditMemberProfileModal({
       return;
     }
     const query = form.birth_place.trim();
-    if (query.length < 2 || form.birth_place_code) {
+    if (query.length < 2 || form.birth_place_code || birthPlaceUnchanged) {
       setMunicipalitySuggestions([]);
       setMunicipalityLoading(false);
       return;
@@ -160,7 +169,7 @@ const EditMemberProfileModal = memo(function EditMemberProfileModal({
       cancelled = true;
       window.clearTimeout(timeoutId);
     };
-  }, [form.birth_place, form.birth_place_code, open]);
+  }, [birthPlaceUnchanged, form.birth_place, form.birth_place_code, open]);
 
   const fiscalCodeValidation = useMemo(
     () =>
@@ -172,7 +181,7 @@ const EditMemberProfileModal = memo(function EditMemberProfileModal({
 
   const liveFiscalCodeError =
     form.fiscal_code.trim() && !fiscalCodeValidation.isFormallyValid
-      ? "Il codice fiscale non ? valido. Verifica formato e checksum."
+      ? "Il codice fiscale non è valido. Verifica formato e checksum."
       : "";
 
   const updateField = (field: keyof FormState, value: string) => {
@@ -217,7 +226,7 @@ const EditMemberProfileModal = memo(function EditMemberProfileModal({
     if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
       nextErrors.email = "Inserisci un indirizzo email valido.";
     }
-    if (form.birth_place.trim() && !form.birth_place_code.trim()) {
+    if (form.birth_place.trim() && !form.birth_place_code.trim() && !birthPlaceUnchanged) {
       nextErrors.birth_place = "Seleziona un comune dall'elenco suggerito.";
     }
     if (liveFiscalCodeError) {
@@ -252,6 +261,11 @@ const EditMemberProfileModal = memo(function EditMemberProfileModal({
     });
   };
 
+  const handleFormSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!saving) handleSubmit();
+  };
+
   if (!open || !member) {
     return null;
   }
@@ -259,13 +273,31 @@ const EditMemberProfileModal = memo(function EditMemberProfileModal({
   return (
     <ModalShell
       open={open}
-      onClose={onClose}
-      title="Modifica anagrafica socio"
-      description="Aggiorna i dati principali del socio. Le modifiche restano tracciate nello storico attività."
+      onClose={handleClose}
+      closeDisabled={saving}
+      title="Modifica profilo"
+      placement="bottom"
       sizeClassName="max-w-4xl"
-      contentClassName="rounded-[28px] border border-neutral-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,246,242,0.98))] p-6 shadow-[0_24px_80px_rgba(15,23,42,0.18)]"
+      contentClassName="member-detail-sheet rounded-t-[28px] border border-neutral-200 bg-white p-5 shadow-xl sm:p-6"
+      footer={
+        <>
+          <button type="button" className="btn-ghost" onClick={handleClose} disabled={saving}>
+            Annulla
+          </button>
+          <button type="submit" form={formId} className="btn-primary" disabled={saving}>
+            {saving ? "Salvataggio..." : "Salva anagrafica"}
+          </button>
+        </>
+      }
     >
-      <div className="space-y-6" data-component="orgadmin-edit-member-profile-modal">
+      <form
+        id={formId}
+        noValidate
+        onSubmit={handleFormSubmit}
+        aria-busy={saving}
+        className="space-y-6"
+        data-component="orgadmin-edit-member-profile-modal"
+      >
         <div className="grid gap-6 md:grid-cols-2">
           <div>
             <label className={labelClass} htmlFor="member-first-name">
@@ -416,9 +448,7 @@ const EditMemberProfileModal = memo(function EditMemberProfileModal({
               <p className="mt-1 text-xs text-red-600">{fieldErrors.fiscal_code}</p>
             ) : liveFiscalCodeError ? (
               <p className="mt-1 text-xs text-red-600">{liveFiscalCodeError}</p>
-            ) : (
-              <p className={helperTextClass}>Validazione formale lato client; il controllo definitivo resta server-side.</p>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -468,9 +498,6 @@ const EditMemberProfileModal = memo(function EditMemberProfileModal({
                 <option value="annual">Annuale</option>
                 <option value="temporary">Temporanea</option>
               </select>
-              <p className={helperTextClass}>
-                La durata della tessera temporanea segue la regola generale impostata nella pagina Soci.
-              </p>
             </div>
             <div>
               <label className={labelClass} htmlFor="member-membership-fee">
@@ -487,28 +514,17 @@ const EditMemberProfileModal = memo(function EditMemberProfileModal({
                 placeholder="Es. 30.00"
                 disabled={saving}
               />
-              <p className={helperTextClass}>
-                Snapshot usato nel totale teorico tessere per questo socio.
-              </p>
             </div>
           </div>
         ) : null}
 
         {error ? (
-          <div className="rounded-xl border border-red-200/70 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div role="alert" className="rounded-xl border border-red-200/70 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
           </div>
         ) : null}
 
-        <div className="flex flex-wrap justify-end gap-3">
-          <button type="button" className="btn-ghost" onClick={onClose} disabled={saving}>
-            Annulla
-          </button>
-          <button type="button" className="btn-primary" onClick={handleSubmit} disabled={saving}>
-            {saving ? "Salvataggio..." : "Salva anagrafica"}
-          </button>
-        </div>
-      </div>
+      </form>
     </ModalShell>
   );
 });

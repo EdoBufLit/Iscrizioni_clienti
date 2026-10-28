@@ -355,3 +355,9 @@ Do not interpret "date without slots" as closed when a default booking schedule 
 
 - Correzione utente: la barra della lista Soci era troppo affollata; non concentrare selezione, spiegazioni, azioni secondarie e storico in un unico blocco sempre espanso. Mostrare le azioni quando esiste una selezione e raccogliere lo storico in un solo accesso.
 - Tenere i solleciti in Quote e rinnovi, senza proporre automaticamente l'anno successivo nella lista Soci. Attivazione dal 2027 e mai prima dell'inizio dell'annualita interessata, usando Europe/Rome e controlli backend anche per anteprime salvate.
+
+## Oct 28, 2026 - Dettaglio socio leggibile e operazioni contestuali
+
+- Correzione utente: separare Profilo, Pagamenti, Documenti e note, Attivita; i form operativi si aprono su richiesta. Una decisione conclusa mostra stato e note readonly, con revisione documenti indipendente.
+- Il flag di pagamento online non prova che la quota sia gratuita. Usare il saldo contabile e non sommare rappresentazioni legacy dello stesso pagamento; dopo un POST riuscito preservare l'esito anche se il refresh fallisce.
+- Un profilo importato con comune senza codice deve consentire modifiche non correlate senza perdere dati. Validare i dati cambiati e preservare quelli storici invariati.

@@ -1,4 +1,5 @@
-import { memo, useState } from "react";
+import { memo, useId, useRef, useState, type FormEvent } from "react";
+import { localPaymentDate } from "../../../lib/temporaryMemberships";
 
 export type ManualPaymentPayload = {
   amount: number;
@@ -19,27 +20,33 @@ type ManualPaymentFormProps = {
   payments?: Payment[];
   paymentMethodLabel: string;
   onSubmit: (payload: ManualPaymentPayload) => Promise<void>;
+  embedded?: boolean;
 };
 
 const ManualPaymentForm = memo(function ManualPaymentForm({
   payments,
   paymentMethodLabel,
   onSubmit,
+  embedded = false,
 }: ManualPaymentFormProps) {
+  const formId = useId();
+  const submitLock = useRef(false);
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("contanti");
-  const [paidAt, setPaidAt] = useState(new Date().toISOString().slice(0, 10));
+  const [paidAt, setPaidAt] = useState(localPaymentDate);
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (submitLock.current) return;
     setError(null);
     setMessage(null);
 
     const parsedAmount = Number(amount.replace(",", "."));
-    if (!parsedAmount || parsedAmount <= 0) {
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
       setError("Inserisci un importo valido.");
       return;
     }
@@ -48,6 +55,7 @@ const ManualPaymentForm = memo(function ManualPaymentForm({
       return;
     }
 
+    submitLock.current = true;
     setSubmitting(true);
     try {
       await onSubmit({
@@ -62,25 +70,32 @@ const ManualPaymentForm = memo(function ManualPaymentForm({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore durante il salvataggio");
     } finally {
+      submitLock.current = false;
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
-      <h2 className="text-lg font-semibold mb-2">Pagamento manuale</h2>
-      <p className="text-sm text-neutral-500">
-        Registra un pagamento ricevuto offline (contanti, bonifico, altro).
-      </p>
+    <form
+      onSubmit={handleSubmit}
+      noValidate
+      aria-label="Pagamento manuale"
+      aria-busy={submitting}
+      className={embedded ? "space-y-4" : "bg-white rounded-xl shadow-sm border border-neutral-200 p-6"}
+    >
+      {!embedded && (
+        <>
+          <h2 className="text-lg font-semibold mb-2">Pagamento manuale</h2>
+          <div className="mt-4 rounded-lg border border-neutral-100 bg-neutral-50 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+              Modalità iscrizione selezionata
+            </p>
+            <p className="text-sm font-medium text-neutral-800">{paymentMethodLabel}</p>
+          </div>
+        </>
+      )}
 
-      <div className="mt-4 rounded-lg border border-neutral-100 bg-neutral-50 px-4 py-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-          Modalità iscrizione selezionata
-        </p>
-        <p className="text-sm font-medium text-neutral-800">{paymentMethodLabel}</p>
-      </div>
-
-      {payments && payments.length > 0 && (
+      {!embedded && payments && payments.length > 0 && (
         <div className="mt-4 rounded-lg border border-emerald-200/70 bg-emerald-50 px-4 py-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
             Ultimo pagamento
@@ -98,12 +113,14 @@ const ManualPaymentForm = memo(function ManualPaymentForm({
         </div>
       )}
 
-      <div className="mt-6 grid gap-4 md:grid-cols-2" data-component="orgadmin-member-payment-form">
+      <fieldset disabled={submitting} className={`${embedded ? "" : "mt-6 "}grid gap-4 md:grid-cols-2`} data-component="orgadmin-member-payment-form">
         <div>
-          <label className="block text-xs font-medium text-neutral-600">Importo (EUR)</label>
+          <label htmlFor={`${formId}-amount`} className="block text-xs font-medium text-neutral-600">Importo (EUR)</label>
           <input
+            id={`${formId}-amount`}
             type="number"
-            min="0"
+            inputMode="decimal"
+            min="0.01"
             step="0.01"
             className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
             value={amount}
@@ -112,8 +129,9 @@ const ManualPaymentForm = memo(function ManualPaymentForm({
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-neutral-600">Metodo</label>
+          <label htmlFor={`${formId}-method`} className="block text-xs font-medium text-neutral-600">Metodo</label>
           <select
+            id={`${formId}-method`}
             className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
             value={method}
             onChange={(e) => setMethod(e.target.value)}
@@ -124,8 +142,9 @@ const ManualPaymentForm = memo(function ManualPaymentForm({
           </select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-neutral-600">Data pagamento</label>
+          <label htmlFor={`${formId}-date`} className="block text-xs font-medium text-neutral-600">Data pagamento</label>
           <input
+            id={`${formId}-date`}
             type="date"
             className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
             value={paidAt}
@@ -133,8 +152,9 @@ const ManualPaymentForm = memo(function ManualPaymentForm({
           />
         </div>
         <div className="md:col-span-2">
-          <label className="block text-xs font-medium text-neutral-600">Note</label>
+          <label htmlFor={`${formId}-notes`} className="block text-xs font-medium text-neutral-600">Note</label>
           <textarea
+            id={`${formId}-notes`}
             rows={3}
             className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
             value={notes}
@@ -142,23 +162,22 @@ const ManualPaymentForm = memo(function ManualPaymentForm({
             placeholder="Eventuali note sul pagamento..."
           />
         </div>
-      </div>
+      </fieldset>
 
       <div className="mt-4 min-h-[24px]">
-        {error && <span className="text-xs text-red-600">{error}</span>}
-        {message && <span className="text-xs text-emerald-600">{message}</span>}
+        {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+        {message && <p role="status" className="text-sm text-emerald-600">{message}</p>}
       </div>
 
       <button
-        type="button"
-        onClick={handleSubmit}
+        type="submit"
         disabled={submitting}
-        className="btn-primary"
+        className="btn-primary w-full justify-center"
       >
-        {submitting ? "Salvataggio..." : "Segna pagato manualmente"}
+        {submitting ? "Salvataggio..." : "Registra pagamento"}
       </button>
 
-      {payments && payments.length > 0 && (
+      {!embedded && payments && payments.length > 0 && (
         <div className="mt-6 rounded-lg border border-neutral-100 bg-neutral-50 px-4 py-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
             Storico pagamenti
@@ -184,7 +203,7 @@ const ManualPaymentForm = memo(function ManualPaymentForm({
           </ul>
         </div>
       )}
-    </div>
+    </form>
   );
 });
 

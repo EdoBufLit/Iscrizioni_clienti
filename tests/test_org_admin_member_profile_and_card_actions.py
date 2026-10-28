@@ -227,6 +227,57 @@ def test_org_admin_profile_update_rejects_duplicate_email_and_other_org_access(c
     assert forbidden_res.status_code == 404
 
 
+@pytest.mark.parametrize("birth_place,birth_place_code", [("Torino", None), (None, None), (" Torino ", " l219 ")])
+def test_org_admin_can_edit_notes_without_revalidating_unchanged_birth_place(
+    client, db, birth_place, birth_place_code
+):
+    suffix = uuid.uuid4().hex[:8]
+    org = Organization(name=f"Legacy Profile {suffix}", slug=f"legacy-profile-{suffix}", is_active=True)
+    other_org = Organization(name=f"Foreign Legacy {suffix}", slug=f"foreign-legacy-{suffix}", is_active=True)
+    db.add_all([org, other_org])
+    db.commit()
+    admin = AdminUser(email=f"legacy-admin-{suffix}@example.com", role=AdminRole.ORG_ADMIN, org_id=org.id, is_active=True)
+    member = Member(org_id=org.id, first_name="Mario", last_name="Rossi", status=MemberStatus.PENDING_DOCS,
+                    birth_place=birth_place, birth_place_code=birth_place_code)
+    foreign_member = Member(org_id=other_org.id, first_name="Other", last_name="Socio", status=MemberStatus.PENDING_DOCS,
+                            birth_place=birth_place, birth_place_code=birth_place_code)
+    db.add_all([admin, member, foreign_member])
+    db.commit()
+    _login_org_admin(client, db, admin.id)
+    payload = {
+        "first_name": "Mario",
+        "last_name": "Rossi",
+        "birth_place": birth_place.strip().lower() if birth_place else None,
+        "birth_place_code": birth_place_code.strip().upper() if birth_place_code else None,
+        "internal_notes": "Nota aggiornata senza cambiare il comune",
+    }
+
+    response = client.patch(f"/api/org-admin/members/{member.id}/profile", json=payload)
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["birth_place"] == birth_place
+    assert data["birth_place_code"] == birth_place_code
+    assert data["internal_notes"] == payload["internal_notes"]
+    db.refresh(member)
+    assert member.birth_place == birth_place
+    assert member.birth_place_code == birth_place_code
+    log = db.query(OperationLog).filter_by(action="member.update", entity_type="member", entity_id=member.id).order_by(OperationLog.id.desc()).first()
+    assert set(log.metadata_json["fields"]) == {"internal_notes"}
+
+    for changed_pair in [
+        {"birth_place": "Comune inesistente", "birth_place_code": "ZZZZ"},
+        {"birth_place": "Comune inesistente", "birth_place_code": "H501"},
+        {"birth_place": "Roma", "birth_place_code": None},
+    ]:
+        rejected = client.patch(f"/api/org-admin/members/{member.id}/profile", json={**payload, **changed_pair})
+        assert rejected.status_code == 422, rejected.text
+
+    forbidden = client.patch(f"/api/org-admin/members/{foreign_member.id}/profile", json=payload)
+    assert forbidden.status_code == 404
+    db.refresh(foreign_member)
+    assert foreign_member.internal_notes is None
+
+
 def test_org_admin_card_email_and_pdf_are_scoped_and_work(client, db, drain_email_outbox):
     previous_email_mode = settings.EMAIL_MODE
     settings.EMAIL_MODE = "test"

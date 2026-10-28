@@ -6245,3 +6245,19 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Pubblicate le cinque modifiche Gemini su Main con e2cc1df; pipeline 40758703512 build/deploy riuscita e Final canary passed verificato nei log.
 - 143 test frontend / 36 file e build TypeScript/Vite/PWA riusciti; review senza blocker. Browser build reale 390x844 light/dark e 320x568: nessun overflow, tema/filtri/Escape/scroll corretti. Server QA fermato, tab chiusa e viewport ripristinato.
 - 24 controlli HTTPS superati e hash asset corrispondenti; sette servizi runtime aggiornati e healthy, zero restart/OOM. Schema invariato, nessuna migrazione/backend modificato o invio reale. Dettagli in docs/members_mobile_release_2026-10-28.md; evidenze private output/members-refinement-20261028/.
+
+## Plan (Dettaglio socio compatto e pannelli inferiori - Oct 28, 2026)
+
+- Riunire nome, stato, tessera e azioni rapide in una sola intestazione; quattro schede Profilo, Pagamenti, Documenti e note, Attivita. Dati leggibili e stati tradotti, senza testi tecnici superflui.
+- Spostare pagamento e modifica profilo in pannelli inferiori; approvazioni concluse in sola lettura, eliminazione discreta con conferma. Preservare API, saldi reali, revisione documenti e branding delle tessere.
+- [x] Verificare contratti e componenti esistenti; implementare layout, schede e pannelli accessibili.
+- [x] Verificare regressioni finanziarie/documentali, test frontend e build; review indipendente.
+- [x] Collaudare pagina e azioni con dati sintetici su mobile e desktop, chiaro/scuro; conservare screenshot.
+- [ ] Pubblicare su Main e controllare deploy, asset e salute; documentare risultati e limiti.
+
+### Review prima del rilascio
+- Quattro schede, hero unica, azioni rapide, pagamento/modifica/decisione pendente nei pannelli inferiori. Decisioni concluse readonly e note persistenti; eliminazione discreta con conferma esplicita. Contenitore tessera segue il tema, artwork e QR conservati.
+- Saldo da contabilità, storici senza doppie somme; parziali/storni rimandano a Incassi. Salvataggio riuscito conservato anche se il refresh fallisce; focus e pulsanti protetti durante invio. Corretto handle stampa e timestamp UTC/Roma.
+- Il backend restituisce note/data/autore decisione. Modifiche non correlate conservano comuni storici senza codice; i comuni cambiati restano validati e isolati per associazione. Nessuna migrazione.
+- 175 test frontend / 39 file e build TypeScript/Vite/PWA riusciti; 12 test backend pertinenti superati. Review indipendente funzionale e componenti conclusa.
+- Browser reale su dati sintetici: 24 casi schede/viewport/tema (320x568,390x844,810x900,1280x600,1440x900); nessun overflow o form aperto. Pagamento30 euro con residuo0, modifica note su profilo storico, approvazione/rigetto documenti di socio attivo, conferma eliminazione annullata, download PDF e QR verificati. Nessuna modifica o invio reale per il collaudo. Evidenze in output/member-detail-20261028/.

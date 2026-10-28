@@ -1,5 +1,6 @@
 import { memo, useEffect, useState } from "react";
 import AsyncActionButton, { type AsyncActionState } from "../../../components/ui/AsyncActionButton";
+import { formatMemberDate } from "./memberDetailPresentation";
 
 type MemberDecisionPanelProps = {
   status: string;
@@ -21,7 +22,9 @@ const MemberDecisionPanel = memo(function MemberDecisionPanel({
   onSubmit,
 }: MemberDecisionPanelProps) {
   const [notes, setNotes] = useState(initialNotes ?? "");
-  const isDecisionMade = status === "active" || status === "rejected";
+  const normalizedStatus = status.trim().toLowerCase();
+  const isApproved = normalizedStatus !== "rejected" && (normalizedStatus === "active" || Boolean(decisionAt));
+  const isDecisionMade = isApproved || normalizedStatus === "rejected";
 
   useEffect(() => {
     setNotes(initialNotes ?? "");
@@ -29,10 +32,10 @@ const MemberDecisionPanel = memo(function MemberDecisionPanel({
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
-      <h2 className="text-lg font-semibold mb-4">Decisione Iscrizione</h2>
+      <h2 className="text-lg font-semibold mb-4">Iscrizione</h2>
 
       <div className="space-y-4" data-component="orgadmin-member-decision-panel">
-        <div>
+        {!isDecisionMade && <div>
           <label htmlFor="decisionNotes" className="block text-sm font-medium text-neutral-700 mb-1">
             Note decisione (opzionale)
           </label>
@@ -43,23 +46,23 @@ const MemberDecisionPanel = memo(function MemberDecisionPanel({
             placeholder="Inserisci eventuali note per l'approvazione o il rifiuto..."
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            disabled={isDecisionMade || isSubmitting}
+            disabled={isSubmitting}
           />
-        </div>
+        </div>}
 
         {isDecisionMade ? (
-          <div className={`p-4 rounded-lg border ${status === "active" ? "bg-green-50 border-green-100 text-green-800" : "bg-red-50 border-red-100 text-red-800"}`}>
-            <p className="font-medium">
-              Decisione presa: {status === "active" ? "Approvata" : "Rifiutata"}
+          <div>
+            <p className={`inline-flex rounded-full border px-3 py-1 text-sm font-semibold ${isApproved ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-red-50 border-red-200 text-red-700"}`}>
+              {isApproved ? "Iscrizione approvata" : "Iscrizione rifiutata"}
             </p>
             {decisionAt && (
-              <p className="text-sm mt-1 opacity-80">
-                Data: {new Date(decisionAt).toLocaleString()}
+              <p className="text-sm mt-2 text-neutral-500">
+                {formatMemberDate(decisionAt, true)}
               </p>
             )}
-            {initialNotes && (
-              <p className="text-sm mt-2 pt-2 border-t border-black/10">
-                Note: {initialNotes}
+            {initialNotes?.trim() && (
+              <p className="text-sm mt-3 whitespace-pre-wrap break-words text-neutral-700">
+                {initialNotes}
               </p>
             )}
           </div>

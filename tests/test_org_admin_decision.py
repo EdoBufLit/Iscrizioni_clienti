@@ -103,6 +103,12 @@ def test_org_admin_decision(client, db):
     # Login
     client.get(f"/api/org-admin/auth/verify?token={token_str}", follow_redirects=False)
 
+    detail = client.get(f"/api/org-admin/members/{member_approve.id}")
+    assert detail.status_code == 200
+    assert detail.json()["decision_at"] is None
+    assert detail.json()["decision_notes"] is None
+    assert detail.json()["decision_by_admin_id"] is None
+
     # Test Approve
     resp = client.post(
         f"/api/org-admin/members/{member_approve.id}/decision",
@@ -117,6 +123,12 @@ def test_org_admin_decision(client, db):
     assert member_approve.decision_by_admin_id == admin.id
     assert member_approve.decision_notes == "Approved via test"
     assert member_approve.decision_at is not None
+
+    detail = client.get(f"/api/org-admin/members/{member_approve.id}")
+    assert detail.status_code == 200
+    assert detail.json()["decision_notes"] == "Approved via test"
+    assert detail.json()["decision_at"] == member_approve.decision_at.isoformat()
+    assert detail.json()["decision_by_admin_id"] == admin.id
 
     annual_term = db.query(AnnualMembershipTerm).filter_by(member_id=member_approve.id).one()
     assert annual_term.status == AnnualMembershipTermStatus.ACTIVE.value
@@ -143,6 +155,12 @@ def test_org_admin_decision(client, db):
     assert member_reject.status == MemberStatus.REJECTED
     assert member_reject.decision_by_admin_id == admin.id
 
+    detail = client.get(f"/api/org-admin/members/{member_reject.id}")
+    assert detail.status_code == 200
+    assert detail.json()["decision_notes"] == "Rejected via test"
+    assert detail.json()["decision_at"] is not None
+    assert detail.json()["workflow_status"] == "rejected"
+
     # Test Cross-Org Access (Forbidden)
     other_org = Organization(name="Other Org", slug=f"other-org-{unique_suffix}", is_active=True)
     db.add(other_org)
@@ -162,6 +180,9 @@ def test_org_admin_decision(client, db):
         json={"decision": "approve"}
     )
     assert resp.status_code == 403
+
+    detail = client.get(f"/api/org-admin/members/{other_member.id}")
+    assert detail.status_code == 404
 
     # Test Invalid Decision
     resp = client.post(

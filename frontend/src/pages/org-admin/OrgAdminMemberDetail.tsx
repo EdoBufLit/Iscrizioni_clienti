@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
   AuthError,
@@ -13,6 +13,10 @@ import {
   type OrgAdminMembershipSettings,
   type UpdateOrgAdminMemberProfileInput,
 } from "../../lib/api";
+import ModalShell from "../../components/ui/ModalShell";
+import MemberDetailHeader, { type MemberDetailTab } from "./components/MemberDetailHeader";
+import MemberPaymentsPanel from "./components/MemberPaymentsPanel";
+import { displayMemberName, documentMeta, formatMemberDate, lifecycleMeta, paymentMeta, paymentMethodLabel as humanPaymentMethod, workflowMeta } from "./components/memberDetailPresentation";
 import { MemberCardPreview } from "../../components/cards/MemberCardPreview";
 import ManualPaymentForm, { type ManualPaymentPayload } from "./components/ManualPaymentForm";
 import TemporaryPurchasesPanel from "./components/TemporaryPurchasesPanel";
@@ -23,6 +27,7 @@ import AsyncActionButton, { type AsyncActionState } from "../../components/ui/As
 import ConfirmModal from "../../components/ui/ConfirmModal";
 import { useToast } from "../../components/ui/ToastProvider";
 import { useOrgAdmin } from "./OrgAdminLayout";
+import "./OrgAdminMemberDetail.css";
 
 function formatBytes(bytes: number, decimals = 2) {
   if (!+bytes) return '0 Bytes';
@@ -42,7 +47,14 @@ export default function OrgAdminMemberDetail() {
   const [membershipSettings, setMembershipSettings] = useState<OrgAdminMembershipSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"details" | "activity">("details");
+  const [activeTab, setActiveTab] = useState<MemberDetailTab>("profile");
+  const [paymentSheetOpen, setPaymentSheetOpen] = useState(false);
+  const [paymentSaving, setPaymentSaving] = useState(false);
+  const [paymentRevision, setPaymentRevision] = useState(0);
+  const [cardSheetOpen, setCardSheetOpen] = useState(false);
+  const [decisionSheetOpen, setDecisionSheetOpen] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const requestSequence = useRef(0);
   const [reviewingDocId, setReviewingDocId] = useState<number | null>(null);
   const [sendingAccess, setSendingAccess] = useState(false);
   const [sendAccessMessage, setSendAccessMessage] = useState<string | null>(null);
@@ -81,7 +93,7 @@ export default function OrgAdminMemberDetail() {
 
   const getActivityMeta = (item: OrgAdminMemberActivity) => {
     const meta = item.metadata ?? {};
-    let label = ACTION_LABELS[item.action] ?? item.action;
+    let label = ACTION_LABELS[item.action] ?? "Aggiornamento del socio";
     let details = "";
     let category = "Attività";
     let tone = "border-neutral-200 bg-neutral-50 text-neutral-600";
@@ -107,7 +119,7 @@ export default function OrgAdminMemberDetail() {
       tone = "border-amber-200 bg-amber-50 text-amber-700";
       const docType = (meta as Record<string, unknown>)?.doc_type;
       if (typeof docType === "string") {
-        details = `Tipo: ${docType}`;
+        details = docType === "identity" ? "Documento d'identità" : docType === "fiscal_code" ? "Codice fiscale" : "Documento reinviato";
       }
     } else if (item.action === "member.payment.manual") {
       category = "Pagamenti";
@@ -119,7 +131,7 @@ export default function OrgAdminMemberDetail() {
         details = `Importo: €${amount}`;
       }
       if (typeof method === "string") {
-        details = details ? `${details} — Metodo: ${method}` : `Metodo: ${method}`;
+        details = details ? `${details} · ${humanPaymentMethod(method)}` : humanPaymentMethod(method);
       }
     } else if (item.action === "member.payment.membership_manual") {
       category = "Pagamenti";
@@ -142,7 +154,8 @@ export default function OrgAdminMemberDetail() {
       tone = "border-neutral-200 bg-neutral-50 text-neutral-700";
       const fields = (meta as Record<string, unknown>)?.fields;
       if (Array.isArray(fields) && fields.length) {
-        details = `Campi: ${fields.join(", ")}`;
+        const fieldLabels: Record<string, string> = { first_name: "nome", last_name: "cognome", email: "email", phone: "telefono", birth_date: "data di nascita", birth_place: "luogo di nascita", birth_place_code: "comune", fiscal_code: "codice fiscale", membership_type: "tipo tessera", membership_fee_snapshot: "quota", valid_from: "inizio validità", valid_until: "scadenza", internal_notes: "note interne" };
+        details = `Dati aggiornati: ${fields.map(field => fieldLabels[String(field)] ?? "altri dati").join(", ")}`;
       }
     } else if (item.action === "member.decision") {
       category = "Iscrizione";
@@ -177,30 +190,37 @@ export default function OrgAdminMemberDetail() {
     setDocActionStates((prev) => ({ ...prev, [docId]: state }));
   };
 
+  const closePaymentSheet = useCallback(() => { if (!paymentSaving) setPaymentSheetOpen(false); }, [paymentSaving]);
+  const closeCardSheet = useCallback(() => setCardSheetOpen(false), []);
+  const closeDecisionSheet = useCallback(() => setDecisionSheetOpen(false), []);
+  const closeProfile = useCallback(() => { if (!profileSaving) { setEditModalOpen(false); setProfileError(null); } }, [profileSaving]);
+  const closeRejectDocument = useCallback(() => { if (!reviewingDocId) setRejectingDoc(null); }, [reviewingDocId]);
+  const closeDecisionConfirmation = useCallback(() => { if (!isSubmittingDecision) setDecisionDraft(null); }, [isSubmittingDecision]);
+  const closeDeleteConfirmation = useCallback(() => { if (deleteActionState !== "loading") { setDeleteConfirmOpen(false); setDeleteActionState("idle"); } }, [deleteActionState]);
+
   useEffect(() => {
+    setActiveTab("profile");
+    setPaymentSheetOpen(false); setCardSheetOpen(false); setDecisionSheetOpen(false);
     void fetchMember();
     void loadMembershipSettings();
+    return () => { requestSequence.current += 1; };
   }, [id]);
 
-  const fetchMember = async () => {
-    if (!id) {
-      setLoading(false);
-      setError("Socio non trovato");
-      return;
-    }
+  const fetchMember = async (refresh = false) => {
+    const sequence = ++requestSequence.current;
+    if (!id) { setLoading(false); setError("Socio non trovato"); return; }
+    if (!refresh) { setLoading(true); setError(null); }
+    setRefreshError(null);
     try {
-      setLoading(true);
-      setError(null);
       const data = await fetchOrgAdminMemberDetail(Number(id));
-      setMember(data);
+      if (sequence === requestSequence.current) setMember(data);
     } catch (err) {
-      if (err instanceof AuthError) {
-        navigate("/org-admin/login", { replace: true });
-        return;
-      }
-      setError(err instanceof Error ? err.message : "Errore sconosciuto");
+      if (sequence !== requestSequence.current) return;
+      if (err instanceof AuthError) { navigate("/org-admin/login", { replace: true }); return; }
+      if (refresh) setRefreshError("Operazione salvata; non è stato possibile aggiornare i dati. Riprova l'aggiornamento.");
+      else setError(err instanceof Error ? err.message : "Errore sconosciuto");
     } finally {
-      setLoading(false);
+      if (sequence === requestSequence.current) setLoading(false);
     }
   };
 
@@ -265,6 +285,7 @@ export default function OrgAdminMemberDetail() {
     try {
       const updated = await updateOrgAdminMemberProfile(member.id, payload);
       setMember(updated);
+      setPaymentRevision(value => value + 1);
       setEditModalOpen(false);
       setActionMessage("Anagrafica aggiornata correttamente.");
       setActionError(null);
@@ -295,7 +316,7 @@ export default function OrgAdminMemberDetail() {
         title: "Tessera socio",
         message: "Email tessera accodata correttamente.",
       });
-      await fetchMember();
+      await fetchMember(true);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Errore invio tessera";
       setCardEmailError(message);
@@ -308,7 +329,9 @@ export default function OrgAdminMemberDetail() {
   const downloadCardPdf = async (mode: "download" | "print") => {
     if (!member) return;
     const isPrint = mode === "print";
-    const printWindow = isPrint ? window.open("", "_blank", "noopener,noreferrer") : null;
+    const printWindow = isPrint ? window.open("", "_blank") : null;
+    // Retain the handle for our generated PDF while isolating the admin window.
+    if (printWindow) printWindow.opener = null;
     if (isPrint && !printWindow) {
       const message = "Consenti al browser di aprire una nuova finestra per la stampa della tessera.";
       setCardEmailError(message);
@@ -399,7 +422,7 @@ export default function OrgAdminMemberDetail() {
       }
 
       await res.json();
-      await fetchMember();
+      await fetchMember(true);
 
       setActionMessage("Documento approvato con successo.");
       setActionError(null);
@@ -442,7 +465,7 @@ export default function OrgAdminMemberDetail() {
         throw new Error(payload?.detail ?? "Errore durante il rigetto");
       }
       await res.json();
-      await fetchMember();
+      await fetchMember(true);
       setRejectingDoc(null);
       setActionMessage("Documento rigettato.");
       setActionError(null);
@@ -465,6 +488,7 @@ export default function OrgAdminMemberDetail() {
   };
 
   const handleDecision = async (decision: "approve" | "reject", notes: string) => {
+    setDecisionSheetOpen(false);
     setDecisionDraft({ decision, notes });
     setActionError(null);
     setActionMessage(null);
@@ -483,7 +507,7 @@ export default function OrgAdminMemberDetail() {
       if (!res.ok) throw new Error("Errore durante il salvataggio della decisione");
 
       await res.json();
-      await fetchMember();
+      await fetchMember(true);
       setDecisionDraft(null);
       setDecisionActionState(decisionDraft.decision, "success");
       showToast({
@@ -506,18 +530,30 @@ export default function OrgAdminMemberDetail() {
   };
 
   const handleManualPayment = async (payload: ManualPaymentPayload) => {
-    if (!member) return;
+    if (!member || paymentSaving) return;
+    setPaymentSaving(true);
     try {
-      await createManualPayment(member.id, {
+      const result = await createManualPayment(member.id, {
         amount: payload.amount,
         method: payload.method,
         paid_at: payload.paid_at,
         notes: payload.notes,
       });
-      await fetchMember();
+      // A failed refresh must not offer another registration after a successful write.
+      setMember(current => current ? {
+        ...current,
+        card_is_paid: true,
+        payment_status: result.membership_payment?.status ?? "manual_completed",
+        payment_completed_at: result.membership_payment?.confirmed_at ?? result.payment.paid_at ?? payload.paid_at,
+      } : current);
+      setPaymentSheetOpen(false);
+      setPaymentRevision(value => value + 1);
+      showToast({ tone: "success", title: "Pagamento registrato", message: "La quota è stata registrata." });
+      await fetchMember(true);
+      window.requestAnimationFrame(() => document.getElementById("member-tab-payments")?.focus());
     } catch (err) {
       throw err instanceof Error ? err : new Error("Errore durante il salvataggio");
-    }
+    } finally { setPaymentSaving(false); }
   };
 
   const loadMembershipSettings = async () => {
@@ -626,7 +662,7 @@ export default function OrgAdminMemberDetail() {
   if (error) return <div className="p-8 text-center text-red-600">{error}</div>;
   if (!member) return <div className="p-8 text-center">Socio non trovato</div>;
 
-  const workflowStatus = member.workflow_status ?? "";
+  const workflowStatus = (member.workflow_status || member.status || "").toLowerCase();
   const documentStatus =
     member.document_status ??
     (docs.length === 0
@@ -637,38 +673,9 @@ export default function OrgAdminMemberDetail() {
           ? "pending"
           : "approved");
   const lastAccessLabel = member.last_access_email_at
-    ? new Date(member.last_access_email_at).toLocaleString("it-IT")
+    ? formatMemberDate(member.last_access_email_at, true)
     : null;
-  const paymentMethodLabel =
-    member.payment_method === "CASH"
-      ? "Contanti"
-      : member.payment_method === "BONIFICO"
-        ? "Bonifico"
-        : "-";
-  const membershipPayments = member.membership_payments ?? [];
-  const paymentStatusLabel =
-    member.card_is_paid || member.payment_status === "completed" || member.payment_status === "manual_completed"
-      ? "Pagata"
-      : member.payment_status === "manual_partial"
-        ? "Parzialmente pagata"
-        : member.payment_status === "manual_reversed"
-          ? "Incasso stornato"
-          : member.payment_required
-        ? "Pagamento non registrato"
-        : "Non richiesta";
-  const paymentStatusTone =
-    paymentStatusLabel === "Pagata"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-      : paymentStatusLabel === "Non richiesta"
-        ? "border-neutral-200 bg-neutral-100 text-neutral-600"
-        : "border-amber-200 bg-amber-50 text-amber-700";
-  const paymentMethodSummary =
-    member.payment_required && membershipPayments[0]?.payment_reason
-      ? membershipPayments[0].payment_reason
-      : paymentMethodLabel;
-  const birthDateLabel = member.birth_date
-    ? new Date(`${member.birth_date}T00:00:00`).toLocaleDateString("it-IT")
-    : "-";
+  const paymentMethodSummary = humanPaymentMethod(member.payment_method);
   const cardNumber = member.card_number ?? member.card_no ?? null;
   const canUseCardActions = Boolean(cardNumber && member.card_year);
   const canSendCardEmail = Boolean(canUseCardActions && member.is_active && member.email);
@@ -687,471 +694,97 @@ export default function OrgAdminMemberDetail() {
     verificationUrl: member.card_verification_url ?? null,
   };
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Link to="/org-admin/soci" className="p-2 hover:bg-neutral-100 rounded-full text-neutral-600">
-           {/* ArrowLeft */}
-           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-        </Link>
-        <h1 className="text-2xl font-bold font-display text-primary-900">
-          Dettaglio Socio
-        </h1>
-      </div>
 
-      <div className="flex flex-wrap items-center gap-2 border-b border-neutral-200 pb-2">
-        <button
-          type="button"
-          onClick={() => setActiveTab("details")}
-          className={`px-3 py-1.5 text-sm font-medium transition ${
-            activeTab === "details"
-              ? "border-b-2 border-brand text-brand"
-              : "text-neutral-500 hover:text-neutral-700"
-          }`}
-        >
-          Dettaglio
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("activity")}
-          className={`px-3 py-1.5 text-sm font-medium transition ${
-            activeTab === "activity"
-              ? "border-b-2 border-brand text-brand"
-              : "text-neutral-500 hover:text-neutral-700"
-          }`}
-        >
-          Attività
-        </button>
-      </div>
+  const paymentStatus = paymentMeta(member);
+  const name = displayMemberName(member.first_name, member.last_name);
+  const lifecycle = lifecycleMeta(member.status);
+  const workflow = workflowMeta(workflowStatus);
+  const documentState = documentMeta(documentStatus);
+  const decisionMade = Boolean(member.decision_at) || ["active", "rejected"].includes(workflowStatus.toLowerCase());
+  const showCard = () => setCardSheetOpen(true);
+  const openProfile = () => { setProfileError(null); setEditModalOpen(true); };
+  const cardPanel = <section className="member-detail-panel member-detail-card" aria-label="Tessera socio">
+    <h2>Tessera socio</h2>
+    <div className="member-detail-card-preview"><MemberCardPreview cardData={cardPreviewData} className="max-w-[420px]" /></div>
+    <div className="member-detail-card-actions">
+      <button type="button" onClick={handleSendCardEmail} disabled={sendingCardEmail || !canSendCardEmail} className="btn-primary member-detail-card-send">{sendingCardEmail ? "Invio…" : "Invia tessera via email"}</button>
+      <button type="button" onClick={() => void downloadCardPdf("download")} disabled={downloadingCard || !canUseCardActions} className="btn-ghost">{downloadingCard ? "Preparazione…" : "Scarica PDF"}</button>
+      <button type="button" onClick={() => void downloadCardPdf("print")} disabled={printingCard || !canUseCardActions} className="btn-ghost">{printingCard ? "Apertura…" : "Stampa"}</button>
+    </div>
+    <dl className="member-detail-data mt-4">
+      <div><dt>Tipo tessera</dt><dd>{member.membership_type_label ?? "Annuale"}</dd></div>
+      <div><dt>Iscrizione</dt><dd>{formatMemberDate(member.joined_at)}</dd></div>
+      <div><dt>Scadenza</dt><dd>{formatMemberDate(member.valid_until, true)}</dd></div>
+    </dl>
+    {cardEmailError && <p role="alert" className="mt-3 text-sm text-red-600">{cardEmailError}</p>}
+    {cardEmailMessage && <p role="status" className="mt-3 text-sm text-emerald-600">{cardEmailMessage}</p>}
+    {!canUseCardActions && <p className="member-detail-hint">Tessera non ancora assegnata.</p>}
+    {canUseCardActions && !member.email && <p className="member-detail-hint">Aggiungi un'email per inviare la tessera.</p>}
+    {canUseCardActions && !member.is_active && <p className="member-detail-hint">L'invio è disponibile per i soci attivi.</p>}
+    {canUseCardActions && member.card_verification_url && <a href={member.card_verification_url} target="_blank" rel="noreferrer" className="member-detail-text-link mt-4 inline-flex">Verifica tessera ↗</a>}
+  </section>;
 
-      {activeTab === "activity" ? (
-        <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
-          <h2 className="text-lg font-semibold mb-2">Attività recenti</h2>
-          <p className="text-sm text-neutral-500">
-            Ultime azioni registrate sul socio.
-          </p>
-          {member.activities && member.activities.length > 0 ? (
-            <ul className="mt-4 space-y-3">
-              {member.activities.map((item) => {
-                const who = item.actor_admin_email
-                  ? `Admin ${item.actor_admin_email}`
-                  : item.actor_admin_id
-                    ? `Admin #${item.actor_admin_id}`
-                    : item.actor_member_name
-                      ? `Socio ${item.actor_member_name}`
-                      : item.actor_member_id
-                        ? `Socio #${item.actor_member_id}`
-                        : "Sistema";
-                const when = item.created_at
-                  ? new Date(item.created_at).toLocaleString("it-IT")
-                  : "-";
-                const meta = getActivityMeta(item);
-                return (
-                  <li
-                    key={item.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-neutral-100 bg-neutral-50 px-4 py-3 text-sm"
-                  >
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${meta.tone}`}>
-                          {meta.category}
-                        </span>
-                        <p className="font-medium text-neutral-900">{meta.label}</p>
-                      </div>
-                      <p className="text-xs text-neutral-500">
-                        {who} il {when}
-                      </p>
-                      {meta.details && (
-                        <p className="text-xs text-neutral-500">{meta.details}</p>
-                      )}
-                      {item.entity_type && item.entity_id != null && (
-                        <p className="text-xs text-neutral-400">
-                          Target: {item.entity_type} #{item.entity_id}
-                        </p>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <div className="mt-4 rounded-lg border border-neutral-100 bg-neutral-50 px-4 py-3 text-sm text-neutral-500">
-              Nessuna attività registrata.
-            </div>
-          )}
-        </div>
-      ) : (
-      <>
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.9fr)]">
-        <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-neutral-400">
-                Anagrafica socio
-              </p>
-              <h2 className="mt-2 text-xl font-semibold text-neutral-900">
-                {member.first_name} {member.last_name}
-              </h2>
-              <p className="mt-1 text-sm text-neutral-500">
-                Correggi i dati anagrafici del socio senza alterare i riferimenti di sistema.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setProfileError(null);
-                setEditModalOpen(true);
-              }}
-              className="btn-ghost !px-4 !py-2 text-xs font-bold uppercase tracking-[0.18em]"
-            >
-              Modifica anagrafica
-            </button>
-          </div>
-
-          <div className="mt-6 grid gap-5 md:grid-cols-2">
-            <div className="rounded-2xl border border-neutral-200 bg-neutral-50/80 p-5">
-              <h3 className="text-sm font-semibold text-neutral-900">Dati principali</h3>
-              <dl className="mt-4 space-y-3 text-sm">
-                <div className="flex items-start justify-between gap-4">
-                  <dt className="text-neutral-500">Nome completo</dt>
-                  <dd className="text-right font-medium text-neutral-900">
-                    {member.first_name} {member.last_name}
-                  </dd>
-                </div>
-                <div className="flex items-start justify-between gap-4">
-                  <dt className="text-neutral-500">Email</dt>
-                  <dd className="text-right font-medium text-neutral-900">{member.email || "-"}</dd>
-                </div>
-                <div className="flex items-start justify-between gap-4">
-                  <dt className="text-neutral-500">Telefono</dt>
-                  <dd className="text-right font-medium text-neutral-900">{member.phone || "-"}</dd>
-                </div>
-                <div className="flex items-start justify-between gap-4">
-                  <dt className="text-neutral-500">Codice fiscale</dt>
-                  <dd className="text-right font-mono text-[13px] font-medium text-neutral-900">
-                    {member.fiscal_code || "-"}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-
-            <div className="rounded-2xl border border-neutral-200 bg-neutral-50/80 p-5">
-              <h3 className="text-sm font-semibold text-neutral-900">Dati associativi</h3>
-              <dl className="mt-4 space-y-3 text-sm">
-                <div className="flex items-start justify-between gap-4">
-                  <dt className="text-neutral-500">Data di nascita</dt>
-                  <dd className="text-right font-medium text-neutral-900">{birthDateLabel}</dd>
-                </div>
-                <div className="flex items-start justify-between gap-4">
-                  <dt className="text-neutral-500">Luogo di nascita</dt>
-                  <dd className="text-right font-medium text-neutral-900">{member.birth_place || "-"}</dd>
-                </div>
-                <div className="flex items-start justify-between gap-4">
-                  <dt className="text-neutral-500">Categoria / Tipo</dt>
-                  <dd className="text-right font-medium text-neutral-900">{member.member_type || "-"}</dd>
-                </div>
-                <div className="flex items-start justify-between gap-4">
-                  <dt className="text-neutral-500">Modalità di pagamento</dt>
-                  <dd className="text-right font-medium text-neutral-900">{paymentMethodSummary}</dd>
-                </div>
-                <div className="flex items-start justify-between gap-4">
-                  <dt className="text-neutral-500">Iscrizione manuale</dt>
-                  <dd className="text-right font-medium text-neutral-900">{member.is_manual ? "Si" : "No"}</dd>
-                </div>
-              </dl>
-            </div>
-          </div>
-
-          <div className="mt-6 rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-neutral-500">
-                  Accesso area riservata
-                </p>
-                <p className="mt-1 text-sm text-neutral-700">
-                  {member.has_access ? "Account attivo e credenziali già presenti." : "Accesso non ancora attivato."}
-                </p>
-                {!member.is_active && (
-                  <p className="mt-1 text-xs text-red-600">
-                    Il socio non è attivo: l'invio credenziali resta disabilitato.
-                  </p>
-                )}
-                {lastAccessLabel && (
-                  <p className="mt-1 text-xs text-neutral-500">Ultimo invio accesso: {lastAccessLabel}</p>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={handleSendAccess}
-                disabled={sendingAccess || member.has_access || !member.email || !member.is_active}
-                className="btn-primary"
-                data-tour="admin-send-access"
-              >
-                {sendingAccess ? "Invio..." : "Invia accesso"}
-              </button>
-            </div>
-            {sendAccessError && <p className="mt-2 text-xs text-red-600">{sendAccessError}</p>}
-            {sendAccessMessage && <p className="mt-2 text-xs text-emerald-600">{sendAccessMessage}</p>}
-            {!member.email && (
-              <p className="mt-2 text-xs text-neutral-500">Inserisci un'email per inviare le credenziali.</p>
-            )}
-          </div>
-        </div>
-
-        <div className="space-y-6">
-          <div className="overflow-hidden rounded-[28px] border border-neutral-200 bg-[radial-gradient(circle_at_top,rgba(166,124,82,0.10),transparent_35%),linear-gradient(180deg,#ffffff_0%,#faf7f2_100%)] p-5 shadow-sm">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-neutral-400">
-                  Tessera socio
-                </p>
-                <h2 className="mt-2 text-lg font-semibold text-neutral-900">Tessera digitale e PDF</h2>
-                <p className="mt-1 text-sm text-neutral-500">
-                  Invia la tessera via email, scarica il PDF o apri il flusso di stampa.
-                </p>
-              </div>
-              <span
-                className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                  member.is_active
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : "border-amber-200 bg-amber-50 text-amber-700"
-                }`}
-              >
-                {member.is_active ? "Socio attivo" : "Socio non attivo"}
-              </span>
-            </div>
-
-            <div className="mt-5">
-              <MemberCardPreview cardData={cardPreviewData} className="max-w-[420px]" />
-            </div>
-
-            <div className="mt-5 grid gap-3 sm:grid-cols-3">
-              <button
-                type="button"
-                onClick={handleSendCardEmail}
-                disabled={sendingCardEmail || !canSendCardEmail}
-                className="btn-primary !justify-center disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {sendingCardEmail ? "Invio..." : "Invia tessera via email"}
-              </button>
-              <button
-                type="button"
-                onClick={() => void downloadCardPdf("download")}
-                disabled={downloadingCard || !canUseCardActions}
-                className="btn-ghost !justify-center disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {downloadingCard ? "Preparazione..." : "Scarica PDF tessera"}
-              </button>
-              <button
-                type="button"
-                onClick={() => void downloadCardPdf("print")}
-                disabled={printingCard || !canUseCardActions}
-                className="btn-ghost !justify-center disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {printingCard ? "Apertura..." : "Stampa tessera"}
-              </button>
-            </div>
-
-            <div className="mt-4 grid gap-3 rounded-2xl border border-neutral-200 bg-white/80 p-4 text-sm text-neutral-700 sm:grid-cols-2 xl:grid-cols-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">Numero tessera</p>
-                <p className="mt-1 font-mono text-base font-semibold text-neutral-900">
-                  {cardNumber ?? "Non assegnata"}
-                  {member.card_year ? ` / ${member.card_year}` : ""}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">Data iscrizione</p>
-                <p className="mt-1 font-medium text-neutral-900">
-                  {member.joined_at ? new Date(member.joined_at).toLocaleDateString("it-IT") : "-"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">Tipo tessera</p>
-                <p className="mt-1 font-medium text-neutral-900">
-                  {member.membership_type_label ?? "Annuale"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">Scadenza reale</p>
-                <p className="mt-1 font-medium text-neutral-900">
-                  {member.valid_until ? new Date(member.valid_until).toLocaleString("it-IT", { timeZone: "Europe/Rome" }) : "-"}
-                </p>
-              </div>
-            </div>
-
-            {cardEmailError && <p className="mt-3 text-xs text-red-600">{cardEmailError}</p>}
-            {cardEmailMessage && <p className="mt-3 text-xs text-emerald-600">{cardEmailMessage}</p>}
-            {!canUseCardActions && (
-              <p className="mt-3 text-xs text-neutral-500">
-                Le azioni PDF sono disponibili quando la tessera ha numero e anno assegnati.
-              </p>
-            )}
-            {canUseCardActions && !member.email && (
-              <p className="mt-3 text-xs text-neutral-500">
-                Per inviare la tessera via email è necessario salvare un indirizzo email valido.
-              </p>
-            )}
-            {canUseCardActions && member.card_verification_url && (
-              <a
-                href={member.card_verification_url}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-4 inline-flex text-xs font-semibold uppercase tracking-[0.18em] text-brand hover:text-brand/80"
-              >
-                Apri verifica tessera
-              </a>
-            )}
-          </div>
-
-          <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-5">
-            <h3 className="text-sm font-semibold text-neutral-900">Stato iscrizione</h3>
-            <dl className="mt-4 space-y-3 text-sm">
-              <div className="flex items-start justify-between gap-4">
-                <dt className="text-neutral-500">Stato operativo</dt>
-                <dd className="font-medium text-neutral-900">{member.status || "-"}</dd>
-              </div>
-              <div className="flex items-start justify-between gap-4">
-                <dt className="text-neutral-500">Workflow</dt>
-                <dd className="font-medium text-neutral-900">{workflowStatus || "-"}</dd>
-              </div>
-              <div className="flex items-start justify-between gap-4">
-                <dt className="text-neutral-500">Documenti</dt>
-                <dd className="font-medium text-neutral-900">{documentStatus}</dd>
-              </div>
+  return <div className="member-detail">
+    <Link to="/org-admin/soci" className="member-detail-back"><span aria-hidden="true">←</span> Soci</Link>
+    <MemberDetailHeader member={member} activeTab={activeTab} onTabChange={setActiveTab} onEdit={openProfile} onShowCard={showCard} />
+    {refreshError && <div role="alert" className="member-detail-panel text-sm text-red-600">{refreshError} <button type="button" className="underline" onClick={() => void fetchMember(true)}>Riprova aggiornamento</button></div>}
+    <div role="tabpanel" id={`member-panel-${activeTab}`} aria-labelledby={`member-tab-${activeTab}`} tabIndex={0} className="member-detail-content">
+      {activeTab === "profile" && <div className="member-detail-profile-grid">
+        <div className="member-detail-stack">
+          <section className="member-detail-panel">
+            <h2>Dati anagrafici</h2>
+            <dl className="member-detail-data mt-4">
+              <div><dt>Email</dt><dd>{member.email ? <a href={`mailto:${member.email}`}>{member.email}</a> : "Non indicata"}</dd></div>
+              <div><dt>Telefono</dt><dd>{member.phone ? <a href={`tel:${member.phone.replace(/[^\d+]/g, "")}`}>{member.phone}</a> : "Non indicato"}</dd></div>
+              <div><dt>Codice fiscale</dt><dd className="font-mono">{member.fiscal_code || "Non indicato"}</dd></div>
+              <div><dt>Data di nascita</dt><dd>{formatMemberDate(member.birth_date)}</dd></div>
+              <div><dt>Luogo di nascita</dt><dd>{member.birth_place || "Non indicato"}</dd></div>
+              <div><dt>Categoria</dt><dd>{member.member_type || "Non indicata"}</dd></div>
+              <div><dt>Metodo di pagamento</dt><dd>{paymentMethodSummary}</dd></div>
+              {member.is_manual && <div><dt>Origine iscrizione</dt><dd>Inserimento manuale</dd></div>}
             </dl>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-5">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-semibold text-neutral-900">Pagamenti</h3>
-                <p className="mt-1 text-sm text-neutral-500">
-                  Stato quota associativa e dettagli dei pagamenti registrati.
-                </p>
-              </div>
-              <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${paymentStatusTone}`}>
-                {paymentStatusLabel}
-              </span>
-            </div>
-
-            <dl className="mt-4 space-y-3 text-sm">
-              <div className="flex items-start justify-between gap-4">
-                <dt className="text-neutral-500">Stato pagamento</dt>
-                <dd className="text-right font-medium text-neutral-900">{member.payment_status || "-"}</dd>
-              </div>
-              <div className="flex items-start justify-between gap-4">
-                <dt className="text-neutral-500">Data conferma</dt>
-                <dd className="text-right font-medium text-neutral-900">
-                  {member.payment_completed_at
-                    ? new Date(member.payment_completed_at).toLocaleString("it-IT")
-                    : "-"}
-                </dd>
-              </div>
+          </section>
+          <section className="member-detail-panel">
+            <h2>Stato iscrizione</h2>
+            <dl className="member-detail-data mt-4">
+              <div><dt>Socio</dt><dd><span className={`member-detail-badge ${lifecycle.tone}`}>{lifecycle.label}</span></dd></div>
+              <div><dt>Iscrizione</dt><dd><span className={`member-detail-badge ${workflow.tone}`}>{workflow.label}</span></dd></div>
+              <div><dt>Documenti</dt><dd><button type="button" onClick={() => setActiveTab("documents")} className={`member-detail-badge ${documentState.tone}`}>{documentState.label} →</button></dd></div>
+              <div><dt>Quota {member.card_year ?? "associativa"}</dt><dd><button type="button" onClick={() => setActiveTab("payments")} className={`member-detail-badge ${paymentStatus.tone}`}>{paymentStatus.label} →</button></dd></div>
             </dl>
-
-            {membershipPayments.length > 0 ? (
-              <div className="mt-4 space-y-3">
-                {membershipPayments.slice(0, 3).map((payment) => (
-                  <div key={payment.id} className="rounded-2xl border border-neutral-200 bg-neutral-50/70 px-4 py-4 text-sm">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="font-medium text-neutral-900">
-                          {payment.payment_reason || "Quota associativa"}
-                        </p>
-                        <p className="mt-1 text-neutral-500">
-                          {payment.amount != null ? `${payment.amount.toFixed(2)} ${payment.currency || "EUR"}` : "-"}
-                        </p>
-                      </div>
-                      <span className="rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-neutral-700">
-                        {payment.status === "manual_partial" ? "Parzialmente pagato" : payment.status === "manual_reversed" ? "Stornato contabilmente" : payment.status}
-                      </span>
-                    </div>
-                    <div className="mt-3 grid gap-2 text-xs text-neutral-500">
-                      <p>Provider: {payment.provider}</p>
-                      <p>Sorgente: {payment.source}</p>
-                      <p>Checkout: {payment.checkout_reference || payment.sumup_checkout_id || "-"}</p>
-                      <p>
-                        Data pagamento: {payment.confirmed_at ? new Date(payment.confirmed_at).toLocaleString("it-IT") : "-"}
-                      </p>
-                      {payment.notes ? <p>Note: {payment.notes}</p> : null}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-4 text-sm text-neutral-500">Nessun pagamento quota registrato.</p>
-            )}
-          </div>
+          </section>
+          <section className="member-detail-panel" data-tour="admin-send-access">
+            <h2>Accesso area riservata</h2>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+              <div><p className="text-sm font-medium">{member.has_access ? "Account attivo" : "Accesso da attivare"}</p>{lastAccessLabel && <p className="member-detail-hint !mt-1">Ultimo invio: {lastAccessLabel}</p>}</div>
+              {!member.has_access && <button type="button" onClick={handleSendAccess} disabled={sendingAccess || !member.email || !member.is_active} className="btn-ghost">{sendingAccess ? "Invio…" : "Invia accesso"}</button>}
+            </div>
+            {!member.has_access && !member.is_active && <p className="member-detail-hint">Attiva il socio per inviare l'accesso.</p>}
+            {!member.has_access && !member.email && <p className="member-detail-hint">Aggiungi un'email per inviare l'accesso.</p>}
+            {sendAccessError && <p role="alert" className="mt-3 text-sm text-red-600">{sendAccessError}</p>}
+            {sendAccessMessage && <p role="status" className="mt-3 text-sm text-emerald-600">{sendAccessMessage}</p>}
+          </section>
         </div>
-      </div>
-
-      <TemporaryPurchasesPanel memberId={member.id} onChanged={async () => { setMember(await fetchOrgAdminMemberDetail(member.id)); }} />
-
-      <section className="surface flex flex-wrap items-center justify-between gap-4 p-5">
-        <div>
-          <h2 className="text-lg font-semibold text-[var(--theme-text)]">Saldo e storico incassi</h2>
-          <p className="mt-1 text-sm text-[var(--theme-text-muted)]">Consulta le ricevute, gli abbinamenti e le rettifiche senza perdere lo storico originale.</p>
-        </div>
-        <Link className="btn-secondary px-4" to={`/org-admin/incassi?member_id=${member.id}`}>Apri incassi del socio</Link>
-      </section>
-
-      {member.payment_status === "manual_partial" ? <p className="surface p-5 text-sm text-[var(--theme-text-muted)]">La quota è parzialmente riconciliata. Completa il saldo da Incassi e riconciliazione per evitare una seconda registrazione dell'intera quota.</p> : <ManualPaymentForm
-        payments={member.payments}
-        paymentMethodLabel={paymentMethodLabel}
-        onSubmit={handleManualPayment}
-      />}
-
-      <EditMemberProfileModal
-        open={editModalOpen}
-        member={member}
-        membershipSettings={membershipSettings}
-        saving={profileSaving}
-        error={profileError}
-        onClose={() => {
-          if (!profileSaving) {
-            setEditModalOpen(false);
-            setProfileError(null);
-          }
-        }}
-        onSubmit={handleProfileSave}
-      />
-
-      {rejectingDoc && (
-        <RejectDocumentModal
-          open={Boolean(rejectingDoc)}
-          docLabel={rejectingDoc.type === "identity" ? "Documento Identità" : rejectingDoc.type === "fiscal_code" ? "Codice Fiscale" : rejectingDoc.type}
-          initialNote={rejectingDoc.rejection_note}
-          isSubmitting={reviewingDocId === rejectingDoc.id}
-          error={actionError}
-          onClose={() => setRejectingDoc(null)}
-          onConfirm={handleReject}
-        />
-      )}
-
-      <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
-        <h2 className="text-lg font-semibold mb-3">Note interne</h2>
-        <p className="text-sm text-neutral-600 whitespace-pre-line">
-          {member.internal_notes ? member.internal_notes : "Nessuna nota interna."}
-        </p>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden" data-tour="admin-documents">
+        {cardPanel}
+      </div>}
+      {activeTab === "payments" && <div className="member-detail-stack">
+        <MemberPaymentsPanel key={paymentRevision} member={member} paymentStatus={paymentStatus} registering={paymentSaving} onRegisterPayment={() => setPaymentSheetOpen(true)} />
+        <TemporaryPurchasesPanel memberId={member.id} onChanged={async () => { await fetchMember(true); setPaymentRevision(value => value + 1); }} />
+      </div>}
+      {activeTab === "documents" && <div className="member-detail-stack">
+      <div className="member-detail-panel !p-0 overflow-hidden" data-tour="admin-documents">
         <div className="px-6 py-4 border-b border-neutral-100 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold">Documenti Caricati</h2>
-              <p className="mt-1 text-sm text-neutral-500">
-                Gestione approvazioni e rigetti con motivazione obbligatoria.
-              </p>
+              <h2 className="text-lg font-semibold">Documenti caricati</h2>
             </div>
             <div className="flex items-center gap-2 text-xs text-neutral-500">
               {documentStatus === "not_provided" && (
                 <span className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-neutral-100 px-2.5 py-0.5 text-neutral-700">
-                  Documento non caricato
+                  Da caricare
                 </span>
               )}
               <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-amber-700">
-                Pending {pendingDocsCount}
+                Da verificare {pendingDocsCount}
               </span>
               <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-red-700">
                 Rigettati {rejectedDocsCount}
@@ -1225,10 +858,10 @@ export default function OrgAdminMemberDetail() {
                             onClick={() => handleDownloadDoc(doc)}
                             disabled={downloadingDocId === doc.id}
                             className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg flex items-center gap-1 text-sm font-medium transition-colors disabled:opacity-50"
-                            title="Scarica"
+                            title="Scarica documento" aria-label={`Scarica ${doc.filename}`}
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                            <span className="hidden md:inline">{downloadingDocId === doc.id ? "..." : "Scarica"}</span>
+                            <span>{downloadingDocId === doc.id ? "..." : "Scarica"}</span>
                           </button>
                           <AsyncActionButton
                             onClick={() => handleApprove(doc.id)}
@@ -1269,63 +902,94 @@ export default function OrgAdminMemberDetail() {
         </div>
       </div>
 
-      <MemberDecisionPanel
-        status={workflowStatus || member.status}
-        decisionAt={member.decision_at ?? undefined}
-        initialNotes={member.decision_notes ?? undefined}
-        isSubmitting={isSubmittingDecision}
-        approveState={decisionActionStates.approve}
-        rejectState={decisionActionStates.reject}
-        onSubmit={handleDecision}
+        <section className="member-detail-panel"><h2>Note interne</h2><p className="mt-3 whitespace-pre-line text-sm text-[var(--theme-text-muted)]">{member.internal_notes || "Nessuna nota interna."}</p><button type="button" className="member-detail-text-link mt-3" onClick={openProfile}>Modifica note</button></section>
+        {decisionMade ? <MemberDecisionPanel status={workflowStatus || member.status} decisionAt={member.decision_at ?? undefined} initialNotes={member.decision_notes ?? undefined} isSubmitting={isSubmittingDecision} approveState={decisionActionStates.approve} rejectState={decisionActionStates.reject} onSubmit={handleDecision} /> : <section className="member-detail-panel flex flex-wrap items-center justify-between gap-3"><div><h2>Decisione iscrizione</h2><p className="member-detail-hint">Da valutare</p></div><button type="button" className="btn-primary" onClick={() => setDecisionSheetOpen(true)}>Valuta iscrizione</button></section>}
+      </div>}
+      {activeTab === "activity" && <>
+        <div className="member-detail-panel">
+          <h2 className="text-lg font-semibold mb-2">Attività recenti</h2>
+          {member.activities && member.activities.length > 0 ? (
+            <ul className="mt-4 space-y-3">
+              {member.activities.map((item) => {
+                const who = item.actor_admin_email
+                  ? `Admin ${item.actor_admin_email}`
+                  : item.actor_admin_id
+                    ? `Admin #${item.actor_admin_id}`
+                    : item.actor_member_name
+                      ? `Socio ${item.actor_member_name}`
+                      : item.actor_member_id
+                        ? `Socio #${item.actor_member_id}`
+                        : "Sistema";
+                const when = item.created_at
+                  ? formatMemberDate(item.created_at, true)
+                  : "-";
+                const meta = getActivityMeta(item);
+                return (
+                  <li
+                    key={item.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-neutral-100 bg-neutral-50 px-4 py-3 text-sm"
+                  >
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${meta.tone}`}>
+                          {meta.category}
+                        </span>
+                        <p className="font-medium text-neutral-900">{meta.label}</p>
+                      </div>
+                      <p className="text-xs text-neutral-500">
+                        {who} il {when}
+                      </p>
+                      {meta.details && (
+                        <p className="text-xs text-neutral-500">{meta.details}</p>
+                      )}
+
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <div className="mt-4 rounded-lg border border-neutral-100 bg-neutral-50 px-4 py-3 text-sm text-neutral-500">
+              Nessuna attività registrata.
+            </div>
+          )}
+        </div>
+      </>}
+    </div>
+    <div className="member-detail-footer"><button type="button" onClick={() => setDeleteConfirmOpen(true)} className="member-detail-delete">Elimina socio</button></div>
+    <ModalShell open={paymentSheetOpen} title="Registra pagamento" placement="bottom" sizeClassName="max-w-xl member-detail-sheet" onClose={closePaymentSheet} closeDisabled={paymentSaving} closeOnEscape={!paymentSaving} closeOnOverlay={!paymentSaving}>
+      <p className="mb-4 text-sm text-[var(--theme-text-muted)]">Quota {member.card_year ?? "associativa"} · {name}</p>
+      <ManualPaymentForm embedded paymentMethodLabel={paymentMethodSummary} onSubmit={handleManualPayment} />
+    </ModalShell>
+    <ModalShell open={cardSheetOpen} title="Tessera socio" placement="bottom" sizeClassName="max-w-xl member-detail-sheet" onClose={closeCardSheet}>
+      {cardPanel}
+    </ModalShell>
+    <ModalShell open={decisionSheetOpen} title="Valuta iscrizione" placement="bottom" sizeClassName="max-w-xl member-detail-sheet" onClose={closeDecisionSheet}>
+      <MemberDecisionPanel status={workflowStatus || member.status} decisionAt={member.decision_at ?? undefined} initialNotes={member.decision_notes ?? undefined} isSubmitting={isSubmittingDecision} approveState={decisionActionStates.approve} rejectState={decisionActionStates.reject} onSubmit={handleDecision} />
+    </ModalShell>
+      <EditMemberProfileModal
+        open={editModalOpen}
+        member={member}
+        membershipSettings={membershipSettings}
+        saving={profileSaving}
+        error={profileError}
+        onClose={closeProfile}
+        onSubmit={handleProfileSave}
       />
 
-      <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
-        <h3 className="text-sm font-semibold text-neutral-900 mb-2">Area Pericolosa</h3>
-        <p className="text-sm text-neutral-500 mb-4">
-          Eliminando il socio, verranno rimossi i suoi accessi e non comparirà più negli elenchi attivi.
-        </p>
-        <button
-          onClick={() => setDeleteConfirmOpen(true)}
-          className="bg-red-50 text-red-700 border border-red-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
-        >
-          Elimina Socio
-        </button>
-      </div>
-      <ConfirmModal
-        open={Boolean(decisionDraft)}
-        title={decisionDraft?.decision === "approve" ? "Approva iscrizione" : "Rifiuta iscrizione"}
-        description={
-          decisionDraft?.decision === "approve"
-            ? "Conferma l'approvazione di questa iscrizione. Il profilo verrà aggiornato subito senza refresh completo."
-            : "Conferma il rifiuto di questa iscrizione. Le note inserite resteranno associate alla decisione."
-        }
-        confirmLabel={decisionDraft?.decision === "approve" ? "Conferma approvazione" : "Conferma rifiuto"}
-        tone={decisionDraft?.decision === "approve" ? "brand" : "danger"}
-        confirmState={decisionDraft ? decisionActionStates[decisionDraft.decision] : "idle"}
-        onClose={() => {
-          if (!isSubmittingDecision) {
-            setDecisionDraft(null);
-          }
-        }}
-        onConfirm={confirmDecision}
-      />
-      <ConfirmModal
-        open={deleteConfirmOpen}
-        title="Elimina socio"
-        description="Questa azione rimuove definitivamente il socio e revoca subito i suoi accessi. Nessun refresh completo della pagina."
-        confirmLabel="Elimina definitivamente"
-        tone="danger"
-        confirmState={deleteActionState}
-        onClose={() => {
-          if (deleteActionState !== "loading") {
-            setDeleteConfirmOpen(false);
-            setDeleteActionState("idle");
-          }
-        }}
-        onConfirm={confirmDelete}
-      />
-      </>
+      {rejectingDoc && (
+        <RejectDocumentModal
+          open={Boolean(rejectingDoc)}
+          docLabel={rejectingDoc.type === "identity" ? "Documento Identità" : rejectingDoc.type === "fiscal_code" ? "Codice Fiscale" : rejectingDoc.type}
+          initialNote={rejectingDoc.rejection_note}
+          isSubmitting={reviewingDocId === rejectingDoc.id}
+          error={actionError}
+          onClose={closeRejectDocument}
+          onConfirm={handleReject}
+        />
       )}
-    </div>
-  );
+
+    <ConfirmModal open={Boolean(decisionDraft)} title={decisionDraft?.decision === "approve" ? "Approva iscrizione" : "Rifiuta iscrizione"} description={decisionDraft?.decision === "approve" ? "Conferma l'approvazione dell'iscrizione." : "Conferma il rifiuto dell'iscrizione."} objectName={name} impact="Le note resteranno associate alla decisione." confirmLabel={decisionDraft?.decision === "approve" ? "Conferma approvazione" : "Conferma rifiuto"} tone={decisionDraft?.decision === "approve" ? "brand" : "danger"} confirmState={decisionDraft ? decisionActionStates[decisionDraft.decision] : "idle"} onClose={closeDecisionConfirmation} onConfirm={confirmDecision} />
+    <ConfirmModal open={deleteConfirmOpen} title="Elimina socio" description="Il socio verrà rimosso dagli elenchi e non potrà più accedere all'area riservata." objectName={name} impact="I suoi accessi saranno revocati. Verifica di aver selezionato il socio corretto." requireCheckbox checkboxLabel="Confermo di voler eliminare questo socio" confirmLabel="Elimina socio" tone="danger" confirmState={deleteActionState} onClose={closeDeleteConfirmation} onConfirm={confirmDelete} />
+  </div>;
 }

@@ -1840,6 +1840,9 @@ def _build_org_member_detail_payload(
         "joined_at": member.joined_at.isoformat() if member.joined_at else None,
         "member_type": member.member_type,
         "internal_notes": member.internal_notes,
+        "decision_notes": member.decision_notes,
+        "decision_at": member.decision_at.isoformat() if member.decision_at else None,
+        "decision_by_admin_id": member.decision_by_admin_id,
         "is_manual": member.is_manual,
         "has_access": bool(member.password_hash),
         "last_access_email_at": last_access_email_at,
@@ -6431,10 +6434,21 @@ def update_member_profile(
         fiscal_code = fiscal_validation.normalized
 
     birth_date = _parse_optional_birth_date(body.birth_date)
-    birth_place, birth_place_code = _normalize_member_identity_document_fields(
-        birth_place=body.birth_place,
-        birth_place_code=body.birth_place_code,
+    birth_place_unchanged = (
+        normalize_municipality_text(body.birth_place)
+        == normalize_municipality_text(member.birth_place)
+        and (body.birth_place_code or "").strip().upper()
+        == (member.birth_place_code or "").strip().upper()
     )
+    if birth_place_unchanged:
+        # Imported profiles may lack a municipality code. Unrelated edits must
+        # preserve that historical pair rather than require a new selection.
+        birth_place, birth_place_code = member.birth_place, member.birth_place_code
+    else:
+        birth_place, birth_place_code = _normalize_member_identity_document_fields(
+            birth_place=body.birth_place,
+            birth_place_code=body.birth_place_code,
+        )
     internal_notes = _normalize_optional_text(body.internal_notes)
     membership_type = normalize_membership_type(body.membership_type)
     if (
