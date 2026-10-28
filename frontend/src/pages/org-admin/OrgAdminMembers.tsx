@@ -16,42 +16,47 @@ import MemberBulkActions from "./components/MemberBulkActions";
 import useMemberSelection from "../../hooks/useMemberSelection";
 import DebouncedSearchInput from "./components/DebouncedSearchInput";
 import MembersTable from "./components/MembersTable";
-import { DetailPanel, EmptyState, KpiCard, PageHeader, SectionPanel, StatusChip } from "./components/OrgAdminPrimitives";
+import ModalShell from "../../components/ui/ModalShell";
+import { DetailPanel, EmptyState, KpiCard, SectionPanel, StatusChip } from "./components/OrgAdminPrimitives";
 
 const STATUS_OPTIONS = [
-  { value: "active", label: "Mostra: Attivi" },
-  { value: "all", label: "Mostra: Tutti" },
-  { value: "expired", label: "Mostra: Scaduti" },
-  { value: "deleted", label: "Mostra: Eliminati" },
+  { value: "active", label: "Mostra: Attivi", chipLabel: "Attivi" },
+  { value: "all", label: "Mostra: Tutti", chipLabel: "Tutti" },
+  { value: "expiring", label: "Mostra: In scadenza", chipLabel: "In scadenza" },
+  { value: "review", label: "Mostra: Da verificare", chipLabel: "Da verificare" },
+  { value: "expired", label: "Mostra: Scaduti", chipLabel: "Scaduti" },
+  { value: "deleted", label: "Mostra: Eliminati", chipLabel: "Eliminati" },
 ];
 
 const ACCESS_OPTIONS = [
-  { value: "", label: "Accesso (tutti)" },
-  { value: "with", label: "Con accesso" },
-  { value: "without", label: "Senza accesso" },
+  { value: "", label: "Accesso (tutti)", chipLabel: "Tutti" },
+  { value: "with", label: "Con accesso", chipLabel: "Con accesso" },
+  { value: "without", label: "Senza accesso", chipLabel: "Senza accesso" },
 ];
 
 const SOURCE_OPTIONS = [
-  { value: "", label: "Iscrizione (tutte)" },
-  { value: "manual", label: "Manuale" },
-  { value: "online", label: "Online" },
+  { value: "", label: "Iscrizione (tutte)", chipLabel: "Tutte" },
+  { value: "online", label: "Online", chipLabel: "Online" },
+  { value: "manual", label: "Manuale", chipLabel: "Manuale" },
 ];
 
 const DOCS_OPTIONS = [
-  { value: "", label: "Documenti (tutti)" },
-  { value: "pending", label: "Documenti pending" },
-  { value: "rejected", label: "Documenti rigettati" },
-  { value: "approved", label: "Documenti approvati" },
+  { value: "", label: "Documenti (tutti)", chipLabel: "Tutti" },
+  { value: "pending", label: "Documenti pending", chipLabel: "In verifica" },
+  { value: "rejected", label: "Documenti rigettati", chipLabel: "Rigettati" },
+  { value: "approved", label: "Documenti approvati", chipLabel: "Approvati" },
 ];
 
 const ORDER_OPTIONS = [
-  { value: "joined_at_desc", label: "Data iscrizione (recenti)" },
-  { value: "joined_at_asc", label: "Data iscrizione (meno recenti)" },
-  { value: "last_name_asc", label: "Cognome (A-Z)" },
-  { value: "last_name_desc", label: "Cognome (Z-A)" },
-  { value: "status_asc", label: "Stato (A-Z)" },
-  { value: "status_desc", label: "Stato (Z-A)" },
+  { value: "joined_at_desc", label: "Data iscrizione (recenti)", chipLabel: "Più recenti", pillLabel: "Più recenti" },
+  { value: "joined_at_asc", label: "Data iscrizione (meno recenti)", chipLabel: "Meno recenti", pillLabel: "Meno recenti" },
+  { value: "last_name_asc", label: "Cognome (A-Z)", chipLabel: "Cognome A-Z", pillLabel: "A-Z" },
+  { value: "last_name_desc", label: "Cognome (Z-A)", chipLabel: "Cognome Z-A", pillLabel: "Z-A" },
+  { value: "status_asc", label: "Stato (A-Z)", chipLabel: "Stato A-Z", pillLabel: "Stato A-Z" },
+  { value: "status_desc", label: "Stato (Z-A)", chipLabel: "Stato Z-A", pillLabel: "Stato Z-A" },
 ];
+
+const MOBILE_ORDER_OPTIONS = ORDER_OPTIONS.slice(0, 3);
 
 const PAGE_SIZE = 25;
 
@@ -108,6 +113,9 @@ const OrgAdminMembers = () => {
 
   const [showModal, setShowModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showFiltersSheet, setShowFiltersSheet] = useState(false);
+  const [showActionsSheet, setShowActionsSheet] = useState(false);
+  const [mobileSelectionMode, setMobileSelectionMode] = useState(false);
   const [searchResetKey, setSearchResetKey] = useState(0);
   const [successMessage, setSuccessMessage] = useState("");
   const [createdMemberId, setCreatedMemberId] = useState<number | null>(null);
@@ -195,6 +203,19 @@ const OrgAdminMembers = () => {
     void loadMetrics();
   }, [loadMetrics]);
 
+  const closeFiltersSheet = useCallback(() => setShowFiltersSheet(false), []);
+  const closeActionsSheet = useCallback(() => setShowActionsSheet(false), []);
+  useEffect(() => {
+    if (!window.matchMedia) return;
+    const media = window.matchMedia("(min-width: 768px)");
+    const closeDesktopSheets = () => {
+      if (media.matches) { closeFiltersSheet(); closeActionsSheet(); }
+    };
+    closeDesktopSheets();
+    media.addEventListener("change", closeDesktopSheets);
+    return () => media.removeEventListener("change", closeDesktopSheets);
+  }, [closeActionsSheet, closeFiltersSheet]);
+
   useEffect(() => {
     const next = new URLSearchParams();
     if (debouncedSearch) next.set("q", debouncedSearch);
@@ -224,12 +245,70 @@ const OrgAdminMembers = () => {
   );
   const expiringSoonCount = metrics?.expiring_members_count ?? 0;
   const missingDocumentsCount = metrics?.documents_pending_review ?? 0;
+  const pendingRequestsCount = metrics?.pending_requests_count ?? 0;
   const activeMembersCount = metrics?.active_members_count ?? 0;
+  const toVerifyCount = metrics?.members_to_review_count ?? 0;
 
   const onFilterChange = useCallback((setter: (value: string) => void, value: string) => {
     setter(value);
     setPage(1);
   }, []);
+
+  const activeFilterPills = useMemo(() => {
+    const pills: Array<{ key: string; label: string; onRemove: () => void }> = [];
+    if (!["active", "all", "review", "expiring"].includes(status)) {
+      pills.push({
+        key: "status",
+        label: `Stato: ${STATUS_OPTIONS.find((opt) => opt.value === status)?.chipLabel ?? status}`,
+        onRemove: () => onFilterChange(setStatus, "active"),
+      });
+    }
+    if (docs) {
+      const docOpt = DOCS_OPTIONS.find((opt) => opt.value === docs);
+      pills.push({
+        key: "docs",
+        label: `Documenti: ${docOpt?.chipLabel ?? docs}`,
+        onRemove: () => onFilterChange(setDocs, ""),
+      });
+    }
+    if (access) {
+      const accessOpt = ACCESS_OPTIONS.find((opt) => opt.value === access);
+      pills.push({
+        key: "access",
+        label: `Accesso: ${accessOpt?.chipLabel ?? access}`,
+        onRemove: () => onFilterChange(setAccess, ""),
+      });
+    }
+    if (source) {
+      const sourceOpt = SOURCE_OPTIONS.find((opt) => opt.value === source);
+      pills.push({
+        key: "source",
+        label: `Iscrizione: ${sourceOpt?.chipLabel ?? source}`,
+        onRemove: () => onFilterChange(setSource, ""),
+      });
+    }
+    if (order !== "joined_at_desc") {
+      const orderOpt = ORDER_OPTIONS.find((opt) => opt.value === order);
+      pills.push({
+        key: "order",
+        label: `Ordine: ${orderOpt?.pillLabel ?? order}`,
+        onRemove: () => onFilterChange(setOrder, "joined_at_desc"),
+      });
+    }
+    return pills;
+  }, [access, docs, onFilterChange, order, source, status]);
+
+  const activeSheetFiltersCount = useMemo(
+    () =>
+      [
+        status !== "active",
+        Boolean(docs),
+        Boolean(access),
+        Boolean(source),
+        order !== "joined_at_desc",
+      ].filter(Boolean).length,
+    [access, docs, order, source, status],
+  );
 
   const resetFilters = useCallback(() => {
     setDebouncedSearch("");
@@ -271,13 +350,19 @@ const OrgAdminMembers = () => {
 
   return (
     <div className="container-shell org-admin-mobile-page org-admin-members-page py-10 space-y-6">
-      <PageHeader
-        eyebrow="Soci e tessere"
-        title="Soci"
-        subtitle="Gestisci i soci, le tessere e la documentazione associativa."
-        actions={
-          !adminLoading && admin ? (
-          <div className="flex flex-wrap items-center gap-3">
+      <header className="org-page-header org-admin-members-header">
+        <div className="min-w-0">
+          <p className="org-eyebrow hidden md:block">Soci e tessere</p>
+          <h1 className="org-page-header__title flex items-baseline gap-1.5">
+            <span>Soci</span>
+            <span className="org-admin-members-header__count md:hidden">({total})</span>
+          </h1>
+          <p className="org-page-header__subtitle hidden md:block">
+            Gestisci i soci, le tessere e la documentazione associativa.
+          </p>
+        </div>
+        {!adminLoading && admin ? (
+          <div className="org-page-header__actions flex items-center gap-2 md:flex-wrap md:gap-3">
             <button
               type="button"
               onClick={() => {
@@ -285,13 +370,27 @@ const OrgAdminMembers = () => {
                 setCreatedMemberId(null);
                 setShowModal(true);
               }}
-              className="btn-primary"
+              className="btn-primary org-admin-members-header__add"
               data-tour="admin-add-member"
             >
-              <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <svg className="mr-1.5 h-4 w-4 md:mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
               </svg>
-              Aggiungi socio
+              <span className="md:hidden">Socio</span>
+              <span className="hidden md:inline">Aggiungi socio</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowActionsSheet(true)}
+              className="btn-secondary org-admin-members-header__more md:!hidden"
+              aria-label="Azioni secondarie"
+              aria-expanded={showActionsSheet}
+            >
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx="5" cy="12" r="1.8" />
+                <circle cx="12" cy="12" r="1.8" />
+                <circle cx="19" cy="12" r="1.8" />
+              </svg>
             </button>
             <button
               type="button"
@@ -300,14 +399,14 @@ const OrgAdminMembers = () => {
                 setCreatedMemberId(null);
                 setShowImportModal(true);
               }}
-              className="btn-secondary"
+              className="btn-secondary !hidden md:!inline-flex"
             >
               Importa CSV
             </button>
             <button
               type="button"
               onClick={() => navigate("/org-admin/presenze")}
-              className="btn-secondary"
+              className="btn-secondary !hidden md:!inline-flex"
             >
               <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4M8 8h3v3H8V8Zm5 0h3v3h-3V8Zm-5 5h3v3H8v-3Zm6 0h2v2h-2v-2Z" />
@@ -316,7 +415,7 @@ const OrgAdminMembers = () => {
             </button>
             <a
               href="/api/org-admin/members.xlsx"
-              className="btn-ghost !px-4 !py-2 text-xs font-bold uppercase tracking-widest flex items-center gap-2"
+              className="btn-ghost !hidden !px-4 !py-2 text-xs font-bold uppercase tracking-widest md:!inline-flex items-center gap-2"
             >
               <svg
                 className="h-4 w-4"
@@ -332,12 +431,11 @@ const OrgAdminMembers = () => {
               Esporta Excel
             </a>
           </div>
-          ) : null
-        }
-      />
+        ) : null}
+      </header>
 
       {successMessage && (
-        <div className="rounded-xl border border-emerald-200/50 bg-emerald-50/50 p-5 flex items-center justify-between gap-4 animate-in slide-in-from-top-2 duration-300">
+        <div className="rounded-xl border border-emerald-200/50 bg-emerald-50/50 p-4 md:p-5 flex items-center justify-between gap-4 animate-in slide-in-from-top-2 duration-300">
           <div className="flex items-center gap-3">
             <div className="h-8 w-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -358,23 +456,16 @@ const OrgAdminMembers = () => {
         </div>
       )}
 
-      <div className="org-admin-mobile-stats-strip" aria-label="Riepilogo soci">
-        <span><strong>{activeMembersCount}</strong> Soci attivi</span>
-        <span><strong>{metrics?.pending_requests_count ?? 0}</strong> Da approvare</span>
-        <span><strong>{missingDocumentsCount}</strong> Documenti</span>
-        <span><strong>{expiringSoonCount}</strong> Rinnovi</span>
-      </div>
-
       <div className="org-admin-desktop-kpi-grid grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <KpiCard label="Soci attivi" value={activeMembersCount} hint="Soci con tessera attiva" tone="success" />
-        <KpiCard label="Da approvare" value={metrics?.pending_requests_count ?? 0} hint="Richieste in verifica" tone="warning" />
+        <KpiCard label="Da approvare" value={pendingRequestsCount} hint="Richieste in verifica" tone="warning" />
         <KpiCard label="Documenti da verificare" value={missingDocumentsCount} hint="In attesa di verifica" tone={missingDocumentsCount ? "danger" : "muted"} />
         <KpiCard label="Rinnovi in scadenza" value={expiringSoonCount} hint="Nei prossimi 30 giorni" tone="info" />
       </div>
 
-      <SectionPanel className="org-admin-mobile-filter-panel p-4">
-        <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-center">
-          <div className="flex-1 min-w-0">
+      <SectionPanel className="org-admin-mobile-filter-panel org-admin-members-toolbar p-4">
+        <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
             <DebouncedSearchInput
               resetKey={searchResetKey}
               initialValue={debouncedSearch}
@@ -384,11 +475,129 @@ const OrgAdminMembers = () => {
                 setPage(1);
               }}
             />
-            <p id="member-search-hint" className="mt-2 text-xs text-neutral-500">
+            <p id="member-search-hint" className="sr-only">
               La ricerca trova anche nomi ed email con piccoli errori di scrittura. Le corrispondenze simili sono indicate nei risultati.
             </p>
+            <button
+              type="button"
+              onClick={() => setShowFiltersSheet(true)}
+              className={`org-admin-members-filter-trigger md:hidden ${activeSheetFiltersCount > 0 ? "is-active" : ""}`}
+              aria-label={activeSheetFiltersCount > 0 ? `Filtri (${activeSheetFiltersCount} attivi)` : "Filtri"}
+              aria-expanded={showFiltersSheet}
+            >
+              <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" />
+              </svg>
+              <span>Filtri</span>
+              {activeSheetFiltersCount > 0 && (
+                <span className="org-admin-members-filter-trigger__badge" aria-hidden="true">
+                  · {activeSheetFiltersCount}
+                </span>
+              )}
+            </button>
           </div>
-          <div className="org-admin-mobile-filter-grid flex flex-wrap items-center gap-3">
+
+          {activeFilterPills.length > 0 && (
+            <div className="org-admin-members-active-pills flex flex-wrap items-center gap-1.5 md:hidden" aria-label="Filtri avanzati attivi">
+              {activeFilterPills.map((pill) => (
+                <button
+                  key={pill.key}
+                  type="button"
+                  onClick={pill.onRemove}
+                  className="org-admin-members-active-pill"
+                  aria-label={`Rimuovi filtro ${pill.label}`}
+                >
+                  <span>{pill.label}</span>
+                  <span aria-hidden="true" className="text-xs leading-none">×</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div
+            className="org-admin-members-quick-chips flex items-center gap-1.5 overflow-x-auto scrollbar-none md:hidden"
+            role="group"
+            aria-label="Filtri rapidi stato soci"
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setStatus("active");
+                setDocs("");
+                setPage(1);
+              }}
+              aria-pressed={status === "active" && !docs}
+              className={`org-admin-members-quick-chip ${status === "active" && !docs ? "is-active" : ""}`}
+            >
+              {status === "active" && !docs && <span className="org-admin-members-quick-chip__dot" aria-hidden="true" />}
+              <span>Attivi</span>
+              <span className="org-admin-members-quick-chip__sep" aria-hidden="true">·</span>
+              <strong>{activeMembersCount}</strong>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setStatus(status === "review" ? "active" : "review");
+                setDocs("");
+                setPage(1);
+              }}
+              aria-pressed={status === "review"}
+              className={`org-admin-members-quick-chip ${
+                status === "review"
+                  ? "is-active is-warning"
+                  : toVerifyCount > 0
+                    ? "has-attention"
+                    : "is-muted"
+              }`}
+            >
+              {(status === "review") && (
+                <span className="org-admin-members-quick-chip__dot" aria-hidden="true" />
+              )}
+              <span>Da verificare</span>
+              <span className="org-admin-members-quick-chip__sep" aria-hidden="true">·</span>
+              <strong>{toVerifyCount}</strong>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (status === "expiring") {
+                  setStatus("active");
+                } else {
+                  setStatus("expiring");
+                  setDocs("");
+                }
+                setPage(1);
+              }}
+              aria-pressed={status === "expiring"}
+              className={`org-admin-members-quick-chip ${
+                status === "expiring"
+                  ? "is-active"
+                  : expiringSoonCount > 0
+                    ? "has-attention"
+                    : "is-muted"
+              }`}
+            >
+              {status === "expiring" && <span className="org-admin-members-quick-chip__dot" aria-hidden="true" />}
+              <span>In scadenza</span>
+              <span className="org-admin-members-quick-chip__sep" aria-hidden="true">·</span>
+              <strong>{expiringSoonCount}</strong>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setStatus("all");
+                setDocs("");
+                setPage(1);
+              }}
+              aria-pressed={status === "all" && !docs}
+              className={`org-admin-members-quick-chip ${status === "all" && !docs ? "is-active" : ""}`}
+            >
+              {status === "all" && !docs && <span className="org-admin-members-quick-chip__dot" aria-hidden="true" />}
+              <span>Tutti</span>
+            </button>
+          </div>
+
+          <div className="hidden md:flex md:flex-wrap md:items-center md:gap-3">
             <select className="premium-select min-w-[140px] flex-1 sm:flex-none" value={status} onChange={(e) => onFilterChange(setStatus, e.target.value)}>
               {STATUS_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -424,7 +633,7 @@ const OrgAdminMembers = () => {
             </button>
           </div>
         </div>
-        <div className="mt-4 px-3 pb-1 flex items-center justify-between border-t border-neutral-100/50 pt-3">
+        <div className="mt-4 hidden md:flex items-center justify-between border-t border-neutral-100/50 px-3 pb-1 pt-3">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
             {total === 0 ? "Nessun risultato" : `${startIndex}-${endIndex} di ${total} soci`}
           </p>
@@ -439,20 +648,25 @@ const OrgAdminMembers = () => {
       </SectionPanel>
 
       {!adminLoading && admin && (
-        <MemberBulkActions
-          selection={bulkSelection.selection}
-          count={bulkSelection.count}
-          total={total}
-          pageCount={members.length}
-          allPageChecked={bulkSelection.allVisibleChecked}
-          disabled={isLoading || error}
-          storageKey={`assonam-member-bulk:${admin.org_id}:${admin.id}`}
-          onTogglePage={bulkSelection.togglePage}
-          onSelectAll={bulkSelection.selectAllFiltered}
-          onClear={bulkSelection.clear}
-          onCompleted={() => { void loadMembers(); }}
-          actions={["export", "send_access"]}
-        />
+        <div className={mobileSelectionMode || bulkSelection.count > 0 ? "block" : "hidden md:block"}>
+          <MemberBulkActions
+            selection={bulkSelection.selection}
+            count={bulkSelection.count}
+            total={total}
+            pageCount={members.length}
+            allPageChecked={bulkSelection.allVisibleChecked}
+            disabled={isLoading || error}
+            storageKey={`assonam-member-bulk:${admin.org_id}:${admin.id}`}
+            onTogglePage={bulkSelection.togglePage}
+            onSelectAll={bulkSelection.selectAllFiltered}
+            onClear={() => {
+              bulkSelection.clear();
+              setMobileSelectionMode(false);
+            }}
+            onCompleted={() => { void loadMembers(); }}
+            actions={["export", "send_access"]}
+          />
+        </div>
       )}
 
       <div className="org-admin-mobile-master-detail grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
@@ -469,9 +683,163 @@ const OrgAdminMembers = () => {
           checkedMemberIds={bulkSelection.checkedIds}
           onToggleMember={bulkSelection.toggle}
           onTogglePage={bulkSelection.togglePage}
+          mobileSelectionMode={mobileSelectionMode}
         />
         <MemberSidePanel member={selectedMember} onOpenMember={handleOpenMember} />
       </div>
+
+      <ModalShell open={showActionsSheet} title="Azioni secondarie soci" onClose={closeActionsSheet}
+        placement="bottom" sizeClassName="max-w-lg org-admin-members-sheet__panel" contentClassName="p-0">
+            <div className="org-admin-members-sheet__actions">
+              <button
+                type="button"
+                className="org-admin-members-sheet__action-item"
+                onClick={() => {
+                  setShowActionsSheet(false);
+                  setSuccessMessage("");
+                  setCreatedMemberId(null);
+                  setShowImportModal(true);
+                }}
+              >
+                <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                </svg>
+                <span>Importa CSV</span>
+              </button>
+              <a
+                href="/api/org-admin/members.xlsx"
+                className="org-admin-members-sheet__action-item"
+                onClick={() => setShowActionsSheet(false)}
+              >
+                <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                </svg>
+                <span>Esporta Excel</span>
+              </a>
+              <button
+                type="button"
+                className="org-admin-members-sheet__action-item"
+                onClick={() => {
+                  setShowActionsSheet(false);
+                  if (mobileSelectionMode || bulkSelection.count > 0) { bulkSelection.clear(); setMobileSelectionMode(false); }
+                  else setMobileSelectionMode(true);
+                }}
+              >
+                <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                </svg>
+                <span>{mobileSelectionMode || bulkSelection.count > 0 ? "Termina selezione multipla" : "Selezione multipla soci"}</span>
+              </button>
+            </div>
+      </ModalShell>
+
+      <ModalShell open={showFiltersSheet} title="Filtri e ordinamento" onClose={closeFiltersSheet}
+        placement="bottom" sizeClassName="max-w-lg org-admin-members-sheet__panel" contentClassName="p-0">
+            <div className="org-admin-members-sheet__body">
+              <div className="org-admin-members-filter-group">
+                <p className="org-admin-members-filter-group__label">Stato socio</p>
+                <div className="org-admin-members-filter-group__chips">
+                  {STATUS_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => onFilterChange(setStatus, opt.value)}
+                      aria-pressed={status === opt.value}
+                      className={`org-admin-members-segment-chip ${status === opt.value ? "is-active" : ""}`}
+                    >
+                      {opt.chipLabel}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="org-admin-members-filter-group">
+                <p className="org-admin-members-filter-group__label">Documenti</p>
+                <div className="org-admin-members-filter-group__chips">
+                  {DOCS_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value || "all"}
+                      type="button"
+                      onClick={() => onFilterChange(setDocs, opt.value)}
+                      aria-pressed={docs === opt.value}
+                      className={`org-admin-members-segment-chip ${docs === opt.value ? "is-active" : ""}`}
+                    >
+                      {opt.chipLabel}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="org-admin-members-filter-group">
+                <p className="org-admin-members-filter-group__label">Accesso area socio</p>
+                <div className="org-admin-members-filter-group__chips">
+                  {ACCESS_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value || "all"}
+                      type="button"
+                      onClick={() => onFilterChange(setAccess, opt.value)}
+                      aria-pressed={access === opt.value}
+                      className={`org-admin-members-segment-chip ${access === opt.value ? "is-active" : ""}`}
+                    >
+                      {opt.chipLabel}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="org-admin-members-filter-group">
+                <p className="org-admin-members-filter-group__label">Origine iscrizione</p>
+                <div className="org-admin-members-filter-group__chips">
+                  {SOURCE_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value || "all"}
+                      type="button"
+                      onClick={() => onFilterChange(setSource, opt.value)}
+                      aria-pressed={source === opt.value}
+                      className={`org-admin-members-segment-chip ${source === opt.value ? "is-active" : ""}`}
+                    >
+                      {opt.chipLabel}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="org-admin-members-filter-group">
+                <p className="org-admin-members-filter-group__label">Ordina per</p>
+                <div className="org-admin-members-filter-group__chips">
+                  {MOBILE_ORDER_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => onFilterChange(setOrder, opt.value)}
+                      aria-pressed={order === opt.value}
+                      className={`org-admin-members-segment-chip ${order === opt.value ? "is-active" : ""}`}
+                    >
+                      {opt.chipLabel}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="org-admin-members-sheet__footer">
+              <button
+                type="button"
+                onClick={resetFilters}
+                disabled={!hasFilters}
+                className="btn-secondary org-admin-members-sheet__reset disabled:opacity-40"
+              >
+                Reset
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowFiltersSheet(false)}
+                className="btn-primary org-admin-members-sheet__apply"
+                disabled={isLoading}
+              >
+                {isLoading ? "Caricamento…" : `Mostra ${total} ${total === 1 ? "socio" : "soci"}`}
+              </button>
+            </div>
+      </ModalShell>
 
       <CreateMemberModal
         open={showModal}

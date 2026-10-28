@@ -228,6 +228,7 @@ from app.services.municipalities import (
     get_municipality_by_code,
     normalize_municipality_text,
 )
+from app.services.member_filters import member_expiring_filters, member_review_filters
 from app.services.member_activity import (
     member_expired_filters,
     get_member_lifecycle_status,
@@ -5319,16 +5320,11 @@ def org_metrics(request: Request, db: Session = Depends(get_db)):
         or 0
     )
     members_count = active_members_count + pending_requests_count
-    from datetime import timezone
-    from app.services.annual_memberships import annual_membership_expiry_datetime, as_rome_datetime
-    soon = current_time + timedelta(days=30)
-    local_year = as_rome_datetime(current_time).year
-    legacy_years = [year for year in (local_year - 1, local_year)
-                    if current_time <= annual_membership_expiry_datetime(year).astimezone(timezone.utc).replace(tzinfo=None) <= soon]
     expiring_members_count = int(db.query(func.count(Member.id)).filter(
-        Member.org_id == org_id, *member_active_filters(now=current_time),
-        or_(and_(Member.valid_until.isnot(None), Member.valid_until <= soon),
-            and_(Member.valid_until.is_(None), Member.card_year.in_(legacy_years))),
+        Member.org_id == org_id, *member_expiring_filters(now=current_time),
+    ).scalar() or 0)
+    members_to_review_count = int(db.query(func.count(Member.id)).filter(
+        Member.org_id == org_id, *member_review_filters(db),
     ).scalar() or 0)
     expired_members_count = int(db.query(func.count(Member.id)).filter(
         Member.org_id == org_id, *member_expired_filters(now=current_time),
@@ -5379,6 +5375,7 @@ def org_metrics(request: Request, db: Session = Depends(get_db)):
         "documents_pending_review": documents_pending_review,
         "documents_rejected": documents_rejected,
         "expiring_members_count": expiring_members_count,
+        "members_to_review_count": members_to_review_count,
         "expired_members_count": expired_members_count,
     }
 

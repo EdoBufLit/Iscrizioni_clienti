@@ -6211,3 +6211,20 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Backend completo 968 passed / 13 skipped; frontend 139 passed / 35 file; build/typecheck/compileall/diff check riusciti. Review indipendente conclusa, corretti i due rilievi su cronologia fuori contesto e breakpoint 640 px.
 - Browser con dati sintetici: desktop 1440/1280, tablet 640, telefono 390/320, chiaro/scuro; selezione tra pagine, globale 32/escluso 31, cambio filtro azzera, anteprima accesso senza invio, Quote 2026 senza checkbox/comandi. Zero email nel database QA. Screenshot e metriche in output/members-toolbar-20261027/.
 - Dopo il deploy: 24 controlli HTTPS riusciti, hash asset corrispondenti e calendario verificato nel runtime reale in sola lettura. Nessun sollecito in coda prima o dopo il rollout. Backup protetto verificato; server QA fermato e browser ripristinato. Rapporto docs/member_actions_release_2026-10-27.md. Limite: viewport Chromium simulati, nessun nuovo invio reale o dispositivo Safari/iOS fisico.
+
+## Plan (Completare redesign mobile Soci lasciato da Gemini e deploy - Oct 28, 2026)
+
+### Specifica e verifica del piano
+- Riprendere le sei modifiche locali esistenti di Gemini, preservate in una patch privata, e completare la schermata Org Admin Soci: intestazione mobile compatta, ricerca/filtri, chip rapidi con contatori, filtri attivi rimovibili, pannelli inferiori e schede soci piu dense.
+- Verificare che filtri, conteggi e badge rappresentino i dati reali, che selezione/esportazione/accessi restino funzionanti e che i solleciti rimangano fuori da Soci secondo le regole appena rilasciate.
+- Collaudare build reale su mobile390x844, schermi piccoli, tablet e desktop1440x900, chiaro/scuro: primo elenco visibile, pannelli/scroll/focus/Escape, filtri applicati/rimossi e assenza di overflow. Correggere gli errori rilevati prima del rilascio.
+- Pubblicare su Main come richiesto, monitorare pipeline/canary e verificare salute, asset effettivi e servizi dopo il deploy. Nessun invio o modifica di profili reali per il collaudo.
+
+### Implementazione e verifica
+- [x] Review indipendente funzionale e accessibilita delle modifiche lasciate da Gemini.
+- [x] Completare interfaccia e correzioni emerse, con regressioni mirate dove servono.
+- [x] Suite frontend, typecheck/build e browser con dati sintetici; verifiche backend pertinenti se necessarie.
+- [ ] Review finale, commit/push Main, deploy e controlli post-rilascio; aggiornare rapporto con prove e limiti.
+
+### Review
+- In corso.

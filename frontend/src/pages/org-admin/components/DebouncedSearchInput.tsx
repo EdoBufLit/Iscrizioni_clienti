@@ -4,6 +4,7 @@ type DebouncedSearchInputProps = {
   resetKey: number;
   initialValue?: string;
   describedBy?: string;
+  placeholder?: string;
   onDebouncedChange: (value: string) => void;
 };
 
@@ -11,6 +12,7 @@ const DebouncedSearchInput = memo(function DebouncedSearchInput({
   resetKey,
   initialValue = "",
   describedBy,
+  placeholder = "Cerca nome, CF, email o tessera...",
   onDebouncedChange,
 }: DebouncedSearchInputProps) {
   const [value, setValue] = useState(initialValue);
@@ -43,7 +45,7 @@ const DebouncedSearchInput = memo(function DebouncedSearchInput({
   };
 
   return (
-    <div className="relative flex-1 min-w-[220px]">
+    <div className="relative min-w-0 flex-1">
       <svg
         className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
         viewBox="0 0 24 24"
@@ -56,11 +58,11 @@ const DebouncedSearchInput = memo(function DebouncedSearchInput({
         <path d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
       </svg>
       <input
-        className="theme-input w-full rounded-md py-2 pl-9 pr-3 text-sm sm:max-w-xs"
+        className="theme-input w-full rounded-lg py-2 pl-9 pr-3 text-sm md:max-w-sm"
         type="search"
         aria-label="Cerca soci"
         aria-describedby={describedBy}
-        placeholder="Cerca nome, cognome, email, CF o tessera..."
+        placeholder={placeholder}
         value={value}
         onChange={handleChange}
       />

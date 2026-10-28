@@ -313,6 +313,8 @@ On mobile admin pages, a visible `+ Nuova` action must always create the thing r
 
 After touching mobile/admin UI strings, grep the changed files for mojibake markers such as `Ã`, `Â`, and `â` before committing. Prefer existing HTML entities or plain ASCII symbols for decorative glyphs if the component has already shown encoding fragility.
 
+On Windows, always specify encoding="utf-8" for both Python reads and writes of source files. A read using the cp1252 locale followed by a UTF-8 write corrupts existing accents and Unicode comments even when the edit is unrelated to those lines; inspect the complete diff before committing.
+
 ## May 27, 2026 - Do not leave dead feature flags visible
 
 If a block or workflow remains active because it is represented by an explicit builder field, do not expose a separate settings flag that appears to disable it. Use explicit mapping choices or field presence as the source of truth, and keep hidden compatibility flags derived from those choices only for backend behavior.

@@ -3760,6 +3760,7 @@ export async function uploadSuperAdminStatute(
 }
 
 export type OrgAdminMetrics = {
+  members_to_review_count?: number;
   expiring_members_count?: number;
   expired_members_count?: number;
   members_count: number;
@@ -3929,6 +3930,7 @@ export type OrgAdminMember = {
   membership_fee_snapshot?: number | null;
   joined_at: string | null;
   docs_count: number;
+  document_status?: string | null;
   is_paid?: boolean;
   last_payment_at?: string | null;
   has_access?: boolean;

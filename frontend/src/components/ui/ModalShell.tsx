@@ -14,6 +14,7 @@ type ModalShellProps = {
   closeDisabled?: boolean;
   contentClassName?: string;
   initialFocusRef?: RefObject<HTMLElement>;
+  placement?: "center" | "bottom";
 };
 
 const ModalShell = ({
@@ -30,6 +31,7 @@ const ModalShell = ({
   closeDisabled = false,
   contentClassName = "p-6",
   initialFocusRef,
+  placement = "center",
 }: ModalShellProps) => {
   const titleId = useId();
   const descriptionId = useId();
@@ -101,7 +103,7 @@ const ModalShell = ({
 
   return (
     <div
-      className={`modal-overlay fixed inset-0 ${zIndexClassName} flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200`}
+      className={`modal-overlay fixed inset-0 ${zIndexClassName} flex ${placement === "bottom" ? "items-end p-0" : "items-center p-4"} justify-center backdrop-blur-sm animate-in fade-in duration-200`}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
@@ -117,7 +119,7 @@ const ModalShell = ({
         className={`modal-panel modal-shell-panel relative w-full ${sizeClassName} ${contentClassName}`}
         tabIndex={-1}
       >
-        <div className="flex items-start justify-between gap-4">
+        <div className="modal-shell-header flex items-start justify-between gap-4">
           <div className="pr-10">
             <h3 id={titleId} className="text-lg font-semibold text-neutral-900">{title}</h3>
             {description ? (
@@ -137,7 +139,7 @@ const ModalShell = ({
           </button>
         </div>
 
-        <div className="mt-5">{children}</div>
+        <div className="modal-shell-body mt-5">{children}</div>
 
         {footer ? <div className="mt-6 flex flex-wrap justify-end gap-3">{footer}</div> : null}
       </div>

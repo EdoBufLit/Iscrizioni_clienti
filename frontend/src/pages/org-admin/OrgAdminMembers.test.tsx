@@ -145,4 +145,89 @@ describe("OrgAdminMembers search", () => {
     await act(async () => current.resolve(response(member(2, "Lucia Bianchi", "exact"))));
     expect(screen.getByRole("row", { name: /Lucia Bianchi/ })).toBeInTheDocument();
   });
+
+  it("filtra la lista con i Quick Chips mobile e mostra le pill dei filtri avanzati dal Bottom Sheet", async () => {
+    mocks.fetchMetrics.mockResolvedValue({
+      active_members_count: 3,
+      expiring_members_count: 0,
+      pending_requests_count: 0,
+      documents_pending_review: 2,
+      members_to_review_count: 2,
+    });
+    mocks.fetchMembers.mockResolvedValue(
+      response(
+        { ...member(1, "Mario Rossi", "exact"), docs_count: 1, document_status: "approved", is_paid: true },
+        { ...member(2, "Laura Bianchi", "exact"), docs_count: 1, document_status: "pending", is_paid: false, membership_fee_snapshot: 25 },
+      ),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/org-admin/soci"]}>
+        <OrgAdminMembers />
+      </MemoryRouter>,
+    );
+
+    const mobileRow = await screen.findByTestId("member-mobile-row-2");
+    expect(within(mobileRow).getByText("#2")).toBeInTheDocument();
+    expect(within(mobileRow).getByText("Doc in verifica")).toBeInTheDocument();
+    expect(within(mobileRow).getByText("Quota da verificare")).toBeInTheDocument();
+
+    const quickGroup = screen.getByRole("group", { name: "Filtri rapidi stato soci" });
+    fireEvent.click(within(quickGroup).getByRole("button", { name: /Da verificare/ }));
+    await waitFor(() =>
+      expect(mocks.fetchMembers).toHaveBeenCalledWith(expect.objectContaining({ status: "review", docs: undefined })),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Filtri/ }));
+    const sheet = await screen.findByRole("dialog", { name: "Filtri e ordinamento" });
+    fireEvent.click(within(sheet).getByRole("button", { name: "Con accesso" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "Cognome A-Z" }));
+
+    await waitFor(() =>
+      expect(mocks.fetchMembers).toHaveBeenCalledWith(
+        expect.objectContaining({ access: "with", order: "last_name_asc" }),
+      ),
+    );
+
+    fireEvent.click(within(sheet).getByRole("button", { name: /Mostra 2 soci/ }));
+    expect(screen.queryByRole("dialog", { name: "Filtri e ordinamento" })).not.toBeInTheDocument();
+
+    const removeAccessPill = screen.getByRole("button", { name: "Rimuovi filtro Accesso: Con accesso" });
+    fireEvent.click(removeAccessPill);
+    await waitFor(() =>
+      expect(mocks.fetchMembers).toHaveBeenCalledWith(expect.objectContaining({ access: undefined })),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Azioni secondarie" }));
+    const actionsSheet = await screen.findByRole("dialog", { name: "Azioni secondarie soci" });
+    expect(within(actionsSheet).getByRole("button", { name: "Importa CSV" })).toBeInTheDocument();
+    expect(within(actionsSheet).getByRole("link", { name: "Esporta Excel" })).toHaveAttribute(
+      "href",
+      "/api/org-admin/members.xlsx",
+    );
+  });
+
+  it("uses the real expiring filter and does not invent missing documents or debt badges", async () => {
+    mocks.fetchMetrics.mockResolvedValue({ active_members_count: 2, expiring_members_count: 1, members_to_review_count: 0 });
+    mocks.fetchMembers.mockResolvedValue(response({ ...member(1, "Anna Gratis", "exact"), is_paid: false, membership_fee_snapshot: 0 }));
+    render(<MemoryRouter><OrgAdminMembers /></MemoryRouter>);
+    const row = await screen.findByTestId("member-mobile-row-1");
+    expect(within(row).queryByText(/Doc mancanti|Non pagato|Quota da verificare/)).not.toBeInTheDocument();
+    const quickGroup = screen.getByRole("group", { name: "Filtri rapidi stato soci" });
+    fireEvent.click(within(quickGroup).getByRole("button", { name: /In scadenza/ }));
+    await waitFor(() => expect(mocks.fetchMembers).toHaveBeenLastCalledWith(expect.objectContaining({ status: "expiring" })));
+  });
+
+  it("locks the background while the filter sheet is open and closes it with Escape", async () => {
+    await renderMembers();
+    const trigger = screen.getByRole("button", { name: /Filtri/ });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const sheet = await screen.findByRole("dialog", { name: "Filtri e ordinamento" });
+    expect(document.body.style.overflow).toBe("hidden");
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(sheet).not.toBeInTheDocument());
+    expect(document.body.style.overflow).not.toBe("hidden");
+    expect(trigger).toHaveFocus();
+  });
 });

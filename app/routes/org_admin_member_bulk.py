@@ -22,7 +22,7 @@ router = APIRouter(prefix="/api/org-admin/member-bulk", tags=["org-admin-member-
 class MemberListFilters(BaseModel):
     model_config = ConfigDict(extra="forbid")
     q: str | None = Field(default=None, max_length=254)
-    status: Literal["all", "active", "pending", "expired", "deleted", "rejected", "suspended", "pending_verification", "pending_docs", "pending_cards"] | None = None
+    status: Literal["all", "active", "pending", "expired", "expiring", "review", "deleted", "rejected", "suspended", "pending_verification", "pending_docs", "pending_cards"] | None = None
     access: Literal["with", "without"] | None = None
     source: Literal["manual", "online"] | None = None
     docs: Literal["pending", "rejected", "approved"] | None = None

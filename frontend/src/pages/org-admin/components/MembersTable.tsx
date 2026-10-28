@@ -25,6 +25,7 @@ type MembersTableProps = {
   checkedMemberIds?: ReadonlySet<number>;
   onToggleMember?: (memberId: number) => void;
   onTogglePage?: () => void;
+  mobileSelectionMode?: boolean;
 };
 
 const MembersTable = memo(function MembersTable({
@@ -40,9 +41,13 @@ const MembersTable = memo(function MembersTable({
   checkedMemberIds,
   onToggleMember,
   onTogglePage,
+  mobileSelectionMode = false,
 }: MembersTableProps) {
   const checkedOnPage = members.filter((member) => checkedMemberIds?.has(member.id)).length;
   const allPageChecked = members.length > 0 && checkedOnPage === members.length;
+  const showMobileCheckboxes = Boolean(
+    onToggleMember && (mobileSelectionMode || (checkedMemberIds && checkedMemberIds.size > 0)),
+  );
   if (error) {
     return (
       <div className="mt-4 rounded-lg border border-red-200/60 bg-red-50 px-7 py-5 min-h-[120px]">
@@ -73,7 +78,7 @@ const MembersTable = memo(function MembersTable({
 
   return (
     <div
-      className="surface-strong mt-4 overflow-hidden min-h-[360px]"
+      className="surface-strong mt-0 overflow-hidden md:mt-4 md:min-h-[360px]"
       data-tour="admin-members-list"
       data-component="orgadmin-members-table"
     >
@@ -256,15 +261,17 @@ const MembersTable = memo(function MembersTable({
       </div>
       <div className="divide-y divide-neutral-200/70 md:hidden">
         {isLoading ? (
-          Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="p-4">
-              <Skeleton className="h-4 w-36" />
-              <Skeleton className="mt-3 h-3.5 w-48" />
-              <Skeleton className="mt-4 h-16 w-full rounded-xl" />
+          Array.from({ length: 5 }).map((_, index) => (
+            <div key={index} className="px-3.5 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <Skeleton className="h-4 w-36" />
+                <Skeleton className="h-5 w-16 rounded-full" />
+              </div>
+              <Skeleton className="mt-2 h-3.5 w-48" />
             </div>
           ))
         ) : members.length === 0 ? (
-          <div className="px-5 py-10 text-center">
+          <div className="px-5 py-8 text-center">
             <p className="text-sm font-semibold text-neutral-800">{EMPTY_STATE_COPY.filteredResults.title}</p>
             <p className="mt-1 text-sm text-neutral-500">{EMPTY_STATE_COPY.filteredResults.description}</p>
           </div>
@@ -273,74 +280,99 @@ const MembersTable = memo(function MembersTable({
             const lifecycleMeta = resolveStatusMeta(memberLifecycleStatusMeta, member.status);
             const workflowMeta = resolveStatusMeta(memberWorkflowStatusMeta, member.workflow_status);
             const isSelected = selectedMemberId === member.id;
+            const cardNo = member.card_number ?? member.card_no;
+            const hasPendingWorkflow = Boolean(member.workflow_status && member.workflow_status !== "active");
+            const badgeMeta =
+              String(member.status || "").toLowerCase() === "pending" && hasPendingWorkflow
+                ? { label: "In verifica", tone: workflowMeta.tone }
+                : lifecycleMeta;
+
+            let docAttentionLabel: string | null = null;
+            let docAttentionTone = "border-amber-200 bg-amber-50 text-amber-800";
+            if (member.document_status === "rejected") {
+              docAttentionLabel = "Doc rigettati";
+              docAttentionTone = "border-rose-200 bg-rose-50 text-rose-700";
+            } else if (member.document_status === "pending") {
+              docAttentionLabel = "Doc in verifica";
+            } else if (member.workflow_status === "pending_docs") {
+              docAttentionLabel = "Documenti da completare";
+            }
+
             return (
               <article
                 key={member.id}
-                className={`p-4 ${isSelected ? "bg-[var(--theme-surface-muted)]" : "bg-[var(--theme-surface-solid)]"}`}
-                onClick={() => onSelectMember?.(member.id)}
+                className={`org-admin-member-mobile-row flex cursor-pointer items-center gap-2.5 px-3.5 py-2.5 transition-colors ${
+                  isSelected ? "bg-[var(--theme-surface-muted)]" : "bg-[var(--theme-surface-solid)]"
+                }`}
+                data-testid={`member-mobile-row-${member.id}`}
               >
-                <div className="flex items-start justify-between gap-3">
-                  {onToggleMember && (
-                    <label
-                      className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <input
-                        type="checkbox"
-                        aria-label={`Seleziona ${member.name}`}
-                        checked={checkedMemberIds?.has(member.id) ?? false}
-                        onChange={() => onToggleMember(member.id)}
-                        className="h-5 w-5 accent-[var(--theme-brand)]"
-                      />
-                    </label>
-                  )}
-                  <div className="min-w-0">
-                    <h3 className="truncate text-sm font-semibold text-neutral-900">{member.name}</h3>
-                    <p className="mt-1 truncate text-xs text-neutral-500">{member.email ?? "Email non indicata"}</p>
-                    {member.search_match === "similar" && (
-                      <span className="mt-2 inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-800">
-                        Corrispondenza simile
-                      </span>
-                    )}
-                  </div>
-                  <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-medium ${lifecycleMeta.tone}`}>
-                    {lifecycleMeta.label}
-                  </span>
-                </div>
-                <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <dt className="font-semibold uppercase tracking-[0.12em] text-neutral-400">Documenti</dt>
-                    <dd className="mt-1 text-neutral-800">{member.docs_count ?? "-"}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-semibold uppercase tracking-[0.12em] text-neutral-400">Tessera</dt>
-                    <dd className="mt-1 text-neutral-800">
-                      {member.card_number ?? member.card_no ?? "-"}{member.card_year ? ` / ${member.card_year}` : ""}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="font-semibold uppercase tracking-[0.12em] text-neutral-400">Iscrizione</dt>
-                    <dd className="mt-1 text-neutral-800">
-                      {member.joined_at ? new Date(member.joined_at).toLocaleDateString("it-IT") : "-"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="font-semibold uppercase tracking-[0.12em] text-neutral-400">Avanzamento</dt>
-                    <dd className="mt-1 text-neutral-800">
-                      {member.workflow_status && member.workflow_status !== "active" ? workflowMeta.label : "Completo"}
-                    </dd>
-                  </div>
-                </dl>
-                <button
-                  type="button"
-                  className="mt-4 w-full rounded-lg border border-brand/20 px-3 py-2 text-sm font-semibold text-brand"
+                {showMobileCheckboxes && onToggleMember && (
+                  <label
+                    className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <input
+                      type="checkbox"
+                      aria-label={`Seleziona ${member.name}`}
+                      checked={checkedMemberIds?.has(member.id) ?? false}
+                      onChange={() => onToggleMember(member.id)}
+                      className="h-4 w-4 accent-[var(--theme-brand)]"
+                    />
+                  </label>
+                )}
+                <a className="flex min-h-11 min-w-0 flex-1 flex-col justify-center rounded-sm" href={`/org-admin/soci/${member.id}`}
+                  aria-label={`Apri profilo di ${member.name}`}
                   onClick={(event) => {
-                    event.stopPropagation();
+                    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                    event.preventDefault();
+                    onSelectMember?.(member.id);
                     onOpenMember(member.id);
-                  }}
-                >
-                  Apri profilo socio
-                </button>
+                  }}>
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="truncate text-sm font-bold text-neutral-900">{member.name}</h3>
+                    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold leading-4 ${badgeMeta.tone}`}>
+                      {badgeMeta.label}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex items-center justify-between gap-2 text-xs text-neutral-500">
+                    <div className="min-w-0 flex flex-1 flex-wrap items-center gap-x-1.5 gap-y-1">
+                      <span className="shrink-0 font-medium text-neutral-700 tabular-nums">
+                        {cardNo != null ? `#${cardNo}` : "Senza tessera"}
+                      </span>
+                      {member.email ? (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <span className="truncate max-w-[155px] sm:max-w-[220px]">{member.email}</span>
+                        </>
+                      ) : null}
+                      {docAttentionLabel ? (
+                        <span className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-tight ${docAttentionTone}`}>
+                          {docAttentionLabel}
+                        </span>
+                      ) : null}
+                      {member.is_paid === false && Number(member.membership_fee_snapshot ?? 0) > 0 ? (
+                        <span className="inline-flex shrink-0 items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold leading-tight text-amber-800">
+                          Quota da verificare
+                        </span>
+                      ) : null}
+                      {member.search_match === "similar" && (
+                        <span className="inline-flex shrink-0 items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold leading-tight text-amber-800">
+                          Corrispondenza simile
+                        </span>
+                      )}
+                    </div>
+                    <svg
+                      className="h-4 w-4 shrink-0 text-neutral-400"
+                      viewBox="0 0 20 20"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      aria-hidden="true"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m7.5 5 5 5-5 5" />
+                    </svg>
+                  </div>
+                </a>
               </article>
             );
           })

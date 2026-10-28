@@ -2,13 +2,37 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import case, or_
+from sqlalchemy import and_, case, or_
 from sqlalchemy.orm import Session
 
 from app.models import DocStatus, Member, MemberDocument, MemberStatus
 from app.services.member_activity import member_active_filters, member_expired_filters
+from app.services.annual_memberships import annual_membership_expiry_datetime, as_rome_datetime
+
+
+def member_expiring_filters(*, now: datetime | None = None):
+    current_time = as_rome_datetime(now).astimezone(timezone.utc).replace(tzinfo=None)
+    soon = current_time + timedelta(days=30)
+    local_year = as_rome_datetime(current_time).year
+    legacy_years = [year for year in (local_year - 1, local_year)
+                    if current_time <= annual_membership_expiry_datetime(year).astimezone(timezone.utc).replace(tzinfo=None) <= soon]
+    return (*member_active_filters(now=current_time), or_(
+        and_(Member.valid_until.isnot(None), Member.valid_until <= soon),
+        and_(Member.valid_until.is_(None), Member.card_year.in_(legacy_years)),
+    ))
+
+
+def member_review_filters(db: Session):
+    pending_documents = db.query(MemberDocument.id).filter(
+        MemberDocument.member_id == Member.id,
+        MemberDocument.status.in_([DocStatus.PENDING.value, DocStatus.UPLOADED.value]),
+    ).exists()
+    return (Member.deleted_at.is_(None), or_(
+        Member.status.in_([MemberStatus.PENDING_VERIFICATION, MemberStatus.PENDING_DOCS, MemberStatus.PENDING_CARDS]),
+        and_(Member.status.notin_([MemberStatus.REJECTED, MemberStatus.EXPIRED]), pending_documents),
+    ))
 
 
 def build_org_member_query(
@@ -39,6 +63,10 @@ def build_org_member_query(
         query = query.filter(Member.status == MemberStatus.REJECTED)
     elif status_filter == "expired":
         query = query.filter(*member_expired_filters(now=current_time))
+    elif status_filter == "expiring":
+        query = query.filter(*member_expiring_filters(now=current_time))
+    elif status_filter == "review":
+        query = query.filter(*member_review_filters(db))
     elif status_filter and status_filter != "all":
         query = query.filter(Member.status == status)
     if access == "with":
