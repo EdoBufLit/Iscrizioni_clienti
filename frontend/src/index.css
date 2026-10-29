@@ -8801,6 +8801,10 @@ body.dashboard-perf-mode .surface-strong:hover {
     padding: 0.55rem 0.75rem calc(5.5rem + env(safe-area-inset-bottom, 0px)) !important;
   }
 
+  .org-admin-v2 .org-admin-settings-page {
+    padding: 0.75rem 0.75rem calc(7.5rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
   .org-admin-v2 .org-admin-attendance-page > :not([hidden]) ~ :not([hidden]) {
     margin-top: 0.45rem !important;
   }

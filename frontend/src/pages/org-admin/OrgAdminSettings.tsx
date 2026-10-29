@@ -1,5 +1,5 @@
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { ChangeEvent, DragEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   fetchOrgAdminOrganization,
   patchOrgAdminOrganization,
@@ -13,9 +13,18 @@ import Skeleton from "../../components/ui/Skeleton";
 import { useToast } from "../../components/ui/ToastProvider";
 import { useUnsavedChangesGuard } from "../../components/ui/UnsavedChangesProvider";
 
+type SettingsTabKey = "profilo" | "documenti" | "email" | "wallet";
+
+const SETTINGS_TABS: Array<{ key: SettingsTabKey; label: string }> = [
+  { key: "profilo", label: "Profilo" },
+  { key: "documenti", label: "Documenti" },
+  { key: "email", label: "Email" },
+  { key: "wallet", label: "Google Wallet" },
+];
+
 const inputClass =
-  "mt-1 w-full rounded-md border border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20";
-const labelClass = "block text-sm font-medium text-neutral-700";
+  "theme-input mt-1.5 w-full rounded-lg px-3.5 py-2.5 text-sm outline-none transition focus:border-[var(--oa-brand)] focus:ring-2 focus:ring-[var(--oa-brand)]/20";
+const labelClass = "block text-xs font-semibold uppercase tracking-[0.08em] text-[var(--oa-muted)]";
 const COMMUNICATIONS_LOCKED_MESSAGE =
   "Modulo Comunicazioni non attivo. Contatta ASSONAM per abilitarlo.";
 
@@ -29,6 +38,11 @@ type EmailPreview = {
   fallbackUsed: boolean;
 };
 
+function resolveTab(raw: string | null): SettingsTabKey {
+  if (raw === "documenti" || raw === "email" || raw === "wallet") return raw;
+  return "profilo";
+}
+
 function normalizeText(value: string | null | undefined): string | null {
   const cleaned = (value || "").trim();
   return cleaned || null;
@@ -41,6 +55,13 @@ function sanitizeEmailLocalPartPreview(value: string | null | undefined): string
   const stripped = spaced.replace(/[^a-z0-9-]+/g, "-");
   const collapsed = stripped.replace(/-{2,}/g, "-").replace(/^-+|-+$/g, "");
   return collapsed.slice(0, 48).replace(/^-+|-+$/g, "");
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(1)} KB`;
+  return `${(kb / 1024).toFixed(2)} MB`;
 }
 
 function buildAssociationEmailPreview(input: {
@@ -58,7 +79,8 @@ function buildAssociationEmailPreview(input: {
   const systemHeader = systemSender?.from_header || systemEmail;
   const systemName = systemSender?.from_name || null;
   const systemReplyTo = systemSender?.reply_to || null;
-  const associationName = normalizeText(input.emailFromNameOverride)
+  const associationName =
+    normalizeText(input.emailFromNameOverride)
     || normalizeText(input.associationName)
     || "ASSONAM";
   const domain = normalizeText(input.mailFromDomain)?.toLowerCase() || null;
@@ -120,14 +142,45 @@ function organizationWalletSnapshot(org: OrgAdminOrganizationDetail | null) {
   };
 }
 
+function Spinner() {
+  return (
+    <svg
+      className="h-4 w-4 animate-spin"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+      <path
+        className="opacity-90"
+        fill="currentColor"
+        d="M4 12a8 8 0 0 1 8-8V1C5.925 1 1 5.925 1 12h3Z"
+      />
+    </svg>
+  );
+}
+
 const OrgAdminSettings = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { showToast } = useToast();
+
+  const activeTab = resolveTab(searchParams.get("tab"));
+  const setActiveTab = (nextTab: SettingsTabKey) => {
+    const next = new URLSearchParams(searchParams);
+    if (nextTab === "profilo") {
+      next.delete("tab");
+    } else {
+      next.set("tab", nextTab);
+    }
+    setSearchParams(next, { replace: true });
+  };
+
   const [org, setOrg] = useState<OrgAdminOrganizationDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Form state
+  // Tab 1: Profile state
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -141,6 +194,15 @@ const OrgAdminSettings = () => {
   const [saveMsg, setSaveMsg] = useState("");
   const [saveError, setSaveError] = useState("");
 
+  // Tab 2: Statute upload state
+  const [statuteFile, setStatuteFile] = useState<File | null>(null);
+  const [statuteDragActive, setStatuteDragActive] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState("");
+  const [uploadError, setUploadError] = useState("");
+  const statuteInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Tab 3: Email state
   const [emailSettingsForm, setEmailSettingsForm] = useState({
     sender_email_local_part: "",
     email_from_name_override: "",
@@ -150,13 +212,7 @@ const OrgAdminSettings = () => {
   const [emailSettingsError, setEmailSettingsError] = useState("");
   const [emailSettingsSaved, setEmailSettingsSaved] = useState(false);
 
-  // Statute upload
-  const [statuteFile, setStatuteFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadMsg, setUploadMsg] = useState("");
-  const [uploadError, setUploadError] = useState("");
-
-  // Google Wallet branding
+  // Tab 4: Google Wallet state
   const [walletForm, setWalletForm] = useState({
     wallet_bg_color: "#0B3C75",
     wallet_title_override: "",
@@ -167,9 +223,30 @@ const OrgAdminSettings = () => {
   const [walletSaveError, setWalletSaveError] = useState("");
   const [walletLogoFile, setWalletLogoFile] = useState<File | null>(null);
   const [walletHeroFile, setWalletHeroFile] = useState<File | null>(null);
-  const [walletAssetsUploading, setWalletAssetsUploading] = useState(false);
-  const [walletAssetsMsg, setWalletAssetsMsg] = useState("");
-  const [walletAssetsError, setWalletAssetsError] = useState("");
+  const [walletLogoObjectUrl, setWalletLogoObjectUrl] = useState<string | null>(null);
+  const [walletHeroObjectUrl, setWalletHeroObjectUrl] = useState<string | null>(null);
+  const walletLogoInputRef = useRef<HTMLInputElement | null>(null);
+  const walletHeroInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!walletLogoFile) {
+      setWalletLogoObjectUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(walletLogoFile);
+    setWalletLogoObjectUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [walletLogoFile]);
+
+  useEffect(() => {
+    if (!walletHeroFile) {
+      setWalletHeroObjectUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(walletHeroFile);
+    setWalletHeroObjectUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [walletHeroFile]);
 
   useEffect(() => {
     fetchOrgAdminOrganization()
@@ -190,13 +267,17 @@ const OrgAdminSettings = () => {
   }, [navigate]);
 
   const handleChange =
-    (field: keyof typeof form) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    (field: keyof typeof form) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      setSaveMsg("");
+      setSaveError("");
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
+    };
 
   const handleEmailSettingsChange =
     (field: keyof typeof emailSettingsForm) =>
     (e: ChangeEvent<HTMLInputElement>) => {
       setEmailSettingsSaved(false);
+      setEmailSettingsError("");
       setEmailSettingsForm((prev) => ({
         ...prev,
         [field]: e.target.value,
@@ -213,16 +294,7 @@ const OrgAdminSettings = () => {
       const result = await patchOrgAdminOrganization(form);
       if (result.organization) {
         setOrg(result.organization);
-        setForm((prev) => ({
-          ...prev,
-          name: result.organization?.name || "",
-          description: result.organization?.description || "",
-          city: result.organization?.city || "",
-          province: result.organization?.province || "",
-          email: result.organization?.email || "",
-          phone: result.organization?.phone || "",
-          website: result.organization?.website || "",
-        }));
+        setForm(organizationFormSnapshot(result.organization));
       }
       setSaveMsg("Dati aggiornati correttamente.");
     } catch (err) {
@@ -233,6 +305,21 @@ const OrgAdminSettings = () => {
       }
     } finally {
       setSaving(false);
+    }
+  };
+
+  const selectStatuteFile = (file: File | null) => {
+    setUploadMsg("");
+    setUploadError("");
+    setStatuteFile(file);
+  };
+
+  const handleStatuteDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setStatuteDragActive(false);
+    const dropped = event.dataTransfer.files?.[0] ?? null;
+    if (dropped) {
+      selectStatuteFile(dropped);
     }
   };
 
@@ -270,6 +357,7 @@ const OrgAdminSettings = () => {
       );
       setUploadMsg(`Statuto aggiornato (${result.statute_version}).`);
       setStatuteFile(null);
+      if (statuteInputRef.current) statuteInputRef.current.value = "";
     } catch (err) {
       if (err instanceof AuthError) {
         navigate("/org-admin/login", { replace: true });
@@ -281,117 +369,8 @@ const OrgAdminSettings = () => {
     }
   };
 
-  const handleWalletBrandingSave = async () => {
-    if (walletSaving) return;
-    setWalletSaving(true);
-    setWalletSaveMsg("");
-    setWalletSaveError("");
-    try {
-      const payload = {
-        wallet_bg_color: walletForm.wallet_bg_color.trim() || null,
-        wallet_title_override: walletForm.wallet_title_override.trim() || null,
-        wallet_is_test_prefix: walletForm.wallet_is_test_prefix,
-      };
-      const result = await patchOrgAdminOrganization(payload);
-      if (result.organization) {
-        setOrg(result.organization);
-        setWalletForm({
-          wallet_bg_color:
-            result.organization.wallet_bg_color
-            || result.organization.wallet_effective_bg_color
-            || "#0B3C75",
-          wallet_title_override:
-            result.organization.wallet_title_override
-            || result.organization.wallet_effective_title_override
-            || "",
-          wallet_is_test_prefix: Boolean(result.organization.wallet_is_test_prefix),
-        });
-      }
-      setWalletSaveMsg("Branding Google Wallet salvato.");
-    } catch (err) {
-      if (err instanceof AuthError) {
-        navigate("/org-admin/login", { replace: true });
-      } else {
-        setWalletSaveError(err instanceof Error ? err.message : "Errore nel salvataggio branding.");
-      }
-    } finally {
-      setWalletSaving(false);
-    }
-  };
-
-  const handleWalletAssetsUpload = async () => {
-    if ((!walletLogoFile && !walletHeroFile) || walletAssetsUploading) return;
-
-    const validateImage = (
-      file: File | null,
-      options: { label: string; maxBytes: number; allowedExt: string[]; allowedMime: string[] },
-    ): string | null => {
-      if (!file) return null;
-      const ext = `.${(file.name.split(".").pop() || "").toLowerCase()}`;
-      const hasValidExt = options.allowedExt.includes(ext);
-      const hasValidMime = !file.type || options.allowedMime.includes(file.type);
-      if (!hasValidExt || !hasValidMime) return `Formato non valido per ${options.label}.`;
-      if (file.size > options.maxBytes) return `${options.label} troppo grande (max 2 MB).`;
-      return null;
-    };
-
-    const logoError =
-      validateImage(walletLogoFile, {
-        label: "logo",
-        maxBytes: 2 * 1024 * 1024,
-        allowedExt: [".png", ".jpg", ".jpeg", ".svg"],
-        allowedMime: ["image/png", "image/jpeg", "image/svg+xml"],
-      }) || null;
-    const heroError =
-      validateImage(walletHeroFile, {
-        label: "hero image",
-        maxBytes: 2 * 1024 * 1024,
-        allowedExt: [".png", ".jpg", ".jpeg"],
-        allowedMime: ["image/png", "image/jpeg"],
-      }) || null;
-    const validationError = logoError || heroError;
-    if (validationError) {
-      setWalletAssetsMsg("");
-      setWalletAssetsError(validationError);
-      return;
-    }
-
-    setWalletAssetsUploading(true);
-    setWalletAssetsMsg("");
-    setWalletAssetsError("");
-    try {
-      const result = await uploadOrgAdminWalletAssets({
-        logo: walletLogoFile,
-        heroImage: walletHeroFile,
-      });
-      setOrg((prev) =>
-        prev
-          ? {
-              ...prev,
-              wallet_logo_url: result.wallet_logo_url ?? prev.wallet_logo_url,
-              wallet_hero_image_url: result.wallet_hero_image_url ?? prev.wallet_hero_image_url,
-              wallet_effective_logo_url:
-                result.wallet_effective_logo_url ?? prev.wallet_effective_logo_url,
-              wallet_effective_hero_image_url:
-                result.wallet_effective_hero_image_url ?? prev.wallet_effective_hero_image_url,
-            }
-          : prev,
-      );
-      setWalletAssetsMsg("Asset Google Wallet caricati.");
-      setWalletLogoFile(null);
-      setWalletHeroFile(null);
-    } catch (err) {
-      if (err instanceof AuthError) {
-        navigate("/org-admin/login", { replace: true });
-      } else {
-        setWalletAssetsError(err instanceof Error ? err.message : "Errore nel caricamento asset.");
-      }
-    } finally {
-      setWalletAssetsUploading(false);
-    }
-  };
-
-  const handleAssociationEmailSave = async () => {
+  const handleAssociationEmailSave = async (event?: FormEvent) => {
+    event?.preventDefault();
     if (emailSettingsSaving) return;
     setEmailSettingsSaving(true);
     setEmailSettingsError("");
@@ -441,6 +420,95 @@ const OrgAdminSettings = () => {
     }
   };
 
+  const validateWalletImage = (
+    file: File | null,
+    options: { label: string; maxBytes: number; allowedExt: string[]; allowedMime: string[] },
+  ): string | null => {
+    if (!file) return null;
+    const ext = `.${(file.name.split(".").pop() || "").toLowerCase()}`;
+    const hasValidExt = options.allowedExt.includes(ext);
+    const hasValidMime = !file.type || options.allowedMime.includes(file.type);
+    if (!hasValidExt || !hasValidMime) return `Formato non valido per ${options.label}.`;
+    if (file.size > options.maxBytes) return `${options.label} troppo grande (max 2 MB).`;
+    return null;
+  };
+
+  const handleWalletUnifiedSave = async (event?: FormEvent) => {
+    event?.preventDefault();
+    if (walletSaving) return;
+
+    const logoError = validateWalletImage(walletLogoFile, {
+      label: "logo",
+      maxBytes: 2 * 1024 * 1024,
+      allowedExt: [".png", ".jpg", ".jpeg", ".svg"],
+      allowedMime: ["image/png", "image/jpeg", "image/svg+xml"],
+    });
+    const heroError = validateWalletImage(walletHeroFile, {
+      label: "hero image",
+      maxBytes: 2 * 1024 * 1024,
+      allowedExt: [".png", ".jpg", ".jpeg"],
+      allowedMime: ["image/png", "image/jpeg"],
+    });
+    const validationError = logoError || heroError;
+    if (validationError) {
+      setWalletSaveMsg("");
+      setWalletSaveError(validationError);
+      return;
+    }
+
+    setWalletSaving(true);
+    setWalletSaveMsg("");
+    setWalletSaveError("");
+
+    try {
+      const payload = {
+        wallet_bg_color: walletForm.wallet_bg_color.trim() || null,
+        wallet_title_override: walletForm.wallet_title_override.trim() || null,
+        wallet_is_test_prefix: walletForm.wallet_is_test_prefix,
+      };
+      const brandingResult = await patchOrgAdminOrganization(payload);
+      let nextOrg = brandingResult.organization ?? org;
+
+      if (walletLogoFile || walletHeroFile) {
+        const assetsResult = await uploadOrgAdminWalletAssets({
+          logo: walletLogoFile,
+          heroImage: walletHeroFile,
+        });
+        if (nextOrg) {
+          nextOrg = {
+            ...nextOrg,
+            wallet_logo_url: assetsResult.wallet_logo_url ?? nextOrg.wallet_logo_url,
+            wallet_hero_image_url: assetsResult.wallet_hero_image_url ?? nextOrg.wallet_hero_image_url,
+            wallet_effective_logo_url:
+              assetsResult.wallet_effective_logo_url ?? nextOrg.wallet_effective_logo_url,
+            wallet_effective_hero_image_url:
+              assetsResult.wallet_effective_hero_image_url ?? nextOrg.wallet_effective_hero_image_url,
+          };
+        }
+        setWalletLogoFile(null);
+        setWalletHeroFile(null);
+        if (walletLogoInputRef.current) walletLogoInputRef.current.value = "";
+        if (walletHeroInputRef.current) walletHeroInputRef.current.value = "";
+      }
+
+      if (nextOrg) {
+        setOrg(nextOrg);
+        setWalletForm(organizationWalletSnapshot(nextOrg));
+      }
+      setWalletSaveMsg("Modifiche Google Wallet salvate correttamente.");
+    } catch (err) {
+      if (err instanceof AuthError) {
+        navigate("/org-admin/login", { replace: true });
+      } else {
+        setWalletSaveError(
+          err instanceof Error ? err.message : "Errore nel salvataggio Google Wallet.",
+        );
+      }
+    } finally {
+      setWalletSaving(false);
+    }
+  };
+
   const emailPreview = buildAssociationEmailPreview({
     associationId: org?.id,
     associationName: normalizeText(form.name) || org?.name,
@@ -452,19 +520,18 @@ const OrgAdminSettings = () => {
     systemSender: org?.system_email_sender,
   });
   const communicationsLocked = !Boolean(org?.communications_enabled);
+  const computedLocalPart =
+    sanitizeEmailLocalPartPreview(emailSettingsForm.sender_email_local_part)
+    || sanitizeEmailLocalPartPreview(normalizeText(form.name) || org?.name)
+    || `org-${org?.id ?? "x"}`;
   const walletPreviewLogo =
-    org?.wallet_logo_url || org?.wallet_effective_logo_url || "/logo-transparent.png";
-  const walletPreviewHero = org?.wallet_hero_image_url || org?.wallet_effective_hero_image_url;
+    walletLogoObjectUrl || org?.wallet_logo_url || org?.wallet_effective_logo_url || "/logo-transparent.png";
+  const walletPreviewHero =
+    walletHeroObjectUrl || org?.wallet_hero_image_url || org?.wallet_effective_hero_image_url;
   const walletPreviewTitle = walletForm.wallet_title_override.trim() || org?.name || "ASSO.N.A.M.";
+
   const hasUnsavedSettingsChanges = useMemo(() => {
-    if (
-      loading
-      || saving
-      || emailSettingsSaving
-      || uploading
-      || walletSaving
-      || walletAssetsUploading
-    ) {
+    if (loading || saving || emailSettingsSaving || uploading || walletSaving) {
       return false;
     }
     return (
@@ -482,7 +549,6 @@ const OrgAdminSettings = () => {
     saving,
     statuteFile,
     uploading,
-    walletAssetsUploading,
     walletForm,
     walletHeroFile,
     walletLogoFile,
@@ -497,10 +563,16 @@ const OrgAdminSettings = () => {
 
   if (loading) {
     return (
-      <div className="container-shell py-10">
-        <Skeleton className="h-6 w-64" />
-        <Skeleton className="mt-3 h-4 w-96" />
-        <div className="mt-8 surface p-7">
+      <div className="container-shell py-8 pb-32">
+        <Skeleton className="h-7 w-56" />
+        <Skeleton className="mt-2 h-4 w-80" />
+        <div className="mt-6 flex gap-2">
+          <Skeleton className="h-10 w-24 rounded-lg" />
+          <Skeleton className="h-10 w-28 rounded-lg" />
+          <Skeleton className="h-10 w-24 rounded-lg" />
+          <Skeleton className="h-10 w-32 rounded-lg" />
+        </div>
+        <div className="mt-6 surface p-6">
           <Skeleton className="h-4 w-48" />
           <Skeleton className="mt-4 h-10 w-full" />
           <Skeleton className="mt-4 h-10 w-full" />
@@ -511,637 +583,828 @@ const OrgAdminSettings = () => {
 
   if (error) {
     return (
-      <div className="container-shell py-10">
-        <div className="rounded-lg border border-red-200/60 bg-red-50 px-7 py-5">
-          <p className="text-sm text-red-700">{error}</p>
+      <div className="container-shell py-8 pb-32">
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-6 py-4" role="alert">
+          <p className="text-sm font-medium text-rose-700">{error}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container-shell py-10">
-      <h2 className="text-xl font-semibold text-neutral-900">Associazione</h2>
-      <p className="mt-1 text-sm text-neutral-500">
-        Modifica i dettagli e gestisci lo statuto dell'associazione.
-      </p>
-
-      {/* Details form */}
-      <form onSubmit={handleSave} className="surface mt-8 p-7">
-        <h3 className="text-sm font-semibold text-neutral-900">Dettagli</h3>
-        <p className="mt-1 text-sm text-neutral-500">
-          Queste informazioni sono visibili nella pagina pubblica dell'associazione.
-        </p>
-
-        <div className="mt-6 grid gap-5 md:grid-cols-2">
-          <div className="md:col-span-2">
-            <label htmlFor="org-name" className={labelClass}>
-              Nome
-            </label>
-            <input
-              id="org-name"
-              className={inputClass}
-              type="text"
-              value={form.name}
-              onChange={handleChange("name")}
-            />
-          </div>
-          <div>
-            <label htmlFor="org-city" className={labelClass}>
-              Città
-            </label>
-            <input
-              id="org-city"
-              className={inputClass}
-              type="text"
-              value={form.city}
-              onChange={handleChange("city")}
-            />
-          </div>
-          <div>
-            <label htmlFor="org-province" className={labelClass}>
-              Provincia
-            </label>
-            <input
-              id="org-province"
-              className={inputClass}
-              type="text"
-              maxLength={2}
-              placeholder="RM"
-              value={form.province}
-              onChange={handleChange("province")}
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label htmlFor="org-description" className={labelClass}>
-              Descrizione
-            </label>
-            <textarea
-              id="org-description"
-              className={inputClass}
-              rows={4}
-              value={form.description}
-              onChange={handleChange("description")}
-            />
-          </div>
-          <div>
-            <label htmlFor="org-email" className={labelClass}>
-              Email
-            </label>
-            <input
-              id="org-email"
-              className={inputClass}
-              type="email"
-              value={form.email}
-              onChange={handleChange("email")}
-            />
-          </div>
-          <div>
-            <label htmlFor="org-phone" className={labelClass}>
-              Telefono
-            </label>
-            <input
-              id="org-phone"
-              className={inputClass}
-              type="tel"
-              value={form.phone}
-              onChange={handleChange("phone")}
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label htmlFor="org-website" className={labelClass}>
-              Sito web
-            </label>
-            <input
-              id="org-website"
-              className={inputClass}
-              type="url"
-              placeholder="https://"
-              value={form.website}
-              onChange={handleChange("website")}
-            />
-          </div>
+    <div className="container-shell org-admin-mobile-page org-admin-settings-page py-8 pb-32 space-y-6">
+      <header className="org-page-header">
+        <div className="min-w-0">
+          <p className="org-eyebrow hidden md:block">Impostazioni</p>
+          <h1 className="org-page-header__title">Associazione</h1>
+          <p className="org-page-header__subtitle hidden md:block">
+            Gestisci profilo pubblico, statuto PDF, mittente email e branding Google Wallet.
+          </p>
         </div>
+      </header>
 
-        {saveMsg && (
-          <div className="mt-5 rounded-md border border-emerald-200/60 bg-emerald-50 px-4 py-3">
-            <p className="text-sm text-emerald-700">{saveMsg}</p>
-          </div>
-        )}
-        {saveError && (
-          <div className="mt-5 rounded-md border border-red-200/60 bg-red-50 px-4 py-3">
-            <p className="text-sm text-red-700">{saveError}</p>
-          </div>
-        )}
+      {/* Persistent Tab Bar */}
+      <div
+        className="flex items-center gap-1.5 overflow-x-auto scrollbar-none rounded-xl border border-[var(--oa-line)] bg-[var(--oa-panel-soft)] p-1.5"
+        role="tablist"
+        aria-label="Sezioni impostazioni associazione"
+      >
+        {SETTINGS_TABS.map((tab) => {
+          const isActive = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => setActiveTab(tab.key)}
+              className={`inline-flex min-h-10 shrink-0 flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2 text-xs sm:text-sm font-semibold whitespace-nowrap transition ${
+                isActive
+                  ? "bg-[var(--oa-panel)] text-[var(--oa-brand-strong)] shadow-sm ring-1 ring-inset ring-[var(--oa-line-strong)]"
+                  : "text-[var(--oa-muted)] hover:text-[var(--oa-text)]"
+              }`}
+            >
+              <span>{tab.label}</span>
+              {tab.key === "documenti" && org?.has_statute && (
+                <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-600">
+                  {org.statute_version || "PDF"}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
 
-        <div className="mt-6 flex justify-end">
-          <button className="btn-primary" type="submit" disabled={saving}>
-            {saving ? "Salvataggio..." : "Salva"}
-          </button>
-        </div>
-      </form>
-
-      <div className="surface mt-8 p-7">
-        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-          <div>
-            <h3 className="text-sm font-semibold text-neutral-900">Impostazioni email associazione</h3>
-            <p className="mt-1 text-sm text-neutral-500">
-              Configura il mittente visibile delle comunicazioni associazione. Se la configurazione non ? completa, il sistema torna automaticamente al mittente ASSONAM.
-            </p>
-          </div>
-          <div className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">
-            {communicationsLocked ? "Modulo non attivo" : `Mode attuale: ${emailPreview.selectedMode}`}
-          </div>
-        </div>
-
-        {communicationsLocked && (
-          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
-            {COMMUNICATIONS_LOCKED_MESSAGE}
-          </div>
-        )}
-
-        <div className="mt-6 grid gap-5 md:grid-cols-2">
-          <div>
-            <label htmlFor="sender-email-local-part" className={labelClass}>
-              Local part mittente
-            </label>
-            <input
-              id="sender-email-local-part"
-              className={inputClass}
-              type="text"
-              disabled={communicationsLocked}
-              placeholder="golden-age-club"
-              value={emailSettingsForm.sender_email_local_part}
-              onChange={handleEmailSettingsChange("sender_email_local_part")}
-            />
-            <p className="mt-2 text-xs text-neutral-500">
-              Se lasci vuoto, il sistema genera automaticamente il local part dal nome associazione.
+      {/* TAB 1: PROFILO */}
+      {activeTab === "profilo" && (
+        <form onSubmit={handleSave} className="org-section-panel p-5 md:p-7">
+          <div className="border-b border-[var(--oa-line)] pb-4">
+            <h2 className="text-base font-semibold text-[var(--oa-text)]">Dettagli e contatti pubblici</h2>
+            <p className="mt-1 text-xs sm:text-sm text-[var(--oa-muted)]">
+              Queste informazioni sono visibili nella scheda pubblica dell&apos;associazione.
             </p>
           </div>
 
-          <div>
-            <label htmlFor="email-from-name-override" className={labelClass}>
-              Nome mittente visibile
-            </label>
-            <input
-              id="email-from-name-override"
-              className={inputClass}
-              type="text"
-              disabled={communicationsLocked}
-              placeholder={normalizeText(form.name) || org?.name || "ASSONAM"}
-              value={emailSettingsForm.email_from_name_override}
-              onChange={handleEmailSettingsChange("email_from_name_override")}
-            />
-            <p className="mt-2 text-xs text-neutral-500">
-              Se lasci vuoto, verrà usato il nome dell&apos;associazione.
+          <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-4">
+            <div className="md:col-span-4">
+              <label htmlFor="org-name" className={labelClass}>
+                Nome
+              </label>
+              <input
+                id="org-name"
+                className={inputClass}
+                type="text"
+                value={form.name}
+                onChange={handleChange("name")}
+              />
+            </div>
+
+            <div className="grid grid-cols-4 gap-3 md:col-span-4 md:gap-4">
+              <div className="col-span-3">
+                <label htmlFor="org-city" className={labelClass}>
+                  Città
+                </label>
+                <input
+                  id="org-city"
+                  className={inputClass}
+                  type="text"
+                  value={form.city}
+                  onChange={handleChange("city")}
+                />
+              </div>
+              <div className="col-span-1">
+                <label htmlFor="org-province" className={labelClass}>
+                  Provincia
+                </label>
+                <input
+                  id="org-province"
+                  className={`${inputClass} uppercase`}
+                  type="text"
+                  maxLength={2}
+                  placeholder="RM"
+                  value={form.province}
+                  onChange={handleChange("province")}
+                />
+              </div>
+            </div>
+
+            <div className="md:col-span-4">
+              <label htmlFor="org-description" className={labelClass}>
+                Descrizione
+              </label>
+              <textarea
+                id="org-description"
+                className={inputClass}
+                rows={3}
+                value={form.description}
+                onChange={handleChange("description")}
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label htmlFor="org-email" className={labelClass}>
+                Email
+              </label>
+              <input
+                id="org-email"
+                className={inputClass}
+                type="email"
+                value={form.email}
+                onChange={handleChange("email")}
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label htmlFor="org-phone" className={labelClass}>
+                Telefono
+              </label>
+              <input
+                id="org-phone"
+                className={inputClass}
+                type="tel"
+                value={form.phone}
+                onChange={handleChange("phone")}
+              />
+            </div>
+
+            <div className="md:col-span-4">
+              <label htmlFor="org-website" className={labelClass}>
+                Sito web
+              </label>
+              <input
+                id="org-website"
+                className={inputClass}
+                type="url"
+                placeholder="https://"
+                value={form.website}
+                onChange={handleChange("website")}
+              />
+            </div>
+          </div>
+
+          {saveMsg && (
+            <div className="mt-5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3" role="status">
+              <p className="text-sm font-medium text-emerald-700">{saveMsg}</p>
+            </div>
+          )}
+          {saveError && (
+            <div className="mt-5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3" role="alert">
+              <p className="text-sm font-medium text-rose-700">{saveError}</p>
+            </div>
+          )}
+
+          <div className="mt-6 flex justify-end border-t border-[var(--oa-line)] pt-5">
+            <button className="btn-primary inline-flex items-center gap-2" type="submit" disabled={saving}>
+              {saving && <Spinner />}
+              <span>{saving ? "Salvataggio..." : "Salva"}</span>
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* TAB 2: DOCUMENTI (STATUTO) */}
+      {activeTab === "documenti" && (
+        <section className="org-section-panel p-5 md:p-7 space-y-6">
+          <div className="border-b border-[var(--oa-line)] pb-4">
+            <h2 className="text-base font-semibold text-[var(--oa-text)]">Statuto associativo</h2>
+            <p className="mt-1 text-xs sm:text-sm text-[var(--oa-muted)]">
+              Carica o aggiorna lo statuto dell&apos;associazione in formato PDF per renderlo consultabile ai soci.
             </p>
           </div>
 
-          <div className="md:col-span-2">
-            <label htmlFor="reply-to-email" className={labelClass}>
-              Reply-To
-            </label>
-            <input
-              id="reply-to-email"
-              className={inputClass}
-              type="email"
-              disabled={communicationsLocked}
-              placeholder="segreteria@associazione.it"
-              value={emailSettingsForm.reply_to_email}
-              onChange={handleEmailSettingsChange("reply_to_email")}
-            />
-            <p className="mt-2 text-xs text-neutral-500">
-              Opzionale. Se valorizzato, verrà usato come Reply-To in association mode.
-            </p>
-          </div>
-        </div>
+          {org?.has_statute ? (
+            <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[var(--oa-line-strong)] bg-[var(--oa-panel-soft)] p-4">
+              <div className="flex min-w-0 items-center gap-3.5">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-500">
+                  <svg
+                    className="h-6 w-6"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={1.8}
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
+                    />
+                  </svg>
+                </span>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-semibold text-[var(--oa-text)]">
+                      Statuto attuale: {org.statute_version}
+                    </p>
+                    <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[11px] font-bold text-emerald-600">
+                      {org.statute_version}
+                    </span>
+                  </div>
+                  {org.statute_updated_at && (
+                    <p className="mt-0.5 text-xs text-[var(--oa-muted)]">
+                      Aggiornato il{" "}
+                      {new Date(org.statute_updated_at).toLocaleDateString("it-IT", {
+                        day: "2-digit",
+                        month: "long",
+                        year: "numeric",
+                      })}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <a
+                href={org.statute_url!}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-secondary inline-flex items-center gap-2 !px-3.5 !py-2 text-xs font-semibold"
+              >
+                <svg
+                  className="h-4 w-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={1.8}
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"
+                  />
+                </svg>
+                <span>Scarica PDF</span>
+              </a>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-[var(--oa-line-strong)] bg-[var(--oa-panel-soft)] p-4 text-xs sm:text-sm text-[var(--oa-muted)]">
+              Nessuno statuto caricato. Carica il primo documento PDF qui sotto.
+            </div>
+          )}
 
-        <div className="mt-6 grid gap-4 rounded-2xl border border-neutral-200 bg-neutral-50/80 p-5 md:grid-cols-2">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">Preview</p>
-            <dl className="mt-4 space-y-3">
-              <div>
-                <dt className="text-xs uppercase tracking-[0.16em] text-neutral-400">From name previsto</dt>
-                <dd className="mt-1 text-sm font-semibold text-neutral-900">{emailPreview.fromName || "-"}</dd>
-              </div>
-              <div>
-                <dt className="text-xs uppercase tracking-[0.16em] text-neutral-400">From email previsto</dt>
-                <dd className="mt-1 break-all font-mono text-sm text-neutral-900">{emailPreview.fromEmail}</dd>
-              </div>
-              <div>
-                <dt className="text-xs uppercase tracking-[0.16em] text-neutral-400">From header completo previsto</dt>
-                <dd className="mt-1 break-all font-mono text-sm text-neutral-900">{emailPreview.fromHeader}</dd>
-              </div>
-              <div>
-                <dt className="text-xs uppercase tracking-[0.16em] text-neutral-400">Reply-To previsto</dt>
-                <dd className="mt-1 break-all font-mono text-sm text-neutral-900">{emailPreview.replyTo || "-"}</dd>
-              </div>
-            </dl>
+            <p className={labelClass}>{org?.has_statute ? "Aggiorna statuto" : "Carica statuto"}</p>
+            <div
+              onDragOver={(event) => {
+                event.preventDefault();
+                setStatuteDragActive(true);
+              }}
+              onDragLeave={() => setStatuteDragActive(false)}
+              onDrop={handleStatuteDrop}
+              className={`mt-2 flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 text-center transition ${
+                statuteDragActive
+                  ? "border-[var(--oa-brand)] bg-[var(--oa-brand)]/10"
+                  : "border-[var(--oa-line-strong)] bg-[var(--oa-panel-soft)] hover:border-[var(--oa-brand)]/60"
+              }`}
+            >
+              <input
+                ref={statuteInputRef}
+                id="statute-pdf-input"
+                type="file"
+                accept=".pdf,application/pdf"
+                aria-label="Seleziona file PDF dello statuto"
+                className="sr-only"
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  selectStatuteFile(e.target.files?.[0] ?? null)
+                }
+              />
+              <svg
+                className="h-8 w-8 text-[var(--oa-brand-strong)]"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.7}
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.233-2.33 3 3 0 0 1 3.758 3.848A3.752 3.752 0 0 1 18 19.5H6.75Z"
+                />
+              </svg>
+              {statuteFile ? (
+                <div className="mt-3 space-y-2">
+                  <p className="text-sm font-semibold text-[var(--oa-text)]">{statuteFile.name}</p>
+                  <p className="text-xs text-[var(--oa-muted)]">{formatFileSize(statuteFile.size)}</p>
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      className="btn-secondary !px-3 !py-1.5 text-xs"
+                      onClick={() => statuteInputRef.current?.click()}
+                    >
+                      Cambia file
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-ghost !px-3 !py-1.5 text-xs"
+                      onClick={() => {
+                        selectStatuteFile(null);
+                        if (statuteInputRef.current) statuteInputRef.current.value = "";
+                      }}
+                    >
+                      Rimuovi
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="mt-2 text-sm font-semibold text-[var(--oa-text)]">
+                    Trascina qui il PDF dello statuto oppure selezionalo dal dispositivo
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--oa-muted)]">
+                    Solo file PDF · Dimensione massima 10 MB
+                  </p>
+                  <button
+                    type="button"
+                    className="btn-secondary mt-4 !px-4 !py-2 text-xs font-semibold"
+                    onClick={() => statuteInputRef.current?.click()}
+                  >
+                    Scegli file PDF
+                  </button>
+                </>
+              )}
+            </div>
           </div>
 
-          <div className="rounded-2xl border border-neutral-200 bg-white p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">Regole attive</p>
-            <div className="mt-4 space-y-3 text-sm text-neutral-600">
-              <p>
-                Stato modulo:{" "}
+          {uploadMsg && (
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3" role="status">
+              <p className="text-sm font-medium text-emerald-700">{uploadMsg}</p>
+            </div>
+          )}
+          {uploadError && (
+            <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3" role="alert">
+              <p className="text-sm font-medium text-rose-700">{uploadError}</p>
+            </div>
+          )}
+
+          <div className="flex justify-end border-t border-[var(--oa-line)] pt-5">
+            <button
+              type="button"
+              className="btn-primary inline-flex items-center gap-2"
+              disabled={!statuteFile || uploading}
+              onClick={handleStatuteUpload}
+            >
+              {uploading && <Spinner />}
+              <span>{uploading ? "Caricamento..." : "Carica"}</span>
+            </button>
+          </div>
+        </section>
+      )}
+
+      {/* TAB 3: COMUNICAZIONI & EMAIL */}
+      {activeTab === "email" && (
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
+          <form onSubmit={handleAssociationEmailSave} className="org-section-panel p-5 md:p-7 space-y-5">
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--oa-line)] pb-4">
+              <div>
+                <h2 className="text-base font-semibold text-[var(--oa-text)]">Impostazioni email associazione</h2>
+                <p className="mt-1 text-xs sm:text-sm text-[var(--oa-muted)]">
+                  Configura il mittente visibile delle comunicazioni associazione. Se la configurazione non è completa, il sistema torna automaticamente al mittente ASSONAM.
+                </p>
+              </div>
+              <span
+                className={`inline-flex shrink-0 items-center rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wider ${
+                  communicationsLocked
+                    ? "border-amber-500/35 bg-amber-500/15 text-amber-700"
+                    : "border-emerald-500/35 bg-emerald-500/15 text-emerald-700"
+                }`}
+              >
+                {communicationsLocked ? "Modulo non attivo" : `Mode attuale: ${emailPreview.selectedMode}`}
+              </span>
+            </div>
+
+            {communicationsLocked && (
+              <div className="rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-800">
+                {COMMUNICATIONS_LOCKED_MESSAGE}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="sender-email-local-part" className={labelClass}>
+                  Local part mittente
+                </label>
+                <input
+                  id="sender-email-local-part"
+                  className={inputClass}
+                  type="text"
+                  disabled={communicationsLocked}
+                  placeholder="golden-age-club"
+                  value={emailSettingsForm.sender_email_local_part}
+                  onChange={handleEmailSettingsChange("sender_email_local_part")}
+                />
+                <p className="mt-1.5 text-xs text-[var(--oa-muted)]">
+                  Se lasci vuoto, il sistema genera automaticamente il local part dal nome associazione.
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="email-from-name-override" className={labelClass}>
+                  Nome mittente visibile
+                </label>
+                <input
+                  id="email-from-name-override"
+                  className={inputClass}
+                  type="text"
+                  disabled={communicationsLocked}
+                  placeholder={normalizeText(form.name) || org?.name || "ASSONAM"}
+                  value={emailSettingsForm.email_from_name_override}
+                  onChange={handleEmailSettingsChange("email_from_name_override")}
+                />
+                <p className="mt-1.5 text-xs text-[var(--oa-muted)]">
+                  Se lasci vuoto, verrà usato il nome dell&apos;associazione.
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="reply-to-email" className={labelClass}>
+                  Reply-To
+                </label>
+                <input
+                  id="reply-to-email"
+                  className={inputClass}
+                  type="email"
+                  disabled={communicationsLocked}
+                  placeholder="segreteria@associazione.it"
+                  value={emailSettingsForm.reply_to_email}
+                  onChange={handleEmailSettingsChange("reply_to_email")}
+                />
+                <p className="mt-1.5 text-xs text-[var(--oa-muted)]">
+                  Opzionale. Se valorizzato, verrà usato come Reply-To in association mode.
+                </p>
+              </div>
+            </div>
+
+            {emailSettingsError && (
+              <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3" role="alert">
+                <p className="text-sm font-medium text-rose-700">{emailSettingsError}</p>
+              </div>
+            )}
+
+            <div className="flex justify-end border-t border-[var(--oa-line)] pt-5">
+              <button
+                type="submit"
+                className="btn-primary inline-flex items-center gap-2"
+                disabled={emailSettingsSaving || communicationsLocked}
+              >
+                {emailSettingsSaving && <Spinner />}
+                {emailSettingsSaved && !emailSettingsSaving && (
+                  <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path
+                      fillRule="evenodd"
+                      d="M16.704 5.29a1 1 0 0 1 .006 1.414l-7.25 7.313a1 1 0 0 1-1.42 0l-3-3.024a1 1 0 1 1 1.42-1.408l2.29 2.308 6.54-6.597a1 1 0 0 1 1.414-.006Z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                )}
+                <span>
+                  {communicationsLocked
+                    ? "Modulo non attivo"
+                    : emailSettingsSaving
+                      ? "Salvataggio..."
+                      : emailSettingsSaved
+                        ? "Salvato"
+                        : "Salva impostazioni email"}
+                </span>
+              </button>
+            </div>
+          </form>
+
+          <aside className="org-section-panel p-5 md:p-6 lg:sticky lg:top-24 space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--oa-line)] pb-3">
+              <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--oa-muted)]">
+                Preview &amp; Regole attive
+              </h3>
+              <div className="flex flex-wrap items-center gap-1.5">
                 <span
-                  className={
+                  className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${
                     communicationsLocked
-                      ? "font-semibold text-amber-700"
-                      : "font-semibold text-emerald-700"
-                  }
+                      ? "border-amber-500/35 bg-amber-500/15 text-amber-700"
+                      : "border-emerald-500/35 bg-emerald-500/15 text-emerald-700"
+                  }`}
                 >
                   {communicationsLocked ? "Non attivo" : "Attivo"}
                 </span>
-              </p>
-              <p>
-                Dominio mittente:{" "}
-                <span className="font-semibold text-neutral-900">{org?.mail_from_domain || "non configurato"}</span>
-              </p>
-              <p>
-                Local part calcolato:{" "}
-                <span className="font-mono text-neutral-900">
-                  {sanitizeEmailLocalPartPreview(emailSettingsForm.sender_email_local_part)
-                    || sanitizeEmailLocalPartPreview(normalizeText(form.name) || org?.name)
-                    || `org-${org?.id ?? "x"}`}
+                <span className="inline-flex items-center rounded-full border border-[var(--oa-line-strong)] bg-[var(--oa-panel-soft)] px-2.5 py-0.5 text-[11px] font-semibold text-[var(--oa-text)]">
+                  {emailPreview.fallbackUsed ? "System mode" : "Association mode"}
                 </span>
-              </p>
-              <p>
-                Fallback usato:{" "}
-                <span className={emailPreview.fallbackUsed ? "font-semibold text-amber-700" : "font-semibold text-emerald-700"}>
+              </div>
+            </div>
+
+            <dl className="space-y-3 rounded-xl border border-[var(--oa-line)] bg-[var(--oa-panel-soft)] p-4 text-xs">
+              <div>
+                <dt className="font-semibold uppercase tracking-wider text-[var(--oa-muted)]">From name previsto</dt>
+                <dd className="mt-0.5 text-sm font-semibold text-[var(--oa-text)]">{emailPreview.fromName || "-"}</dd>
+              </div>
+              <div>
+                <dt className="font-semibold uppercase tracking-wider text-[var(--oa-muted)]">From email previsto</dt>
+                <dd className="mt-0.5 break-all font-mono text-sm text-[var(--oa-text)]">{emailPreview.fromEmail}</dd>
+              </div>
+              <div>
+                <dt className="font-semibold uppercase tracking-wider text-[var(--oa-muted)]">From header completo previsto</dt>
+                <dd className="mt-0.5 break-all font-mono text-sm text-[var(--oa-text)]">{emailPreview.fromHeader}</dd>
+              </div>
+              <div>
+                <dt className="font-semibold uppercase tracking-wider text-[var(--oa-muted)]">Reply-To previsto</dt>
+                <dd className="mt-0.5 break-all font-mono text-sm text-[var(--oa-text)]">{emailPreview.replyTo || "-"}</dd>
+              </div>
+            </dl>
+
+            <div className="space-y-2.5 text-xs text-[var(--oa-muted)]">
+              <div className="flex items-center justify-between gap-2">
+                <span>Dominio mittente</span>
+                <strong className="text-[var(--oa-text)]">{org?.mail_from_domain || "non configurato"}</strong>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span>Local part calcolato</span>
+                <code className="font-mono font-semibold text-[var(--oa-text)]">{computedLocalPart}</code>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span>Fallback usato</span>
+                <strong className={emailPreview.fallbackUsed ? "text-amber-600" : "text-emerald-600"}>
                   {emailPreview.fallbackUsed ? "Si, system mode" : "No, association mode"}
-                </span>
-              </p>
+                </strong>
+              </div>
               {communicationsLocked && (
-                <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
-                  L'attivazione del modulo Comunicazioni e gestita solo dal super admin ASSONAM.
+                <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-amber-800">
+                  L&apos;attivazione del modulo Comunicazioni è gestita solo dal super admin ASSONAM.
                 </p>
               )}
               {!org?.mail_from_domain && (
-                <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
+                <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-amber-800">
                   <code>MAIL_FROM_DOMAIN</code> non configurato: la preview e l&apos;invio useranno system mode.
                 </p>
               )}
             </div>
-          </div>
+          </aside>
         </div>
+      )}
 
-        {emailSettingsError && (
-          <div className="mt-5 rounded-md border border-red-200/60 bg-red-50 px-4 py-3">
-            <p className="text-sm text-red-700">{emailSettingsError}</p>
+      {/* TAB 4: GOOGLE WALLET BRANDING */}
+      {activeTab === "wallet" && (
+        <form onSubmit={handleWalletUnifiedSave} className="org-section-panel p-5 md:p-7 space-y-6">
+          <div className="border-b border-[var(--oa-line)] pb-4">
+            <h2 className="text-base font-semibold text-[var(--oa-text)]">Google Wallet Branding</h2>
+            <p className="mt-1 text-xs sm:text-sm text-[var(--oa-muted)]">
+              Personalizza la tessera aperta e la miniatura compatta mostrata in Google Wallet (Android).
+            </p>
           </div>
-        )}
 
-        <div className="mt-6 flex justify-end">
-          <button
-            type="button"
-            className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white transition ${
-              emailSettingsSaved
-                ? "bg-emerald-600 hover:bg-emerald-700"
-                : "bg-neutral-900 hover:bg-neutral-800"
-            } disabled:cursor-not-allowed disabled:opacity-60`}
-            disabled={emailSettingsSaving || communicationsLocked}
-            onClick={handleAssociationEmailSave}
+          <div
+            className="rounded-xl border border-[var(--oa-brand)]/40 bg-[var(--oa-panel-soft)] px-4 py-3.5 text-sm text-[var(--oa-text)]"
+            role="note"
           >
-            {emailSettingsSaved && !emailSettingsSaving && (
-              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                <path fillRule="evenodd" d="M16.704 5.29a1 1 0 0 1 .006 1.414l-7.25 7.313a1 1 0 0 1-1.42 0l-3-3.024a1 1 0 1 1 1.42-1.408l2.29 2.308 6.54-6.597a1 1 0 0 1 1.414-.006Z" clipRule="evenodd" />
-              </svg>
-            )}
-            {communicationsLocked
-              ? "Modulo non attivo"
-              : emailSettingsSaving
-                ? "Salvataggio..."
-                : emailSettingsSaved
-                  ? "Salvato"
-                  : "Salva impostazioni email"}
-          </button>
-        </div>
-      </div>
-
-      {/* Statute management */}
-      <div className="surface mt-8 p-7">
-        <h3 className="text-sm font-semibold text-neutral-900">Statuto</h3>
-        <p className="mt-1 text-sm text-neutral-500">
-          Carica o aggiorna lo statuto dell'associazione in formato PDF.
-        </p>
-
-        {org?.has_statute && (
-          <div className="mt-5 flex flex-wrap items-center gap-4 rounded-lg border border-neutral-100 bg-neutral-25 px-5 py-4">
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-neutral-800">
-                Statuto attuale: {org.statute_version}
-              </p>
-              {org.statute_updated_at && (
-                <p className="mt-0.5 text-xs text-neutral-500">
-                  Aggiornato il{" "}
-                  {new Date(org.statute_updated_at).toLocaleDateString("it-IT", {
-                    day: "2-digit",
-                    month: "long",
-                    year: "numeric",
-                  })}
-                </p>
-              )}
-            </div>
-            <a
-              href={org.statute_url!}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-sm font-medium text-neutral-700 transition hover:border-neutral-300 hover:text-neutral-900"
-            >
-              <svg
-                className="h-4 w-4"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
-              </svg>
-              Scarica PDF
-            </a>
+            <p className="font-semibold text-[var(--oa-text)]">Il formato della miniatura lo decide Google.</p>
+            <p className="mt-1 text-xs sm:text-sm leading-relaxed text-[var(--oa-muted)]">
+              Un pass socio non può diventare alto come un biglietto cinema. Possiamo renderlo più curato con logo reale, colore e hero; il QR resta nell&apos;area di verifica e non va usato come logo.
+            </p>
           </div>
-        )}
 
-        <div className="mt-5">
-          <label className="block text-sm font-medium text-neutral-700">
-            {org?.has_statute ? "Aggiorna statuto" : "Carica statuto"}
-          </label>
-          <div className="mt-2 flex flex-wrap items-center gap-3">
-            <input
-              type="file"
-              accept=".pdf"
-              className="block text-sm text-neutral-600 file:mr-3 file:rounded-md file:border file:border-neutral-200 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-neutral-700 file:transition hover:file:border-neutral-300 hover:file:text-neutral-900"
-              onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                setStatuteFile(e.target.files?.[0] ?? null)
-              }
-            />
-            <button
-              type="button"
-              className="btn-primary"
-              disabled={!statuteFile || uploading}
-              onClick={handleStatuteUpload}
-            >
-              {uploading ? "Caricamento..." : "Carica"}
-            </button>
-          </div>
-          <p className="mt-2 text-xs text-neutral-400">Solo file PDF, massimo 10 MB.</p>
-        </div>
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
+            <div className="space-y-6">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label htmlFor="wallet-bg-color" className={labelClass}>
+                    Colore sfondo Wallet
+                  </label>
+                  <div className="mt-1.5 flex items-center gap-2.5">
+                    <input
+                      id="wallet-bg-color"
+                      type="color"
+                      aria-label="Selettore colore sfondo Wallet"
+                      className="h-10 w-12 shrink-0 cursor-pointer rounded-lg border border-[var(--oa-line-strong)] bg-[var(--oa-panel)] p-1"
+                      value={
+                        /^#[0-9A-Fa-f]{6}$/.test(walletForm.wallet_bg_color.trim())
+                          ? walletForm.wallet_bg_color.trim()
+                          : "#0B3C75"
+                      }
+                      onChange={(e) =>
+                        setWalletForm((prev) => ({ ...prev, wallet_bg_color: e.target.value }))
+                      }
+                    />
+                    <input
+                      className={`${inputClass} !mt-0 font-mono`}
+                      type="text"
+                      placeholder="#0B3C75"
+                      value={walletForm.wallet_bg_color}
+                      onChange={(e) =>
+                        setWalletForm((prev) => ({ ...prev, wallet_bg_color: e.target.value }))
+                      }
+                    />
+                  </div>
+                  {org?.wallet_effective_bg_color && !org.wallet_bg_color && (
+                    <p className="mt-1.5 text-xs text-[var(--oa-muted)]">
+                      Fallback attivo: {org.wallet_effective_bg_color} (es. Golden Age).
+                    </p>
+                  )}
+                </div>
 
-        {uploadMsg && (
-          <div className="mt-5 rounded-md border border-emerald-200/60 bg-emerald-50 px-4 py-3">
-            <p className="text-sm text-emerald-700">{uploadMsg}</p>
-          </div>
-        )}
-        {uploadError && (
-          <div className="mt-5 rounded-md border border-red-200/60 bg-red-50 px-4 py-3">
-            <p className="text-sm text-red-700">{uploadError}</p>
-          </div>
-        )}
-      </div>
-
-      <div className="surface mt-8 p-7">
-        <h3 className="text-sm font-semibold text-neutral-900">Google Wallet Branding</h3>
-        <p className="mt-1 text-sm text-neutral-500">
-          Personalizza la tessera aperta e la miniatura compatta mostrata in Google Wallet (Android).
-        </p>
-
-        <div className="mt-5 rounded-xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm text-blue-900">
-          <p className="font-medium">Il formato della miniatura lo decide Google.</p>
-          <p className="mt-1 text-blue-800">
-            Un pass socio non può diventare alto come un biglietto cinema. Possiamo renderlo più curato
-            con logo reale, colore e hero; il QR resta nell'area di verifica e non va usato come logo.
-          </p>
-        </div>
-
-        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
-          <div>
-            <div className="grid gap-5 md:grid-cols-2">
-              <div>
-                <label htmlFor="wallet-bg-color" className={labelClass}>
-                  Colore sfondo Wallet
-                </label>
-                <div className="mt-1 flex items-center gap-3">
+                <div>
+                  <label htmlFor="wallet-title" className={labelClass}>
+                    Titolo Wallet (override)
+                  </label>
                   <input
-                    id="wallet-bg-color"
-                    type="color"
-                    className="h-10 w-14 rounded-md border border-neutral-200 bg-white p-1"
-                    value={
-                      /^#[0-9A-Fa-f]{6}$/.test(walletForm.wallet_bg_color.trim())
-                        ? walletForm.wallet_bg_color.trim()
-                        : "#0B3C75"
-                    }
-                    onChange={(e) =>
-                      setWalletForm((prev) => ({ ...prev, wallet_bg_color: e.target.value }))
-                    }
-                  />
-                  <input
+                    id="wallet-title"
                     className={inputClass}
                     type="text"
-                    placeholder="#0B3C75"
-                    value={walletForm.wallet_bg_color}
+                    placeholder="ASSO.N.A.M. / Golden Age Club"
+                    value={walletForm.wallet_title_override}
                     onChange={(e) =>
-                      setWalletForm((prev) => ({ ...prev, wallet_bg_color: e.target.value }))
+                      setWalletForm((prev) => ({ ...prev, wallet_title_override: e.target.value }))
                     }
                   />
+                  {org?.wallet_effective_title_override && !org.wallet_title_override && (
+                    <p className="mt-1.5 text-xs text-[var(--oa-muted)]">
+                      Fallback attivo: {org.wallet_effective_title_override}
+                    </p>
+                  )}
                 </div>
-                {org?.wallet_effective_bg_color && !org.wallet_bg_color && (
-                  <p className="mt-2 text-xs text-neutral-500">
-                    Fallback attivo: {org.wallet_effective_bg_color} (es. Golden Age).
-                  </p>
-                )}
+
+                <div className="md:col-span-2">
+                  <label className="inline-flex cursor-pointer items-center gap-3 rounded-xl border border-[var(--oa-line)] bg-[var(--oa-panel-soft)] px-4 py-3 text-sm text-[var(--oa-text)]">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-[var(--oa-line-strong)] accent-[var(--oa-brand)]"
+                      checked={walletForm.wallet_is_test_prefix}
+                      onChange={(e) =>
+                        setWalletForm((prev) => ({
+                          ...prev,
+                          wallet_is_test_prefix: e.target.checked,
+                        }))
+                      }
+                    />
+                    <span>Abilita prefisso demo (&quot;[SOLO TEST]&quot;) solo quando <code>WALLET_DEMO_MODE=true</code></span>
+                  </label>
+                </div>
               </div>
 
-              <div>
-                <label htmlFor="wallet-title" className={labelClass}>
-                  Titolo Wallet (override)
-                </label>
-                <input
-                  id="wallet-title"
-                  className={inputClass}
-                  type="text"
-                  placeholder="ASSO.N.A.M. / Golden Age Club"
-                  value={walletForm.wallet_title_override}
-                  onChange={(e) =>
-                    setWalletForm((prev) => ({ ...prev, wallet_title_override: e.target.value }))
-                  }
-                />
-                {org?.wallet_effective_title_override && !org.wallet_title_override && (
-                  <p className="mt-2 text-xs text-neutral-500">
-                    Fallback attivo: {org.wallet_effective_title_override}
-                  </p>
-                )}
-              </div>
+              <div className="border-t border-[var(--oa-line)] pt-5">
+                <h3 className="text-sm font-semibold text-[var(--oa-text)]">Asset immagini</h3>
+                <p className="mt-1 text-xs text-[var(--oa-muted)]">
+                  Logo quadrato (1:1, consigliato 660×660 PNG) e Hero image (consigliata 1032×812 PNG/JPG). Max 2 MB per file.
+                </p>
 
-              <div className="md:col-span-2">
-                <label className="inline-flex items-center gap-3 text-sm text-neutral-700">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-neutral-300 text-brand focus:ring-brand/30"
-                    checked={walletForm.wallet_is_test_prefix}
-                    onChange={(e) =>
-                      setWalletForm((prev) => ({
-                        ...prev,
-                        wallet_is_test_prefix: e.target.checked,
-                      }))
-                    }
-                  />
-                  Abilita prefisso demo ("[SOLO TEST]") solo quando `WALLET_DEMO_MODE=true`
-                </label>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div className="rounded-xl border border-[var(--oa-line-strong)] bg-[var(--oa-panel-soft)] p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={labelClass}>Logo Wallet (1:1)</span>
+                      {(org?.wallet_logo_url || org?.wallet_effective_logo_url) && (
+                        <a
+                          href={org.wallet_logo_url || org.wallet_effective_logo_url || "#"}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs font-semibold text-[var(--oa-brand-strong)] hover:underline"
+                        >
+                          Apri immagine logo
+                        </a>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-[var(--oa-muted)]">
+                      Google ritaglia il logo in una maschera circolare (lascia 15% di margine).
+                    </p>
+                    <input
+                      ref={walletLogoInputRef}
+                      id="wallet-logo-input"
+                      type="file"
+                      accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml"
+                      aria-label="Logo Wallet"
+                      className="sr-only"
+                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                        setWalletLogoFile(e.target.files?.[0] ?? null)
+                      }
+                    />
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        className="btn-secondary !px-3 !py-1.5 text-xs font-semibold"
+                        onClick={() => walletLogoInputRef.current?.click()}
+                      >
+                        {walletLogoFile ? "Cambia logo" : "Scegli logo"}
+                      </button>
+                      {walletLogoFile && (
+                        <span className="truncate text-xs font-medium text-[var(--oa-text)]">
+                          {walletLogoFile.name}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-[var(--oa-line-strong)] bg-[var(--oa-panel-soft)] p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={labelClass}>Hero image Wallet</span>
+                      {(org?.wallet_hero_image_url || org?.wallet_effective_hero_image_url) && (
+                        <a
+                          href={org.wallet_hero_image_url || org.wallet_effective_hero_image_url || "#"}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs font-semibold text-[var(--oa-brand-strong)] hover:underline"
+                        >
+                          Apri hero image
+                        </a>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-[var(--oa-muted)]">
+                      Banner orizzontale visibile aprendo il pass (1032×812, senza QR né testo).
+                    </p>
+                    <input
+                      ref={walletHeroInputRef}
+                      id="wallet-hero-input"
+                      type="file"
+                      accept=".png,.jpg,.jpeg,image/png,image/jpeg"
+                      aria-label="Hero image Wallet"
+                      className="sr-only"
+                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                        setWalletHeroFile(e.target.files?.[0] ?? null)
+                      }
+                    />
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        className="btn-secondary !px-3 !py-1.5 text-xs font-semibold"
+                        onClick={() => walletHeroInputRef.current?.click()}
+                      >
+                        {walletHeroFile ? "Cambia hero" : "Scegli hero"}
+                      </button>
+                      {walletHeroFile && (
+                        <span className="truncate text-xs font-medium text-[var(--oa-text)]">
+                          {walletHeroFile.name}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">
-              Anteprima indicativa
-            </p>
-            <div
-              className="mt-2 overflow-hidden rounded-2xl shadow-[0_18px_45px_rgba(15,23,42,0.22)]"
-              style={{ backgroundColor: walletForm.wallet_bg_color || "#0B3C75" }}
-            >
-              <div className="flex items-center gap-3 px-4 py-4 text-white">
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white shadow-sm">
-                  <img
-                    src={walletPreviewLogo}
-                    alt="Logo Wallet in anteprima"
-                    className="h-full w-full object-contain p-1"
-                  />
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate text-base font-semibold">{walletPreviewTitle}</p>
-                  <p className="text-sm text-white/75">Tessera socio</p>
-                </div>
-              </div>
-              {walletPreviewHero && (
-                <img
-                  src={walletPreviewHero}
-                  alt="Hero Wallet in anteprima"
-                  className="aspect-[1032/812] w-full object-cover"
-                />
-              )}
-              <div className="grid grid-cols-2 gap-3 px-4 py-4 text-white">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-white/60">Tessera</p>
-                  <p className="mt-0.5 text-sm font-medium">N. 0000 · 2026</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-white/60">Validità</p>
-                  <p className="mt-0.5 text-sm font-medium">Attiva</p>
-                </div>
-              </div>
-            </div>
-            <p className="mt-3 text-xs leading-relaxed text-neutral-500">
-              La hero appare quando la tessera viene aperta; nella home Wallet restano visibili soprattutto logo,
-              titolo e colore.
-            </p>
-          </div>
-        </div>
-
-        {walletSaveMsg && (
-          <div className="mt-5 rounded-md border border-emerald-200/60 bg-emerald-50 px-4 py-3">
-            <p className="text-sm text-emerald-700">{walletSaveMsg}</p>
-          </div>
-        )}
-        {walletSaveError && (
-          <div className="mt-5 rounded-md border border-red-200/60 bg-red-50 px-4 py-3">
-            <p className="text-sm text-red-700">{walletSaveError}</p>
-          </div>
-        )}
-
-        <div className="mt-6 flex justify-end">
-          <button
-            type="button"
-            className="btn-primary"
-            disabled={walletSaving}
-            onClick={handleWalletBrandingSave}
-          >
-            {walletSaving ? "Salvataggio..." : "Salva branding Wallet"}
-          </button>
-        </div>
-
-        <div className="mt-8 border-t border-neutral-100 pt-6">
-          <h4 className="text-sm font-semibold text-neutral-900">Asset immagini</h4>
-          <p className="mt-1 text-sm text-neutral-500">
-            Logo quadrato (PNG consigliato, almeno 660x660) e hero quasi quadrata
-            (PNG/JPG, consigliata 1032x812). Non inserire testo o QR nella hero.
-          </p>
-
-          <div className="mt-5 grid gap-5 md:grid-cols-2">
-            <div>
-              <label className={labelClass}>Logo Wallet</label>
-              <p className="mt-1 text-xs text-neutral-500">
-                Usa il marchio vero con 15% di margine: Google lo ritaglia automaticamente in un cerchio.
+            <aside className="lg:sticky lg:top-24">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--oa-muted)]">
+                Anteprima indicativa
               </p>
-              <input
-                type="file"
-                accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml"
-                className="mt-2 block w-full text-sm text-neutral-600 file:mr-3 file:rounded-md file:border file:border-neutral-200 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-neutral-700 file:transition hover:file:border-neutral-300 hover:file:text-neutral-900"
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  setWalletLogoFile(e.target.files?.[0] ?? null)
-                }
-              />
-              {(org?.wallet_logo_url || org?.wallet_effective_logo_url) && (
-                <a
-                  href={org.wallet_logo_url || org.wallet_effective_logo_url || "#"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-2 inline-flex items-center text-xs font-medium text-brand hover:underline"
-                >
-                  Apri immagine logo
-                </a>
-              )}
-            </div>
-
-            <div>
-              <label className={labelClass}>Hero image Wallet</label>
-              <input
-                type="file"
-                accept=".png,.jpg,.jpeg,image/png,image/jpeg"
-                className="mt-2 block w-full text-sm text-neutral-600 file:mr-3 file:rounded-md file:border file:border-neutral-200 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-neutral-700 file:transition hover:file:border-neutral-300 hover:file:text-neutral-900"
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  setWalletHeroFile(e.target.files?.[0] ?? null)
-                }
-              />
-              {(org?.wallet_hero_image_url || org?.wallet_effective_hero_image_url) && (
-                <a
-                  href={org.wallet_hero_image_url || org.wallet_effective_hero_image_url || "#"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-2 inline-flex items-center text-xs font-medium text-brand hover:underline"
-                >
-                  Apri hero image
-                </a>
-              )}
-            </div>
+              <div
+                className="mt-2 overflow-hidden rounded-2xl border border-white/15 shadow-[0_18px_45px_rgba(15,23,42,0.28)]"
+                style={{ backgroundColor: walletForm.wallet_bg_color || "#0B3C75" }}
+              >
+                <div className="flex items-center gap-3 px-4 py-4 text-white">
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white shadow-sm">
+                    <img
+                      src={walletPreviewLogo}
+                      alt="Logo Wallet in anteprima"
+                      className="h-full w-full object-contain p-1"
+                    />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-base font-semibold text-white">
+                      {walletForm.wallet_is_test_prefix ? `[SOLO TEST] ${walletPreviewTitle}` : walletPreviewTitle}
+                    </p>
+                    <p className="text-sm text-white/75">Tessera socio</p>
+                  </div>
+                </div>
+                {walletPreviewHero && (
+                  <img
+                    src={walletPreviewHero}
+                    alt="Hero Wallet in anteprima"
+                    className="aspect-[1032/812] w-full object-cover"
+                  />
+                )}
+                <div className="grid grid-cols-2 gap-3 px-4 py-4 text-white">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-white/65">Tessera</p>
+                    <p className="mt-0.5 text-sm font-medium text-white">N. 0000 · 2026</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-white/65">Validità</p>
+                    <p className="mt-0.5 text-sm font-medium text-white">Attiva</p>
+                  </div>
+                </div>
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-[var(--oa-muted)]">
+                La hero appare quando la tessera viene aperta; nella home Wallet restano visibili soprattutto logo, titolo e colore.
+              </p>
+            </aside>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-3">
+          {walletSaveMsg && (
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3" role="status">
+              <p className="text-sm font-medium text-emerald-700">{walletSaveMsg}</p>
+            </div>
+          )}
+          {walletSaveError && (
+            <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3" role="alert">
+              <p className="text-sm font-medium text-rose-700">{walletSaveError}</p>
+            </div>
+          )}
+
+          <div className="flex justify-end border-t border-[var(--oa-line)] pt-5">
             <button
-              type="button"
-              className="btn-primary"
-              disabled={walletAssetsUploading || (!walletLogoFile && !walletHeroFile)}
-              onClick={handleWalletAssetsUpload}
+              type="submit"
+              className="btn-primary inline-flex items-center gap-2"
+              disabled={walletSaving}
             >
-              {walletAssetsUploading ? "Caricamento..." : "Carica asset Wallet"}
+              {walletSaving && <Spinner />}
+              <span>{walletSaving ? "Salvataggio..." : "Salva modifiche Wallet"}</span>
             </button>
-            <p className="text-xs text-neutral-400">Max 2 MB per file. URL pubblici serviti da `/uploads`.</p>
           </div>
-
-          {walletAssetsMsg && (
-            <div className="mt-4 rounded-md border border-emerald-200/60 bg-emerald-50 px-4 py-3">
-              <p className="text-sm text-emerald-700">{walletAssetsMsg}</p>
-            </div>
-          )}
-          {walletAssetsError && (
-            <div className="mt-4 rounded-md border border-red-200/60 bg-red-50 px-4 py-3">
-              <p className="text-sm text-red-700">{walletAssetsError}</p>
-            </div>
-          )}
-        </div>
-      </div>
+        </form>
+      )}
     </div>
   );
 };
