@@ -196,23 +196,24 @@ def test_online_checkout_reused_and_completion_uses_temporary_dispatch(memory_db
     assert not apply_membership_payment_completion(db=db, payment=payment, member=member, org=org, verified_payload={"status": "PAID"}).issued_card
 
 
-def test_manual_create_defers_email_until_release_and_deduplicates(memory_db):
+def test_manual_create_queues_onboarding_then_defers_activation_and_deduplicates(memory_db):
     db = memory_db
     org, existing, admin, batch = setup(db)
     body = CreateMemberBody(first_name="Nuovo", last_name="Socio", email="new@example.com",
                             membership_type="temporary", send_access_email=True)
     with patch("app.routes.org_admin._get_current_org_admin", return_value=admin):
         response = create_org_member(request(), body, db)
-        assert response["email_status"] == "deferred"
+        assert response["email_status"] == response["registration_email_status"] == "queued"
         new = db.get(Member, response["id"])
-        assert new.access_email_requested and db.query(EmailOutbox).count() == 0
+        assert new.access_email_requested and db.query(EmailOutbox).count() == 1
         member_decision(request(), new.id, MemberDecisionBody(decision="approve"), db)
         db.refresh(new)
         assert not new.access_email_requested
         assert new.valid_until - new.valid_from == timedelta(hours=4)
         assert new.valid_from > datetime.utcnow() - timedelta(seconds=15)
         member_decision(request(), new.id, MemberDecisionBody(decision="approve"), db)
-    assert db.query(EmailOutbox).filter(EmailOutbox.to_email == "new@example.com").count() == 1
+    assert db.query(EmailOutbox).filter(EmailOutbox.to_email == "new@example.com").count() == 2
+    assert db.query(EmailOutbox).filter(EmailOutbox.email_type == "member_card_ready").count() == 1
 
 
 def test_manual_initial_payment_date_and_retry_keep_ledgers_equal(memory_db):
@@ -337,6 +338,6 @@ def test_deferred_access_outbox_drains_once_to_requested_recipient(memory_db, mo
     monkeypatch.setattr(email_outbox, "SessionLocal", lambda: Session(db.get_bind()))
     monkeypatch.setattr(email_outbox, "send_email_via_transport_low_level", lambda **kw: sent.append(kw) or "synthetic-message-id")
     stats = email_outbox.drain_outbox_for_tests()
-    assert stats["sent"] == 1
-    assert [item["to_email"] for item in sent] == ["deferred@example.com"]
+    assert stats["sent"] == 2
+    assert [item["to_email"] for item in sent] == ["deferred@example.com", "deferred@example.com"]
     assert email_outbox.drain_outbox_for_tests()["sent"] == 0

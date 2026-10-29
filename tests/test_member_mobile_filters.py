@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta, timezone
+from io import BytesIO
 import uuid
 
 import pytest
+from openpyxl import load_workbook
 
 from app.db import SessionLocal
 from app.models import AdminRole, AdminUser, Member, MemberDocument, MemberStatus, OrgAdminToken, Organization
@@ -85,3 +87,87 @@ def test_expiring_legacy_annual_card_uses_actual_rome_expiry(tenant):
     assert build_org_member_query(db, org_id=org.id, status="expiring", now=datetime(2026,12,15)).one().id == member.id
     assert build_org_member_query(db, org_id=org.id, status="expiring", now=datetime(2026,10,28)).count() == 0
     assert build_org_member_query(db, org_id=org.id, status="expiring", now=datetime(2026,12,15,tzinfo=timezone.utc)).one().id == member.id
+
+
+def test_pending_documents_metric_matches_filtered_members_not_document_count(client, tenant):
+    db, org = tenant
+    active = add_member(db, org)
+    pending = add_member(db, org, status=MemberStatus.PENDING_DOCS)
+    pending_without_documents = add_member(db, org, status=MemberStatus.PENDING_VERIFICATION, card_no=None)
+    excluded = [
+        add_member(db, org, status=MemberStatus.EXPIRED),
+        add_member(db, org, status=MemberStatus.REJECTED),
+        add_member(db, org, deleted_at=datetime.utcnow()),
+    ]
+    other = Organization(name="Other documents", slug=f"other-docs-{uuid.uuid4().hex}", is_active=True)
+    db.add(other); db.flush()
+    excluded.append(add_member(db, other))
+    for member in [active, *excluded]:
+        for kind, status in (("identity", "pending"), ("fiscal_code", "uploaded")):
+            db.add(MemberDocument(member_id=member.id, doc_type=kind, status=status))
+    db.add(MemberDocument(member_id=pending.id, doc_type="identity", status="uploaded"))
+    db.commit()
+
+    response = client.get("/api/org-admin/members", params={"status": "review", "docs": "pending"})
+    assert response.status_code == 200, response.text
+    filtered = response.json()
+    assert filtered["total"] == 2
+    assert {item["id"] for item in filtered["items"]} == {active.id, pending.id}
+    metrics = client.get("/api/org-admin/metrics").json()
+    assert metrics["members_pending_documents_review_count"] == filtered["total"]
+    assert metrics["documents_pending_review"] == 3  # Existing document-based metric is unchanged.
+    assert metrics["pending_requests_count"] == 2
+    assert pending_without_documents.id not in {item["id"] for item in filtered["items"]}
+    pending_list = client.get("/api/org-admin/members", params={"status": "pending"}).json()
+    assert pending_list["total"] == metrics["pending_requests_count"]
+    assert {item["id"] for item in pending_list["items"]} == {pending.id, pending_without_documents.id}
+
+
+def workbook_members(response):
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"].startswith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    workbook = load_workbook(BytesIO(response.content), read_only=True)
+    rows = list(workbook.active.iter_rows(min_row=5, values_only=True))
+    workbook.close()
+    return [row for row in rows if row[0] is not None]
+
+
+def test_single_member_xlsx_contains_only_requested_member_and_global_export_is_unchanged(client, tenant):
+    db, org = tenant
+    first = add_member(db, org, first_name="Primo", last_name="Socio")
+    second = add_member(db, org, first_name="Secondo", last_name="Socio")
+    expired = add_member(db, org, first_name="Scaduto", last_name="Consultabile", status=MemberStatus.EXPIRED)
+    db.commit()
+
+    response = client.get("/api/org-admin/members.xlsx", params={"member_id": second.id})
+    assert f"scheda-socio-{second.id}-" in response.headers["content-disposition"]
+    rows = workbook_members(response)
+    assert len(rows) == 1 and rows[0][0] == "Secondo"
+    assert rows[0][6] == second.card_no
+
+    # A visible expired profile can be exported individually, while the global
+    # register keeps its existing active/pending eligibility rules.
+    assert workbook_members(client.get("/api/org-admin/members.xlsx", params={"member_id": expired.id}))[0][0] == "Scaduto"
+    global_response = client.get("/api/org-admin/members.xlsx")
+    assert "libro-soci-" in global_response.headers["content-disposition"]
+    assert {row[0] for row in workbook_members(global_response)} == {first.first_name, second.first_name}
+
+
+def test_single_member_xlsx_rejects_missing_foreign_deleted_and_unauthenticated_requests(client, tenant):
+    db, org = tenant
+    own = add_member(db, org)
+    deleted = add_member(db, org, deleted_at=datetime.utcnow())
+    other = Organization(name="Foreign export", slug=f"foreign-export-{uuid.uuid4().hex}", is_active=True)
+    db.add(other); db.flush()
+    foreign = add_member(db, other)
+    db.commit()
+    for member_id in (deleted.id, foreign.id, 999999999):
+        response = client.get("/api/org-admin/members.xlsx", params={"member_id": member_id})
+        assert response.status_code == 404, response.text
+    client.cookies.clear()
+    assert client.get("/api/org-admin/members.xlsx", params={"member_id": own.id}).status_code == 401
+
+
+@pytest.mark.parametrize("member_id", ["0", "-1", "1.5", "abc"])
+def test_single_member_xlsx_requires_a_positive_integer(client, tenant, member_id):
+    assert client.get("/api/org-admin/members.xlsx", params={"member_id": member_id}).status_code == 422

@@ -654,6 +654,42 @@ export async function changePassword(
   return res.json();
 }
 
+export type MemberOnboardingContext = {
+  member: { display_name: string; email: string | null; has_password: boolean; is_active: boolean; status: string };
+  organization: { name: string; require_identity_document: boolean };
+  documents: Array<{ id: number; type: string; filename: string; status: string; rejection_note: string | null }>;
+  completed: boolean;
+  session_expires_in_seconds: number;
+};
+
+export class MemberOnboardingError extends Error {
+  constructor(message: string, public status: number) { super(message); this.name = "MemberOnboardingError"; }
+}
+
+async function readMemberOnboardingResponse(res: Response): Promise<MemberOnboardingContext> {
+  if (!res.ok) throw new MemberOnboardingError(await parseApiErrorDetail(res, "Il completamento dell'iscrizione non è disponibile. Riapri il link ricevuto o contatta la tua associazione."), res.status);
+  return res.json();
+}
+
+export async function establishMemberOnboardingSession(token: string): Promise<MemberOnboardingContext> {
+  return readMemberOnboardingResponse(await fetch("/api/member/onboarding/session", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token }), cache: "no-store",
+  }));
+}
+
+export async function fetchMemberOnboarding(): Promise<MemberOnboardingContext> {
+  return readMemberOnboardingResponse(await fetch("/api/member/onboarding", { cache: "no-store" }));
+}
+
+export async function completeMemberOnboarding(data: { newPassword?: string; identityDocument?: File | null; fiscalCodeDocument?: File | null }): Promise<MemberOnboardingContext & { ok: boolean; message?: string }> {
+  const body = new FormData();
+  if (data.newPassword) body.append("new_password", data.newPassword);
+  if (data.identityDocument) body.append("identity_document", data.identityDocument);
+  if (data.fiscalCodeDocument) body.append("fiscal_code_document", data.fiscalCodeDocument);
+  const res = await fetch("/api/member/onboarding/complete", { method: "POST", body, cache: "no-store" });
+  return readMemberOnboardingResponse(res) as Promise<MemberOnboardingContext & { ok: boolean; message?: string }>;
+}
+
 export type MemberContactChange = {
   id: number;
   field: "email" | "phone";
@@ -3770,6 +3806,7 @@ export type OrgAdminMetrics = {
   cards_remaining: number | null;
   pending_requests_count: number | null;
   documents_pending_review?: number | null;
+  members_pending_documents_review_count?: number | null;
   documents_rejected?: number | null;
 };
 
@@ -4166,6 +4203,7 @@ export type OrgAdminMemberCreated = {
   is_manual: boolean;
   email_sent: boolean;
   email_status?: string;
+  registration_email_status?: string;
 };
 
 export type OrgAdminMemberDocument = {
@@ -4230,6 +4268,7 @@ export type OrgAdminMemberDetail = {
   last_name: string;
   email: string | null;
   phone: string | null;
+  signup_source?: string | null;
   birth_date?: string | null;
   birth_place?: string | null;
   birth_place_code?: string | null;
@@ -6823,10 +6862,16 @@ export async function createOrgAdminMember(
   });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (res.status === 400 || res.status === 422) {
-    const payload = await res.json().catch(() => null);
-    throw new Error(payload?.detail ?? "Dati non validi");
+    throw new Error(await parseApiErrorDetail(res, "Dati non validi. Controlla nome, cognome e indirizzo email."));
   }
   if (!res.ok) throw new Error("Errore nella creazione del socio");
+  return res.json();
+}
+
+export async function sendOrgAdminMemberOnboarding(memberId: number): Promise<{ ok: boolean; email_status: string; registration_email_status?: string }> {
+  const res = await fetch(`/api/org-admin/members/${memberId}/send-onboarding`, { method: "POST" });
+  if (res.status === 401) throw new AuthError("Not authenticated");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Impossibile accodare l'invito al completamento dell'iscrizione."));
   return res.json();
 }
 

@@ -20,6 +20,7 @@ const Login = lazy(() => import("./pages/Login"));
 const PasswordReset = lazy(() => import("./pages/PasswordReset"));
 const MagicLinkVerify = lazy(() => import("./pages/MagicLinkVerify"));
 const MemberDocumentCorrection = lazy(() => import("./pages/MemberDocumentCorrection"));
+const MemberOnboarding = lazy(() => import("./pages/MemberOnboarding"));
 const MemberContactConfirmation = lazy(() => import("./pages/MemberContactConfirmation"));
 const BookingReminderResponsePage = lazy(() => import("./pages/BookingReminderResponsePage"));
 const WalletGoogleAdd = lazy(() => import("./pages/WalletGoogleAdd"));
@@ -140,6 +141,7 @@ const App = () => {
               <Route path="privacy" element={<Privacy />} />
               <Route path="login" element={<Login />} />
               <Route path="recupera-password" element={<PasswordReset />} />
+              <Route path="completa-iscrizione" element={<MemberOnboarding />} />
               <Route path="area-riservata" element={<ReservedAreaRedirect />} />
               <Route path="pienissimo/thank-you/:orgSlug" element={<PienissimoThankYouPage />} />
               <Route path="forms/:orgSlug/:slug" element={<PublicFormPage />} />

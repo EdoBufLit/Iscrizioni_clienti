@@ -13,7 +13,7 @@ type Props = {
   selection: MemberSelection; count: number; total: number; pageCount: number; allPageChecked: boolean;
   disabled: boolean; storageKey: string; onTogglePage: () => void; onSelectAll: () => void; onClear: () => void;
   onCompleted?: () => void;
-  actions?: BulkAction[]; membershipYear?: number; showSelectionControls?: boolean;
+  actions?: BulkAction[]; membershipYear?: number; showSelectionControls?: boolean; contextual?: boolean;
 };
 
 const statusLabels = { preview: "Anteprima", running: "In elaborazione", completed: "Completata", expired: "Anteprima scaduta" };
@@ -26,7 +26,7 @@ function itemStatus(item: BulkItem, action: BulkAction) {
   return { pending: "Da elaborare", skipped: "Saltato", failed: "Fallito" }[item.status];
 }
 
-export default function MemberBulkActions({ selection, count, total, pageCount, allPageChecked, disabled, storageKey, onTogglePage, onSelectAll, onClear, onCompleted, actions = ["export", "send_access"], membershipYear, showSelectionControls = true }: Props) {
+export default function MemberBulkActions({ selection, count, total, pageCount, allPageChecked, disabled, storageKey, onTogglePage, onSelectAll, onClear, onCompleted, actions = ["export", "send_access"], membershipYear, showSelectionControls = true, contextual = false }: Props) {
   const navigate = useNavigate();
   const historyId = useId();
   const canRemind = membershipYear != null && isQuoteReminderYearAvailable(membershipYear);
@@ -41,6 +41,7 @@ export default function MemberBulkActions({ selection, count, total, pageCount, 
   const [lastId, setLastId] = useState(() => savedRun(storageKey));
   const [recent, setRecent] = useState<{ items: RecentBulkRun[]; total: number } | null>(null);
   const [recentOffset, setRecentOffset] = useState(0);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const mounted = useRef(true);
   const busyRef = useRef(false);
   const pause = useRef(false);
@@ -85,6 +86,7 @@ export default function MemberBulkActions({ selection, count, total, pageCount, 
 
   const read = async (id: string, offset = 0) => {
     if (busyRef.current) return;
+    if (contextual) setHistoryOpen(false);
     busyRef.current = true; setBusy(true); setError(""); setOpen(true);
     setNotice("");
     if (run?.id !== id) {
@@ -156,49 +158,61 @@ export default function MemberBulkActions({ selection, count, total, pageCount, 
   };
 
   const close = () => { if (!busyRef.current) { setOpen(false); setError(""); setNotice(""); } };
+  const closeHistory = () => { if (!busyRef.current) { setHistoryOpen(false); setError(""); } };
+  const recentContent = recent && <div id={historyId} className="member-bulk-toolbar__recent">
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      {!contextual && <h3 className="text-sm font-semibold">Operazioni recenti</h3>}
+      {lastId && <button className="btn-ghost px-3" type="button" disabled={busy} onClick={() => void read(lastId)}>Riprendi ultima operazione</button>}
+    </div>
+    {recent.items.length === 0 && <p className="text-sm text-[var(--theme-text-muted)]">Nessuna operazione precedente.</p>}
+    {recent.items.map((item) => <button type="button" className="flex min-h-11 w-full flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--theme-border)] p-3 text-left text-sm" key={item.id} disabled={busy} onClick={() => void read(item.id)}>
+      <span>{item.action_label} · {new Date(item.created_at).toLocaleString("it-IT")}</span>
+      <span>{statusLabels[item.status]} · {item.selected_count} soci · {item.counts.failed} falliti</span>
+    </button>)}
+    <div className="flex justify-between gap-3">
+      <button type="button" className="btn-ghost px-3" disabled={busy || recentOffset === 0} onClick={() => void recentRuns(Math.max(0, recentOffset - 10))}>Operazioni precedenti</button>
+      <button type="button" className="btn-ghost px-3" disabled={busy || recentOffset + 10 >= recent.total} onClick={() => void recentRuns(recentOffset + 10)}>Operazioni successive</button>
+    </div>
+  </div>;
+  const idle = contextual && count === 0;
 
   return (
-    <section className="surface member-bulk-toolbar" aria-label="Selezione multipla soci">
+    <section className={`${idle ? "" : "surface "}member-bulk-toolbar${contextual ? " member-bulk-toolbar--contextual" : ""}${idle ? " member-bulk-toolbar--idle" : ""}`} aria-label={idle ? "Operazioni sui soci" : "Selezione multipla soci"}>
       <div className="member-bulk-toolbar__row">
-        <div className="member-bulk-toolbar__selection">
+        {!idle && <div className="member-bulk-toolbar__selection">
           <label className="member-bulk-toolbar__page">
             <input type="checkbox" checked={allPageChecked} disabled={disabled || pageCount === 0 || busy} onChange={onTogglePage} className="h-4 w-4 accent-[var(--theme-brand)]" />
             Seleziona pagina <span className="text-[var(--theme-text-muted)]">({pageCount})</span>
           </label>
           <p className="member-bulk-toolbar__count" role="status">{count === 0 ? "Nessun selezionato" : `${count} ${count === 1 ? "selezionato" : "selezionati"}`}</p>
-        </div>
+        </div>}
         {count > 0 && <div className="member-bulk-toolbar__actions" role="group" aria-label="Azioni sui soci selezionati">
           {availableActions.includes("export") && <button className="btn-secondary" type="button" aria-label="Esporta selezionati" disabled={disabled || busy} onClick={() => void preview("export")}>Esporta</button>}
           {availableActions.includes("send_access") && <button className="btn-primary" type="button" aria-label="Invia accesso ai selezionati" disabled={disabled || busy} onClick={() => void preview("send_access")}>Invia accesso</button>}
           {availableActions.includes("quote_reminder") && <button className="btn-primary" type="button" disabled={disabled || busy} onClick={() => void preview("quote_reminder")}>Sollecita quote {membershipYear}</button>}
           <button className="btn-ghost" type="button" aria-label="Azzera selezione" disabled={busy} onClick={onClear}>Azzera</button>
         </div>}
-        <button className="btn-ghost member-bulk-toolbar__history" type="button" aria-label="Cronologia operazioni" aria-expanded={recent !== null} aria-controls={historyId} disabled={busy} onClick={() => recent ? setRecent(null) : void recentRuns()}>
+        <button className="btn-ghost member-bulk-toolbar__history" type="button" aria-label="Cronologia operazioni" aria-expanded={contextual ? historyOpen : recent !== null} aria-controls={recent ? historyId : undefined} aria-haspopup={contextual ? "dialog" : undefined} disabled={busy} onClick={() => {
+          if (contextual) { setHistoryOpen(true); void recentRuns(); }
+          else if (recent) setRecent(null);
+          else void recentRuns();
+        }}>
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.8 7M3 4v7h7M12 7v5l3 2" strokeLinecap="round" strokeLinejoin="round" /></svg>
           <span className="hidden sm:inline">Cronologia</span>
         </button>
       </div>
-      {count === 0 ? <p className="member-bulk-toolbar__hint">{availableActions.includes("quote_reminder") ? "Seleziona i soci dall'elenco per preparare un sollecito." : "Seleziona i soci dall'elenco per esportarli o inviare l'accesso."}</p> : <div className="member-bulk-toolbar__scope">
+      {!idle && (count === 0 ? <p className="member-bulk-toolbar__hint">{availableActions.includes("quote_reminder") ? "Seleziona i soci dall'elenco per preparare un sollecito." : "Seleziona i soci dall'elenco per esportarli o inviare l'accesso."}</p> : <div className="member-bulk-toolbar__scope">
         <p>{selection.mode === "filtered" ? "Selezione estesa a tutte le pagine. Puoi escludere singoli soci." : "La selezione si conserva tra le pagine."} Cambiare i filtri la azzera.</p>
         {showSelectionControls && total > pageCount && (selection.mode !== "filtered" || count < total) && <button className="member-bulk-toolbar__all" type="button" disabled={disabled || busy} onClick={onSelectAll}>Seleziona tutti i {total} risultati</button>}
-      </div>}
-      {recent && <div id={historyId} className="member-bulk-toolbar__recent">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold">Operazioni recenti</h3>
-          {lastId && <button className="btn-ghost px-3" type="button" disabled={busy} onClick={() => void read(lastId)}>Riprendi ultima operazione</button>}
-        </div>
-        {recent.items.length === 0 && <p className="text-sm text-[var(--theme-text-muted)]">Nessuna operazione precedente.</p>}
-        {recent.items.map((item) => <button type="button" className="flex min-h-11 w-full flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--theme-border)] p-3 text-left text-sm" key={item.id} disabled={busy} onClick={() => void read(item.id)}>
-          <span>{item.action_label} · {new Date(item.created_at).toLocaleString("it-IT")}</span>
-          <span>{statusLabels[item.status]} · {item.selected_count} soci · {item.counts.failed} falliti</span>
-        </button>)}
-        <div className="flex justify-between gap-3">
-          <button type="button" className="btn-ghost px-3" disabled={busy || recentOffset === 0} onClick={() => void recentRuns(Math.max(0, recentOffset - 10))}>Operazioni precedenti</button>
-          <button type="button" className="btn-ghost px-3" disabled={busy || recentOffset + 10 >= recent.total} onClick={() => void recentRuns(recentOffset + 10)}>Operazioni successive</button>
-        </div>
-      </div>}
-      {busy && !open && <p role="status" className="text-sm text-[var(--theme-text-muted)]">Caricamento…</p>}
-      {error && !open && <p role="alert" className="text-sm text-[var(--theme-danger)]">{error}</p>}
+      </div>)}
+      {!contextual && recentContent}
+      {busy && !open && !historyOpen && <p role="status" className="text-sm text-[var(--theme-text-muted)]">Caricamento…</p>}
+      {error && !open && !historyOpen && <p role="alert" className="text-sm text-[var(--theme-danger)]">{error}</p>}
+      {contextual && <ModalShell open={historyOpen} title="Operazioni recenti" onClose={closeHistory} closeDisabled={busy} closeOnOverlay={!busy} closeOnEscape={!busy} sizeClassName="max-w-2xl">
+        {recentContent}
+        {busy && <p role="status" className="text-sm text-[var(--theme-text-muted)]">Caricamento…</p>}
+        {error && <div className="mt-3 space-y-2"><p role="alert" className="text-sm text-[var(--theme-danger)]">{error}</p><button type="button" className="btn-secondary px-3" disabled={busy} onClick={() => void recentRuns(recentOffset)}>Riprova cronologia</button></div>}
+      </ModalShell>}
       <ModalShell open={open} title={run ? `${run.action_label} · ${statusLabels[run.status]}` : "Operazione sui soci"} description="La selezione è congelata all'anteprima. Ogni riga viene verificata di nuovo prima dell'operazione." onClose={close} closeDisabled={busy} closeOnOverlay={!busy} closeOnEscape={!busy} sizeClassName="max-w-3xl">
         {error && <p role="alert" className="mb-4 rounded-lg border border-[var(--theme-danger)] p-3 text-sm text-[var(--theme-danger)]">{error}</p>}
         {notice && <p role="status" className="mb-4 text-sm text-[var(--theme-text)]">{notice}</p>}

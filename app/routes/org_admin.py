@@ -229,7 +229,7 @@ from app.services.municipalities import (
     get_municipality_by_code,
     normalize_municipality_text,
 )
-from app.services.member_filters import member_expiring_filters, member_review_filters
+from app.services.member_filters import build_org_member_query, member_expiring_filters, member_review_filters
 from app.services.member_activity import (
     member_expired_filters,
     get_member_lifecycle_status,
@@ -1855,6 +1855,7 @@ def _build_org_member_detail_payload(
         "decision_notes": member.decision_notes,
         "decision_at": member.decision_at.isoformat() if member.decision_at else None,
         "decision_by_admin_id": member.decision_by_admin_id,
+        "signup_source": member.signup_source,
         "is_manual": member.is_manual,
         "has_access": bool(member.password_hash),
         "last_access_email_at": last_access_email_at,
@@ -5350,6 +5351,11 @@ def org_metrics(request: Request, db: Session = Depends(get_db)):
     members_to_review_count = int(db.query(func.count(Member.id)).filter(
         Member.org_id == org_id, *member_review_filters(db),
     ).scalar() or 0)
+    members_pending_documents_review_count = int(
+        build_org_member_query(
+            db, org_id=org_id, status="review", docs="pending", now=current_time,
+        ).order_by(None).with_entities(func.count(func.distinct(Member.id))).scalar() or 0
+    )
     expired_members_count = int(db.query(func.count(Member.id)).filter(
         Member.org_id == org_id, *member_expired_filters(now=current_time),
     ).scalar() or 0)
@@ -5397,6 +5403,7 @@ def org_metrics(request: Request, db: Session = Depends(get_db)):
         "cards_remaining": cards_remaining,
         "pending_requests_count": pending_requests_count,
         "documents_pending_review": documents_pending_review,
+        "members_pending_documents_review_count": members_pending_documents_review_count,
         "documents_rejected": documents_rejected,
         "expiring_members_count": expiring_members_count,
         "members_to_review_count": members_to_review_count,
@@ -6338,7 +6345,14 @@ def create_org_member(
     )
 
     email_sent = False
-    email_status = "deferred" if body.send_access_email else "not_requested"
+    email_status = "not_requested"
+    registration_email_status = "not_requested"
+    if body.send_access_email:
+        from app.services.member_onboarding import queue_member_onboarding
+
+        queue_member_onboarding(db, request, member)
+        email_status = "queued"
+        registration_email_status = "queued"
     access_email_sent_at = None
     audit.log_operation(
         db,
@@ -6351,6 +6365,7 @@ def create_org_member(
             "org_id": admin.org_id,
             "email_sent": email_sent,
             "email_status": email_status,
+            "registration_email_status": registration_email_status,
             "is_manual": member.is_manual,
         },
         ip=get_client_ip(request),
@@ -6390,6 +6405,7 @@ def create_org_member(
         "is_manual": member.is_manual,
         "email_sent": email_sent,
         "email_status": email_status,
+        "registration_email_status": registration_email_status,
         "access_email_sent_at": access_email_sent_at.isoformat()
         if access_email_sent_at
         else None,
@@ -6837,6 +6853,50 @@ def send_member_access(
     }
 
 
+@router.post("/members/{member_id}/send-onboarding")
+def send_member_onboarding(
+    request: Request,
+    member_id: int,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    from app.services.member_bulk import acquire_sqlite_member_action_lock
+    from app.services.member_onboarding import queue_member_onboarding
+
+    acquire_sqlite_member_action_lock(db)
+    member = (
+        db.query(Member)
+        .filter(Member.id == member_id, Member.org_id == admin.org_id, Member.deleted_at.is_(None))
+        .populate_existing()
+        .with_for_update()
+        .first()
+    )
+    if member is None:
+        raise HTTPException(status_code=404, detail="Member not found")
+    pending_signup = member.status in {
+        MemberStatus.PENDING_VERIFICATION, MemberStatus.PENDING_DOCS, MemberStatus.PENDING_CARDS,
+    }
+    active_without_password = is_member_active(member) and not member.password_hash
+    if member.signup_source != SignupSource.ADMIN.value or not (pending_signup or active_without_password):
+        raise HTTPException(status_code=409, detail="L'invito è disponibile per le iscrizioni manuali ancora da completare.")
+    if not (member.email or "").strip():
+        raise HTTPException(status_code=400, detail="Inserisci l'email del socio prima di inviare l'invito.")
+
+    outbox_id = queue_member_onboarding(db, request, member)
+    member.access_email_requested = True
+    audit.log_operation(
+        db, action="member.onboarding_invitation_queued", entity_type="member", entity_id=member.id,
+        actor_admin_id=admin.id, actor_role=AdminRole.ORG_ADMIN.value,
+        metadata={"org_id": admin.org_id, "email_status": "queued", "outbox_id": outbox_id},
+        ip=get_client_ip(request), user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+    return {"ok": True, "email_sent": False, "email_status": "queued", "registration_email_status": "queued"}
+
+
 @router.post(
     "/members/{member_id}/decision",
     dependencies=[Depends(sqlite_card_allocation_request_guard)],
@@ -6860,9 +6920,12 @@ def member_decision(
 
     if member.org_id != admin.org_id:
         raise HTTPException(status_code=403, detail="Forbidden")
+    if member.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="Member not found")
 
     org = member.organization or db.query(Organization).filter(Organization.id == member.org_id).first()
     requires_payment = organization_requires_membership_payment(org)
+    activation_reason = None
 
     member.decision_at = datetime.utcnow()
     member.decision_by_admin_id = admin.id
@@ -6872,6 +6935,7 @@ def member_decision(
     if body.decision == "approve":
         if requires_payment and not payment_status_is_paid(member.payment_status):
             member.status = MemberStatus.PENDING_CARDS
+            activation_reason = "payment_pending"
         else:
             fulfillment = maybe_fulfill_member_card(
                 db=db,
@@ -6879,8 +6943,13 @@ def member_decision(
                 org=org,
                 request=None,
             )
+            if fulfillment.reason == "member_deleted":
+                db.rollback()
+                raise HTTPException(status_code=404, detail="Member not found")
             if not fulfillment.issued_card and fulfillment.reason == "card_stock_exhausted":
                 member.status = MemberStatus.PENDING_CARDS
+            if member.status != MemberStatus.ACTIVE:
+                activation_reason = fulfillment.reason
         if member.status == MemberStatus.ACTIVE:
             from app.services.annual_memberships import reactivate_current_annual_membership_term
 
@@ -6923,7 +6992,19 @@ def member_decision(
                 member.id,
             )
 
-    return {"ok": True, "status": member.status.value}
+    if body.decision == "reject":
+        activation_status = "rejected"
+    elif is_member_active(member, now=datetime.utcnow()):
+        activation_status = "active"
+    elif member.status == MemberStatus.ACTIVE:
+        activation_status = "membership_expired"
+    else:
+        activation_status = activation_reason or "activation_pending"
+    return {
+        "ok": True, "status": member.status.value,
+        "activation_status": activation_status,
+        "reason": None if activation_status in {"active", "rejected"} else activation_status,
+    }
 
 
 @router.post(
@@ -7409,6 +7490,7 @@ def export_members_csv(
 @router.get("/members.xlsx")
 def export_members_xlsx(
     request: Request,
+    member_id: int | None = Query(default=None, gt=0),
     db: Session = Depends(get_db),
 ):
     """Export a styled, filterable member register for Excel."""
@@ -7422,19 +7504,24 @@ def export_members_xlsx(
         MemberStatus.PENDING_DOCS,
         MemberStatus.PENDING_CARDS,
     ]
-    members = (
-        db.query(Member)
-        .filter(
-            Member.org_id == admin.org_id,
-            Member.deleted_at.is_(None),
-            or_(
-                and_(*member_active_filters(now=now)),
-                Member.status.in_(pending_statuses),
-            ),
+    if member_id is not None:
+        members = [_get_org_admin_member_or_404(
+            db=db, admin=admin, member_id=member_id, include_deleted=False,
+        )]
+    else:
+        members = (
+            db.query(Member)
+            .filter(
+                Member.org_id == admin.org_id,
+                Member.deleted_at.is_(None),
+                or_(
+                    and_(*member_active_filters(now=now)),
+                    Member.status.in_(pending_statuses),
+                ),
+            )
+            .order_by(Member.last_name, Member.first_name)
+            .all()
         )
-        .order_by(Member.last_name, Member.first_name)
-        .all()
-    )
     organization = admin.organization
     payload = build_members_workbook(
         organization=organization,
@@ -7442,7 +7529,8 @@ def export_members_xlsx(
         generated_at=now,
     )
     safe_slug = re.sub(r"[^a-z0-9-]+", "-", (organization.slug or "associazione").lower()).strip("-")
-    filename = f"libro-soci-{safe_slug or 'associazione'}-{now.strftime('%Y%m%d')}.xlsx"
+    export_prefix = f"scheda-socio-{member_id}" if member_id is not None else "libro-soci"
+    filename = f"{export_prefix}-{safe_slug or 'associazione'}-{now.strftime('%Y%m%d')}.xlsx"
     return StreamingResponse(
         payload,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

@@ -17,13 +17,18 @@ import useMemberSelection from "../../hooks/useMemberSelection";
 import DebouncedSearchInput from "./components/DebouncedSearchInput";
 import MembersTable from "./components/MembersTable";
 import ModalShell from "../../components/ui/ModalShell";
-import { DetailPanel, EmptyState, KpiCard, SectionPanel, StatusChip } from "./components/OrgAdminPrimitives";
+import { useToast } from "../../components/ui/ToastProvider";
+import { formatMemberDate } from "../../lib/memberDates";
+import { memberLifecycleStatusMeta, memberWorkflowStatusMeta, resolveStatusMeta } from "../../lib/statusLabels";
+import { DetailPanel, KpiCard, SectionPanel, StatusChip } from "./components/OrgAdminPrimitives";
+import "./OrgAdminMembers.css";
 
 const STATUS_OPTIONS = [
   { value: "active", label: "Mostra: Attivi", chipLabel: "Attivi" },
   { value: "all", label: "Mostra: Tutti", chipLabel: "Tutti" },
   { value: "expiring", label: "Mostra: In scadenza", chipLabel: "In scadenza" },
   { value: "review", label: "Mostra: Da verificare", chipLabel: "Da verificare" },
+  { value: "pending", label: "Mostra: Da approvare", chipLabel: "Da approvare" },
   { value: "expired", label: "Mostra: Scaduti", chipLabel: "Scaduti" },
   { value: "deleted", label: "Mostra: Eliminati", chipLabel: "Eliminati" },
 ];
@@ -42,7 +47,7 @@ const SOURCE_OPTIONS = [
 
 const DOCS_OPTIONS = [
   { value: "", label: "Documenti (tutti)", chipLabel: "Tutti" },
-  { value: "pending", label: "Documenti pending", chipLabel: "In verifica" },
+  { value: "pending", label: "Documenti da verificare", chipLabel: "In verifica" },
   { value: "rejected", label: "Documenti rigettati", chipLabel: "Rigettati" },
   { value: "approved", label: "Documenti approvati", chipLabel: "Approvati" },
 ];
@@ -69,13 +74,9 @@ function memberInitials(name: string) {
     .join("") || "S";
 }
 
-function formatDate(value: string | null | undefined) {
-  if (!value) return "-";
-  return new Date(value).toLocaleDateString("it-IT");
-}
-
 function workflowTone(member: OrgAdminMember): "success" | "warning" | "danger" | "muted" {
   const status = (member.status || "").toUpperCase();
+  if (member.deleted_at || status === "DELETED") return "muted";
   if (status === "EXPIRED" || member.workflow_status === "rejected") return "danger";
   if (status === "PENDING" || member.workflow_status?.startsWith("pending")) return "warning";
   if (status === "ACTIVE" || member.workflow_status === "active") return "success";
@@ -88,11 +89,13 @@ type CreatedMember = {
   last_name: string;
   email_sent?: boolean;
   email_status?: string;
+  registration_email_status?: string;
 };
 
 const OrgAdminMembers = () => {
   const { admin, loading: adminLoading } = useOrgAdmin();
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [members, setMembers] = useState<OrgAdminMember[]>([]);
@@ -120,6 +123,8 @@ const OrgAdminMembers = () => {
   const [successMessage, setSuccessMessage] = useState("");
   const [createdMemberId, setCreatedMemberId] = useState<number | null>(null);
   const [selectedMemberId, setSelectedMemberId] = useState<number | null>(null);
+  const [wideProfile, setWideProfile] = useState(() => Boolean(window.matchMedia?.("(min-width: 1440px)").matches));
+  const profileCloseRef = useRef<HTMLButtonElement>(null);
   const bulkSelection = useMemberSelection(
     { q: debouncedSearch || undefined, status, access: access || undefined, source: source || undefined, docs: docs || undefined, order },
     members.map((member) => member.id),
@@ -174,7 +179,7 @@ const OrgAdminMembers = () => {
       setTotal(response.total);
       setSelectedMemberId((current) => {
         if (current && response.items.some((member) => member.id === current)) return current;
-        return response.items[0]?.id ?? null;
+        return null;
       });
     } catch (err) {
       if (requestId !== membersRequestId.current) return;
@@ -205,6 +210,30 @@ const OrgAdminMembers = () => {
 
   const closeFiltersSheet = useCallback(() => setShowFiltersSheet(false), []);
   const closeActionsSheet = useCallback(() => setShowActionsSheet(false), []);
+  const closeQuickProfile = useCallback(() => {
+    setSelectedMemberId(null);
+    window.requestAnimationFrame(() => {
+      if (document.activeElement === document.body || document.activeElement === profileCloseRef.current) {
+        const row = document.querySelector<HTMLElement>(`[data-member-id="${selectedMemberId}"]`);
+        (row ?? document.querySelector<HTMLElement>('input[type="search"]'))?.focus();
+      }
+    });
+  }, [selectedMemberId]);
+  useEffect(() => {
+    if (!window.matchMedia) return;
+    const media = window.matchMedia("(min-width: 1440px)");
+    const update = () => setWideProfile(media.matches);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  useEffect(() => {
+    if (!wideProfile || selectedMemberId === null) return;
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !document.querySelector('[role="dialog"]')) closeQuickProfile();
+    };
+    window.addEventListener("keydown", onEscape);
+    return () => window.removeEventListener("keydown", onEscape);
+  }, [wideProfile, selectedMemberId, closeQuickProfile]);
   useEffect(() => {
     if (!window.matchMedia) return;
     const media = window.matchMedia("(min-width: 768px)");
@@ -240,11 +269,11 @@ const OrgAdminMembers = () => {
     Boolean(docs) ||
     order !== "joined_at_desc";
   const selectedMember = useMemo(
-    () => members.find((member) => member.id === selectedMemberId) || members[0] || null,
+    () => members.find((member) => member.id === selectedMemberId) || null,
     [members, selectedMemberId],
   );
   const expiringSoonCount = metrics?.expiring_members_count ?? 0;
-  const missingDocumentsCount = metrics?.documents_pending_review ?? 0;
+  const missingDocumentsCount = metrics?.members_pending_documents_review_count ?? 0;
   const pendingRequestsCount = metrics?.pending_requests_count ?? 0;
   const activeMembersCount = metrics?.active_members_count ?? 0;
   const toVerifyCount = metrics?.members_to_review_count ?? 0;
@@ -252,7 +281,15 @@ const OrgAdminMembers = () => {
   const onFilterChange = useCallback((setter: (value: string) => void, value: string) => {
     setter(value);
     setPage(1);
+    setSelectedMemberId(null);
   }, []);
+
+  const applyKpiFilter = (nextStatus: string, nextDocs = "") => {
+    setDebouncedSearch(""); setAccess(""); setSource(""); setOrder("joined_at_desc");
+    setStatus(nextStatus); setDocs(nextDocs); setPage(1); setSelectedMemberId(null);
+    setSearchResetKey(value => value + 1);
+  };
+  const globalKpiFilter = !debouncedSearch && !access && !source && order === "joined_at_desc";
 
   const activeFilterPills = useMemo(() => {
     const pills: Array<{ key: string; label: string; onRemove: () => void }> = [];
@@ -318,6 +355,7 @@ const OrgAdminMembers = () => {
     setDocs("");
     setOrder("joined_at_desc");
     setPage(1);
+    setSelectedMemberId(null);
     setSearchResetKey((prev) => prev + 1);
   }, []);
 
@@ -336,9 +374,10 @@ const OrgAdminMembers = () => {
         }`
       );
       setCreatedMemberId(created.id);
-      await loadMembers();
+      showToast({ tone: "success", title: "Socio creato", message: `${created.first_name} ${created.last_name}: profilo salvato. ${(created.registration_email_status ?? created.email_status) === "queued" ? "Email per password e documenti accodata." : "Puoi inviare l’invito e attivare il socio da qui."}` });
+      navigate(`/org-admin/soci/${created.id}`, { state: { memberCreated: true } });
     },
-    [loadMembers]
+    [navigate, showToast]
   );
 
   const handleOpenMember = useCallback(
@@ -456,16 +495,22 @@ const OrgAdminMembers = () => {
         </div>
       )}
 
-      <div className="org-admin-desktop-kpi-grid grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Soci attivi" value={activeMembersCount} hint="Soci con tessera attiva" tone="success" />
-        <KpiCard label="Da approvare" value={pendingRequestsCount} hint="Richieste in verifica" tone="warning" />
-        <KpiCard label="Documenti da verificare" value={missingDocumentsCount} hint="In attesa di verifica" tone={missingDocumentsCount ? "danger" : "muted"} />
-        <KpiCard label="Rinnovi in scadenza" value={expiringSoonCount} hint="Nei prossimi 30 giorni" tone="info" />
+      <div className="org-admin-desktop-kpi-grid org-admin-members-kpis grid gap-3 md:grid-cols-2 xl:grid-cols-4" role="group" aria-label="Scorciatoie elenco soci">
+        {([
+          { label: "Soci attivi", value: activeMembersCount, hint: "Soci con tessera attiva", tone: "success", status: "active", docs: "" },
+          { label: "Da approvare", value: pendingRequestsCount, hint: "Richieste di iscrizione", tone: "warning", status: "pending", docs: "" },
+          { label: "Documenti da verificare", value: missingDocumentsCount, hint: "Soci con documenti in attesa", tone: missingDocumentsCount ? "danger" : "muted", status: "review", docs: "pending" },
+          { label: "Rinnovi in scadenza", value: expiringSoonCount, hint: "Nei prossimi 30 giorni", tone: "info", status: "expiring", docs: "" },
+        ] as const).map(kpi => <button key={kpi.label} type="button" className="org-admin-members-kpi-action" disabled={!metrics}
+          aria-label={`${kpi.label}: ${kpi.value} soci`} aria-pressed={globalKpiFilter && status === kpi.status && docs === kpi.docs}
+          onClick={() => applyKpiFilter(kpi.status, kpi.docs)}>
+          <KpiCard label={kpi.label} value={kpi.value} hint={kpi.hint} tone={kpi.tone} />
+        </button>)}
       </div>
 
       <SectionPanel className="org-admin-mobile-filter-panel org-admin-members-toolbar p-4">
-        <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center">
-          <div className="flex items-center gap-2 flex-1 min-w-0">
+        <div className="org-admin-members-query">
+          <div className="org-admin-members-query__search flex items-center gap-2 flex-1 min-w-0">
             <DebouncedSearchInput
               resetKey={searchResetKey}
               initialValue={debouncedSearch}
@@ -481,7 +526,7 @@ const OrgAdminMembers = () => {
             <button
               type="button"
               onClick={() => setShowFiltersSheet(true)}
-              className={`org-admin-members-filter-trigger md:hidden ${activeSheetFiltersCount > 0 ? "is-active" : ""}`}
+              className={`org-admin-members-filter-trigger ${activeSheetFiltersCount > 0 ? "is-active" : ""}`}
               aria-label={activeSheetFiltersCount > 0 ? `Filtri (${activeSheetFiltersCount} attivi)` : "Filtri"}
               aria-expanded={showFiltersSheet}
             >
@@ -495,10 +540,13 @@ const OrgAdminMembers = () => {
                 </span>
               )}
             </button>
+            <button type="button" className="org-admin-members-current-status hidden md:inline-flex" onClick={() => setShowFiltersSheet(true)} aria-label={`Stato soci: ${STATUS_OPTIONS.find(option => option.value === status)?.chipLabel ?? status}`}>
+              {STATUS_OPTIONS.find(option => option.value === status)?.chipLabel ?? status}
+            </button>
           </div>
 
           {activeFilterPills.length > 0 && (
-            <div className="org-admin-members-active-pills flex flex-wrap items-center gap-1.5 md:hidden" aria-label="Filtri avanzati attivi">
+            <div className="org-admin-members-active-pills flex flex-wrap items-center gap-1.5" aria-label="Filtri avanzati attivi">
               {activeFilterPills.map((pill) => (
                 <button
                   key={pill.key}
@@ -593,59 +641,14 @@ const OrgAdminMembers = () => {
             </button>
           </div>
 
-          <div className="hidden md:flex md:flex-wrap md:items-center md:gap-3">
-            <select className="premium-select min-w-[140px] flex-1 sm:flex-none" value={status} onChange={(e) => onFilterChange(setStatus, e.target.value)}>
-              {STATUS_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-            <select className="premium-select min-w-[140px] flex-1 sm:flex-none" value={access} onChange={(e) => onFilterChange(setAccess, e.target.value)}>
-              {ACCESS_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-            <select className="premium-select min-w-[140px] flex-1 sm:flex-none" value={source} onChange={(e) => onFilterChange(setSource, e.target.value)}>
-              {SOURCE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-            <select className="premium-select min-w-[140px] flex-1 sm:flex-none" value={docs} onChange={(e) => onFilterChange(setDocs, e.target.value)}>
-              {DOCS_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-            <select className="premium-select min-w-[140px] flex-1 sm:flex-none" value={order} onChange={(e) => onFilterChange(setOrder, e.target.value)}>
-              {ORDER_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={resetFilters}
-              disabled={!hasFilters}
-              className="btn-ghost !px-4 !py-2 !text-xs font-bold uppercase tracking-widest disabled:opacity-30 flex-1 sm:flex-none"
-            >
-              Reset
-            </button>
-          </div>
-        </div>
-        <div className="mt-4 hidden md:flex items-center justify-between border-t border-neutral-100/50 px-3 pb-1 pt-3">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
-            {total === 0 ? "Nessun risultato" : `${startIndex}-${endIndex} di ${total} soci`}
-          </p>
-          <div className="flex gap-1.5">
-            {hasFilters && (
-              <span className="inline-flex items-center rounded-full bg-brand/5 px-2 py-0.5 text-[10px] font-bold text-brand uppercase tracking-tighter ring-1 ring-inset ring-brand/10">
-                Filtri attivi
-              </span>
-            )}
-          </div>
-        </div>
-      </SectionPanel>
 
-      {!adminLoading && admin && (
-        <div className={mobileSelectionMode || bulkSelection.count > 0 ? "block" : "hidden md:block"}>
+        </div>
+        <div className={`org-admin-members-results ${bulkSelection.count > 0 || mobileSelectionMode ? "has-selection" : ""}`}>
+          <p className="org-admin-members-results__count hidden md:block" role="status">{total === 0 ? "Nessun risultato" : `${startIndex}-${endIndex} di ${total} soci`}</p>
+          {hasFilters && <button type="button" className="org-admin-members-clear hidden md:inline-flex" onClick={resetFilters}>Azzera filtri</button>}
+          {!adminLoading && admin && <div className={mobileSelectionMode || bulkSelection.count > 0 ? "org-admin-members-bulk" : "org-admin-members-bulk hidden md:contents"}>
           <MemberBulkActions
+            contextual={!mobileSelectionMode}
             selection={bulkSelection.selection}
             count={bulkSelection.count}
             total={total}
@@ -662,10 +665,11 @@ const OrgAdminMembers = () => {
             onCompleted={() => { void loadMembers(); }}
             actions={["export", "send_access"]}
           />
+          </div>}
         </div>
-      )}
+      </SectionPanel>
 
-      <div className="org-admin-mobile-master-detail grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
+      <div className={`org-admin-members-master-detail ${selectedMember && wideProfile ? "has-profile" : ""}`}>
         <MembersTable
           error={error}
           isLoading={isLoading}
@@ -682,8 +686,15 @@ const OrgAdminMembers = () => {
           onTogglePage={bulkSelection.togglePage}
           mobileSelectionMode={mobileSelectionMode}
         />
-        <MemberSidePanel member={selectedMember} onOpenMember={handleOpenMember} />
+        {selectedMember && wideProfile && <DetailPanel title="Profilo rapido" className="org-admin-members-quick-profile"
+          action={<button ref={profileCloseRef} type="button" className="org-admin-members-profile-close" aria-label="Chiudi profilo rapido" onClick={closeQuickProfile}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></button>}>
+          <MemberQuickProfile member={selectedMember} onOpenMember={handleOpenMember} />
+        </DetailPanel>}
       </div>
+      <ModalShell open={Boolean(selectedMember && !wideProfile)} title="Profilo rapido" onClose={closeQuickProfile}
+        zIndexClassName="z-[90] org-admin-members-profile-overlay" sizeClassName="org-admin-members-profile-drawer" contentClassName="p-5">
+        {selectedMember && <MemberQuickProfile member={selectedMember} onOpenMember={handleOpenMember} />}
+      </ModalShell>
 
       <ModalShell open={showActionsSheet} title="Azioni secondarie soci" onClose={closeActionsSheet}
         placement="bottom" sizeClassName="max-w-lg org-admin-members-sheet__panel" contentClassName="p-0">
@@ -857,98 +868,41 @@ const OrgAdminMembers = () => {
   );
 };
 
-function MemberSidePanel({
-  member,
-  onOpenMember,
-}: {
-  member: OrgAdminMember | null;
-  onOpenMember: (memberId: number) => void;
-}) {
-  if (!member) {
-    return (
-      <DetailPanel title="Dettaglio socio" eyebrow="Master detail">
-        <EmptyState title="Nessun socio selezionato" description="Seleziona una riga per vedere tessera, stato e attività recente." />
-      </DetailPanel>
-    );
-  }
-
-  return (
-    <DetailPanel title="Dettaglio socio" eyebrow="Profilo rapido">
-      <div className="space-y-5">
-        <div className="flex items-center gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-lg font-bold text-brand">
-            {memberInitials(member.name)}
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-lg font-semibold text-slate-950">{member.name}</p>
-            <div className="mt-1">
-              <StatusChip tone={workflowTone(member)}>{member.workflow_status || member.status || "Sconosciuto"}</StatusChip>
-            </div>
-            {member.search_match === "similar" && (
-              <div className="mt-2">
-                <StatusChip tone="warning">Corrispondenza simile</StatusChip>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="space-y-2 text-sm text-slate-600">
-          <p>{member.email || "Email non disponibile"}</p>
-          <p>Iscritto il {formatDate(member.joined_at)}</p>
-          <p>{member.has_access ? "Accesso area socio attivo" : "Accesso area socio non attivo"}</p>
-        </div>
-
-        <div className="rounded-[0.85rem] border border-slate-200 bg-white p-4">
-          <div className="flex items-start gap-4">
-            <div className="grid h-20 w-20 shrink-0 grid-cols-4 gap-1 rounded-[0.65rem] border border-slate-200 bg-slate-50 p-2">
-              {Array.from({ length: 16 }).map((_, index) => (
-                <span key={index} className={index % 3 === 0 || index % 5 === 0 ? "bg-slate-900" : "bg-white"} />
-              ))}
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-semibold text-slate-950">{member.card_number ?? member.card_no ?? "Tessera non assegnata"}</p>
-                <StatusChip tone={member.card_number || member.card_no ? "success" : "warning"}>
-                  {member.card_number || member.card_no ? "Attiva" : "Da assegnare"}
-                </StatusChip>
-              </div>
-              <p className="mt-2 text-xs leading-5 text-slate-500">
-                {member.membership_type_label || "Tipo tessera non definito"}
-                {member.valid_until ? ` - Scadenza ${formatDate(member.valid_until)}` : ""}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-[0.85rem] border border-slate-200 bg-white p-4">
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Attività recente</p>
-          <div className="mt-3 space-y-3 text-sm">
-            <div className="flex justify-between gap-3">
-              <span className="text-slate-600">Documenti caricati</span>
-              <span className="font-semibold text-slate-900">{member.docs_count ?? 0}</span>
-            </div>
-            <div className="flex justify-between gap-3">
-              <span className="text-slate-600">Pagamento quota</span>
-              <span className="font-semibold text-slate-900">{member.is_paid ? "Registrato" : "Da verificare"}</span>
-            </div>
-            <div className="flex justify-between gap-3">
-              <span className="text-slate-600">Origine</span>
-              <span className="font-semibold text-slate-900">{member.signup_source || (member.is_manual ? "Manuale" : "Online")}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid gap-2">
-          <button type="button" className="btn-primary w-full justify-center" onClick={() => onOpenMember(member.id)}>
-            Vedi profilo completo
-          </button>
-          <a className="btn-secondary w-full justify-center" href="/api/org-admin/members.xlsx">
-            Esporta Excel
-          </a>
-        </div>
+function MemberQuickProfile({ member, onOpenMember }: { member: OrgAdminMember; onOpenMember: (memberId: number) => void }) {
+  const lifecycle = resolveStatusMeta(memberLifecycleStatusMeta, member.status, "Stato non disponibile");
+  const workflow = resolveStatusMeta(memberWorkflowStatusMeta, member.workflow_status, "Stato non disponibile");
+  const isDeleted = Boolean(member.deleted_at) || member.status?.toUpperCase() === "DELETED";
+  const isExpired = member.status?.toUpperCase() === "EXPIRED";
+  const statusLabel = isDeleted ? "Eliminato" : isExpired ? "Scaduto" : member.workflow_status && member.workflow_status !== "active" ? workflow.label : lifecycle.label;
+  const cardNumber = member.card_number ?? member.card_no;
+  const sourceLabel = ({ assonam_form: "Iscrizione online", online: "Iscrizione online", admin: "Inserito dall’amministratore", manual: "Inserimento manuale", pienissimo: "Integrazione Pienissimo" } as Record<string, string>)[member.signup_source ?? ""] ?? (member.is_manual ? "Inserimento manuale" : "Iscrizione online");
+  return <div className="org-admin-members-profile-content">
+    <div className="org-admin-members-profile-identity">
+      <span className="org-admin-members-profile-avatar" aria-hidden="true">{memberInitials(member.name)}</span>
+      <div className="min-w-0"><h3>{member.name}</h3><StatusChip tone={workflowTone(member)}>{statusLabel}</StatusChip>
+        {member.search_match === "similar" && <StatusChip tone="warning">Corrispondenza simile</StatusChip>}
       </div>
-    </DetailPanel>
-  );
+    </div>
+    <dl className="org-admin-members-profile-data">
+      <div><dt>Email</dt><dd>{member.email || "Non disponibile"}</dd></div>
+      <div><dt>Iscrizione</dt><dd>{formatMemberDate(member.joined_at)}</dd></div>
+      <div><dt>Password</dt><dd>{member.has_access ? "Impostata" : "Da impostare"}</dd></div>
+    </dl>
+    <section className="org-admin-members-profile-card" aria-label="Tessera del socio">
+      <span>Tessera</span><strong>{cardNumber == null ? "Da assegnare" : `#${cardNumber}${member.card_year ? ` / ${member.card_year}` : ""}`}</strong>
+      <p>{member.membership_type_label || "Tipo non indicato"}</p>
+      <p>{cardNumber == null ? "" : member.is_active ? "Attiva" : lifecycle.label}{member.valid_until ? ` · Scadenza ${formatMemberDate(member.valid_until)}` : ""}</p>
+    </section>
+    <dl className="org-admin-members-profile-data">
+      <div><dt>Documenti caricati</dt><dd>{member.docs_count ?? 0}</dd></div>
+      <div><dt>Pagamento quota</dt><dd>{member.is_paid ? "Registrato" : "Non registrato"}</dd></div>
+      <div><dt>Origine</dt><dd>{sourceLabel}</dd></div>
+    </dl>
+    <div className="org-admin-members-profile-actions">
+      <button type="button" className="btn-primary" onClick={() => onOpenMember(member.id)}>Vedi profilo completo</button>
+      {!isDeleted && <a className="btn-secondary" href={`/api/org-admin/members.xlsx?member_id=${member.id}`}>Esporta scheda socio</a>}
+    </div>
+  </div>;
 }
 
 export default OrgAdminMembers;

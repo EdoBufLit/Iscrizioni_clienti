@@ -49,7 +49,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = (
             "SAMEORIGIN" if allow_same_origin_embed else "DENY"
         )
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Referrer-Policy"] = (
+            "no-referrer" if response.headers.get("Referrer-Policy") == "no-referrer"
+            else "strict-origin-when-cross-origin"
+        )
         # The authenticated attendance scanner needs first-party camera access.
         # Keep every other origin and the unused sensors denied.
         response.headers["Permissions-Policy"] = (

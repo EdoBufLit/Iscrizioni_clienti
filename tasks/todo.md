@@ -6296,3 +6296,27 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 ### Review Form pubblici
 - Refactor Gemini completato e pubblicato con Tessere: card senza tagli a320/390/810/1440px, azioni contestuali, copia link con esito reale, menu tastiera, duplicazione atomica e conferma eliminazione sul target corretto. Default template stabile e stato conferma azzerato.
 - 14 regressioni card e quattro layout; creato/salvato form e campo, duplicata bozza, attivato form, inviata una risposta sintetica e verificati contatore/inbox. Notifiche disabilitate e conferma eliminazione annullata nel browser. Form reale, login e home verificati in produzione senza scritture/invii; esiti rollout e limiti nel rapporto comune sopra.
+
+## Plan (Soci desktop: densita, filtri rapidi e profilo richiudibile - Oct 29, 2026)
+
+- Ridurre lo spazio prima delle righe su desktop: KPI piu compatti e barra di selezione solo con almeno un socio selezionato. Selezione pagina dalla checkbox in intestazione; cronologia operazioni ancora raggiungibile senza barra vuota.
+- Rendere i quattro KPI scorciatoie coerenti con il loro conteggio. Documenti da verificare usa esattamente il criterio della metrica; azzerare filtri incompatibili quando si sceglie una metrica globale.
+- Click riga apre solo Profilo rapido, pulsante Profilo apre la pagina completa. Nessuna selezione automatica obbligatoria; chiusura visibile, recupero focus e tabella a tutta larghezza. Sotto1440px overlay accessibile, da1440px pannello affiancato richiudibile; mobile preservato.
+- Badge italiani, esportazione singola esplicita e funzionante, date italiane coerenti Europe/Rome senza modificare i dati reali.
+- [x] Verificare contratti metriche/filtri/export e componenti; implementare densita, interazioni e pannello responsive con impatto minimo.
+- [x] Test pertinenti e build; review indipendente e browser chiaro/scuro a390/1280x720/1366x768/1440/1920, misurando la prima riga e la leggibilita delle colonne.
+- [ ] Pubblicare su Main nel seguito UI/UX autorizzato; verificare deploy/canary/asset/servizi e documentare risultati/limiti con screenshot.
+
+### Bug segnalato durante il lavoro: socio manuale non visibile
+- [x] Verificare il caso reale in sola lettura: record presente, non eliminato, in attesa documenti, escluso dal filtro iniziale Attivi. Nessun duplicato o modifica del record reale.
+- [x] Dopo creazione riuscita aprire sempre il profilo restituito, conservando approvazione e regole tessera; feedback persistente, nessun refresh con vecchi filtri. Verificare anche data d'iscrizione storica e filtro pagina precedente.
+
+### Chiarimento utente: completamento prima dell'attivazione
+- Il problema comprende un deadlock reale: password assente e upload ordinario riservato agli attivi; email differita non risolve il completamento della pratica. Il socio deve ricevere subito un link per scegliere password e caricare documenti prima dell'approvazione.
+- [x] Implementare invito email transazionale con token monouso/TTL/epoch e sessione onboarding separata, senza concedere sessione membro o servizi degli attivi. Password e documenti propri, validazioni e caricamenti fuori dai lock lunghi; nessun cambio a login/reset ordinari o join/continue legacy.
+- [x] Invito predefinito con email nella creazione manuale e reinvio dal profilo per i soci gia creati. Azione di attivazione visibile nel Profilo, esiti reali su quota/magazzino e invio accesso/tessera dopo attivazione.
+- [x] Test sicurezza/funzionali backend, regressioni UI e flusso sintetico completo creazione→email→password/documenti→approvazione→accesso; nessun invio o modifica del caso reale senza richiesta esplicita.
+
+### Review prima del rilascio
+- Backend completo1025 passed/13 skipped, frontend306 passed/52file e build riuscita.21 controlli PostgreSQL16 su schema QA isolato, poi rimosso; concorrenza monouso, rollback, lock e retry verificati. Nessuna email reale.
+- Browser chiaro/scuro390/1280/1366/1440/1920px senza overflow; prima riga353px a1280x720 con cinque righe complete. Verificate selezione/cronologia, pannello/X/Escape/focus, export singolo e creazione con apertura immediata del profilo. Invito utilizzabile prima dell'attivazione; flusso completo verificato tramite API sintetiche. Rapporto docs/members_desktop_onboarding_release_2026-10-29.md.

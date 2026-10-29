@@ -147,6 +147,70 @@ describe("explicit member bulk workflows", () => {
     expect(mocks.preview).not.toHaveBeenCalled();
   });
 
+  it("renders only compact history when contextual selection is empty", () => {
+    mount({ contextual: true, count: 0, allPageChecked: false, selection: { mode: "ids", member_ids: [] } });
+    const history = screen.getByRole("button", { name: "Cronologia operazioni" });
+    expect(history).toHaveAttribute("aria-haspopup", "dialog");
+    expect(history.closest("section")).toHaveClass("member-bulk-toolbar--idle", "member-bulk-toolbar--contextual");
+    expect(history.closest("section")).not.toHaveClass("surface");
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.queryByText("Nessun selezionato")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Seleziona i soci dall'elenco/)).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+    expect(mocks.preview).not.toHaveBeenCalled();
+  });
+
+  it("paginates contextual history in a dialog and opens one existing operation at a time", async () => {
+    sessionStorage.setItem(props.storageKey, "run-a");
+    mocks.recent.mockResolvedValueOnce({ items: [{ ...run({ action: "export", action_label: "Esporta soci" }) }], total: 12 })
+      .mockResolvedValueOnce({ items: [{ ...run({ id: "run-b", action: "export", action_label: "Esporta soci pagina due" }) }], total: 12 });
+    mocks.read.mockResolvedValueOnce(completed({ id: "run-b", action: "export", action_label: "Esporta soci pagina due", can_download: true }));
+    mount({ contextual: true, count: 0, allPageChecked: false });
+    fireEvent.click(screen.getByRole("button", { name: "Cronologia operazioni" }));
+    const history = await screen.findByRole("dialog", { name: "Operazioni recenti" });
+    await within(history).findByRole("button", { name: /Esporta soci ·/ });
+    expect(screen.getByRole("button", { name: "Cronologia operazioni" })).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(within(history).getByRole("button", { name: "Operazioni successive" }));
+    fireEvent.click(await within(history).findByRole("button", { name: /Esporta soci pagina due ·/ }));
+    await screen.findByRole("button", { name: "Scarica Excel selezionati" });
+    expect(screen.queryByRole("dialog", { name: "Operazioni recenti" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(mocks.recent.mock.calls.map(call => call[0])).toEqual([0, 10]);
+    expect(mocks.read).toHaveBeenCalledExactlyOnceWith("run-b", 0);
+    expect(mocks.preview).not.toHaveBeenCalled();
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
+
+  it("keeps an operation mounted and confirmable when contextual selection is cleared", async () => {
+    const view = mount({ contextual: true });
+    const dialog = await accessPreview();
+    view.rerender(<MemoryRouter><MemberBulkActions {...props} contextual count={0} allPageChecked={false} selection={{ mode: "ids", member_ids: [] }} /></MemoryRouter>);
+    expect(screen.getByRole("dialog")).toBe(dialog);
+    expect(screen.queryByRole("button", { name: "Invia accesso ai selezionati" })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Conferma e accoda 2 accessi" })).toBeEnabled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Conferma e accoda 2 accessi" }));
+    await within(dialog).findByText("Esiti aggiornati. Le email sono accodate; la consegna è gestita dal sistema.");
+    expect(mocks.preview).toHaveBeenCalledTimes(1);
+    expect(mocks.execute).toHaveBeenCalledTimes(1);
+    expect(mocks.execute.mock.calls[0][0]).toBe("run-a");
+  });
+
+  it("shows contextual history errors inside the dialog and allows retry", async () => {
+    mocks.recent.mockRejectedValueOnce(new Error("Cronologia non disponibile"))
+      .mockResolvedValueOnce({ items: [], total: 0 });
+    mount({ contextual: true, count: 0, allPageChecked: false });
+    fireEvent.click(screen.getByRole("button", { name: "Cronologia operazioni" }));
+    const history = await screen.findByRole("dialog", { name: "Operazioni recenti" });
+    expect(await within(history).findByRole("alert")).toHaveTextContent("Cronologia non disponibile");
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    fireEvent.click(within(history).getByRole("button", { name: "Riprova cronologia" }));
+    await within(history).findByText("Nessuna operazione precedente.");
+    expect(within(history).queryByRole("alert")).not.toBeInTheDocument();
+    fireEvent.click(within(history).getByRole("button", { name: "Chiudi finestra" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Cronologia operazioni" })).toHaveAttribute("aria-expanded", "false");
+  });
+
   it("does not repeat select-all when the whole result already fits on the page", () => {
     mount({ total: 3 });
     expect(screen.getByRole("button", { name: "Esporta selezionati" })).toBeVisible();

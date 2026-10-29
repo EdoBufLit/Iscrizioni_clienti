@@ -1,4 +1,4 @@
-import { FormEvent, memo, useEffect, useState } from "react";
+import { FormEvent, memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   createOrgAdminMember,
   type CreateOrgAdminMemberInput,
@@ -21,7 +21,13 @@ type CreateMemberModalProps = {
   membershipSettings?: OrgAdminMembershipSettings | null;
 };
 
-const todayIsoDate = () => new Date().toISOString().slice(0, 10);
+const todayIsoDate = () => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Rome", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(new Date());
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find(item => item.type === type)?.value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
+};
 
 const CreateMemberModal = memo(function CreateMemberModal({
   open,
@@ -30,16 +36,21 @@ const CreateMemberModal = memo(function CreateMemberModal({
   membershipSettings,
 }: CreateMemberModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [submitError, setSubmitError] = useState("");
-  const [joinedAtDefault, setJoinedAtDefault] = useState(todayIsoDate);
+  const [contactEmail, setContactEmail] = useState("");
+  const [sendCompletionEmail, setSendCompletionEmail] = useState(true);
+  const [joinedAtDate, setJoinedAtDate] = useState(todayIsoDate);
   const [membershipType, setMembershipType] = useState<"annual" | "temporary">("annual");
   const [membershipFeeSnapshot, setMembershipFeeSnapshot] = useState("");
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || submittingRef.current) return;
     setSubmitError("");
     setIsSubmitting(false);
-    setJoinedAtDefault(todayIsoDate());
+    setContactEmail("");
+    setSendCompletionEmail(true);
+    setJoinedAtDate(todayIsoDate());
     setMembershipType("annual");
     setMembershipFeeSnapshot(
       membershipSettings?.membership_fee_amount != null
@@ -67,6 +78,7 @@ const CreateMemberModal = memo(function CreateMemberModal({
 
   const handleCreateMember = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (submittingRef.current) return;
     setSubmitError("");
 
     const form = event.currentTarget;
@@ -120,6 +132,7 @@ const CreateMemberModal = memo(function CreateMemberModal({
       return;
     }
 
+    submittingRef.current = true;
     setIsSubmitting(true);
     try {
       const created = await createOrgAdminMember(payload);
@@ -129,9 +142,13 @@ const CreateMemberModal = memo(function CreateMemberModal({
         err instanceof Error ? err.message : "Errore durante la creazione"
       );
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
+  const handleClose = useCallback(() => {
+    if (!submittingRef.current) onClose();
+  }, [onClose]);
 
   if (!open) {
     return null;
@@ -141,8 +158,8 @@ const CreateMemberModal = memo(function CreateMemberModal({
     <ModalShell
       open={open}
       title="Aggiungi socio"
-      description="Inserisci i dati anagrafici del socio e salva l'iscrizione manuale."
-      onClose={() => !isSubmitting && onClose()}
+      description="Il socio viene creato in attesa di approvazione."
+      onClose={handleClose}
       closeOnOverlay={!isSubmitting}
       closeOnEscape={!isSubmitting}
       closeDisabled={isSubmitting}
@@ -160,6 +177,7 @@ const CreateMemberModal = memo(function CreateMemberModal({
         </div>
 
         <form className="mt-2 grid gap-4" onSubmit={handleCreateMember}>
+          <fieldset disabled={isSubmitting} className="m-0 grid min-w-0 gap-4 border-0 p-0">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
               <label htmlFor="create-member-first-name" className="block text-xs font-medium text-neutral-600">
@@ -197,6 +215,8 @@ const CreateMemberModal = memo(function CreateMemberModal({
                 className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
                 type="email"
                 name="email"
+                value={contactEmail}
+                onChange={event => setContactEmail(event.target.value)}
               />
             </div>
             <div>
@@ -248,7 +268,8 @@ const CreateMemberModal = memo(function CreateMemberModal({
                 className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
                 type="date"
                 name="joined_at"
-                defaultValue={joinedAtDefault}
+                value={joinedAtDate}
+                onChange={event => setJoinedAtDate(event.target.value)}
               />
             </div>
           </div>
@@ -332,11 +353,14 @@ const CreateMemberModal = memo(function CreateMemberModal({
                 type="checkbox"
                 className="rounded border-gray-300 text-brand focus:ring-brand"
                 name="send_access_email"
+                checked={sendCompletionEmail}
+                disabled={!contactEmail.trim()}
+                onChange={event => setSendCompletionEmail(event.target.checked)}
               />
-              Invia accesso quando il socio sarà attivo
+              Invia email per completare l’iscrizione
             </label>
             <p className="text-xs text-neutral-500">
-              L'accesso verrà inviato una sola volta dopo l'attivazione. È necessaria un'email valida.
+              Il socio riceve subito il link per scegliere la password e caricare i documenti. Accesso completo e tessera seguono l’attivazione.
             </p>
           </div>
 
@@ -344,7 +368,7 @@ const CreateMemberModal = memo(function CreateMemberModal({
             <button
               type="button"
               className="btn-ghost"
-              onClick={onClose}
+              onClick={handleClose}
               disabled={isSubmitting}
             >
               Annulla
@@ -353,6 +377,7 @@ const CreateMemberModal = memo(function CreateMemberModal({
               {isSubmitting ? "Salvataggio..." : "Crea socio"}
             </button>
           </div>
+          </fieldset>
         </form>
       </div>
     </ModalShell>

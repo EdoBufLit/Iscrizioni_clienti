@@ -1,0 +1,19 @@
+.member-onboarding-page { align-items: flex-start; }
+.member-onboarding-shell { display: grid; gap: 18px; width: min(640px, calc(100% - 32px)); min-width: 0; padding: 28px; border-radius: 20px; }
+.member-onboarding-shell .auth-title { font-size: clamp(24px, 4vw, 32px); line-height: 1.2; }
+.member-onboarding-shell .auth-copy { font-size: 14px; line-height: 1.65; overflow-wrap: anywhere; }
+.member-onboarding-shell .auth-alert { padding: 14px 16px; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.member-onboarding-email { display: block; color: var(--theme-text-muted); overflow-wrap: anywhere; }
+.member-onboarding-shell fieldset { display: grid; min-width: 0; gap: 24px; border: 0; margin: 0; padding: 0; }
+.member-onboarding-fields { display: grid; min-width: 0; gap: 14px; }
+.member-onboarding-fields h2 { font-size: 18px; font-weight: 600; color: var(--theme-text); }
+.member-onboarding-fields label { display: grid; gap: 8px; font-size: 14px; font-weight: 600; color: var(--theme-text); }
+.member-onboarding-fields input { width: 100%; min-width: 0; max-width: 100%; min-height: 46px; border: 1px solid var(--theme-border); border-radius: 10px; background: var(--theme-surface-solid); color: var(--theme-text); padding: 11px 12px; font-size: 16px; font-weight: 400; }
+.member-onboarding-fields input:focus { outline: 2px solid var(--theme-brand); outline-offset: 2px; }
+.member-onboarding-fields input[type="file"] { padding: 10px; font-size: 14px; }
+.member-onboarding-upload { display: grid; min-width: 0; gap: 9px; padding: 16px; border: 1px solid var(--theme-border); border-radius: 14px; }
+.member-onboarding-rejection { color: var(--theme-danger); overflow-wrap: anywhere; font-size: 14px; line-height: 1.5; }
+.member-onboarding-status { display: block; width: fit-content; max-width: 100%; border-radius: 10px; padding: 9px 12px; background: var(--theme-surface-muted); color: var(--theme-text); font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.member-onboarding-submit { justify-content: center; width: 100%; min-height: 46px; padding: 12px 16px; }
+.member-onboarding-shell fieldset:disabled { opacity: .65; }
+@media (max-width: 479px) { .member-onboarding-shell { padding: 20px; gap: 16px; } .member-onboarding-upload { padding: 12px; } }

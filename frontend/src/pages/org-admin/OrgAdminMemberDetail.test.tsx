@@ -12,6 +12,7 @@ const apiMocks = vi.hoisted(() => ({
   createManualPayment: vi.fn(),
   fetchAccounting: vi.fn(),
   updateProfile: vi.fn(),
+  sendOnboarding: vi.fn(),
 }));
 
 vi.mock("../../lib/api", () => ({
@@ -21,6 +22,7 @@ vi.mock("../../lib/api", () => ({
   fetchOrgAdminMembershipSettings: (...args: unknown[]) =>
     apiMocks.fetchMembershipSettings(...args),
   sendOrgAdminMemberCardEmail: vi.fn(),
+  sendOrgAdminMemberOnboarding: (...args: unknown[]) => apiMocks.sendOnboarding(...args),
   updateOrgAdminMemberProfile: (...args: unknown[]) => apiMocks.updateProfile(...args),
 }));
 
@@ -233,5 +235,43 @@ describe("OrgAdminMemberDetail", () => {
     fireEvent.click(confirm);
     expect(request).toHaveBeenCalledExactlyOnceWith("/api/org-admin/members/42", { method: "DELETE" });
     expect(await screen.findByText("Elenco soci")).toBeInTheDocument();
+  });
+
+  it("permette al socio manuale pendente di ricevere l'invito prima dell'attivazione", async () => {
+    apiMocks.fetchMember.mockResolvedValue(makeMember({ status: "PENDING", workflow_status: "pending_docs", is_active: false, is_manual: true, signup_source: "admin", has_access: false, card_no: null, card_number: null }));
+    apiMocks.sendOnboarding.mockResolvedValue({ ok: true, email_status: "queued" });
+    renderDetail();
+    const action = await screen.findByRole("button", { name: "Invia invito al socio" });
+    expect(screen.getByRole("button", { name: "Attiva socio" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Invia accesso" })).toBeDisabled();
+    fireEvent.click(action);
+    await waitFor(() => expect(apiMocks.sendOnboarding).toHaveBeenCalledExactlyOnceWith(42));
+    expect((await screen.findAllByText(/Invito accodato:/)).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Email consegnata/)).not.toBeInTheDocument();
+  });
+
+  it("mostra l'esito reale dell'approvazione quando manca la quota e consente di completarla", async () => {
+    const pending = makeMember({ status: "PENDING", workflow_status: "pending_docs", is_active: false, is_manual: true, signup_source: "admin", has_access: false });
+    apiMocks.fetchMember.mockResolvedValueOnce(pending).mockResolvedValue({ ...pending, workflow_status: "pending_cards", decision_at: "2026-10-29T10:00:00Z" });
+    const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true, status: "pending_cards", activation_status: "payment_pending" }) });
+    vi.stubGlobal("fetch", request);
+    renderDetail();
+    fireEvent.click(await screen.findByRole("button", { name: "Attiva socio" }));
+    const confirmation = screen.getByRole("dialog", { name: "Approva iscrizione" });
+    expect(request).not.toHaveBeenCalled();
+    fireEvent.click(within(confirmation).getByRole("button", { name: "Conferma approvazione" }));
+    expect(await screen.findByText(/Registra la quota nella scheda Pagamenti/)).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Completa attivazione" })).toBeEnabled();
+    expect(screen.queryByText("Socio attivato. La tessera è disponibile.")).not.toBeInTheDocument();
+  });
+
+  it("rende recuperabile un'approvazione ferma per mancanza tessere", async () => {
+    apiMocks.fetchMember.mockResolvedValue(makeMember({ status: "PENDING", workflow_status: "pending_cards", decision_at: "2026-10-29T10:00:00Z", is_active: false, is_manual: true, has_access: false }));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ status: "pending_cards", activation_status: "card_stock_exhausted" }) }));
+    renderDetail();
+    fireEvent.click(await screen.findByRole("button", { name: "Completa attivazione" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Approva iscrizione" })).getByRole("button", { name: "Conferma approvazione" }));
+    expect(await screen.findByText(/Servono tessere disponibili/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Completa attivazione" })).toBeEnabled();
   });
 });

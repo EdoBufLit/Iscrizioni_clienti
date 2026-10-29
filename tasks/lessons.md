@@ -371,3 +371,15 @@ Do not interpret "date without slots" as closed when a default booking schedule 
 
 - Correzione utente: nella nuova pagina Tessere il filtro anno era tagliato e lo stato abbreviato. L'assenza di overflow del documento non prova che i singoli controlli siano leggibili.
 - Su telefono e tablet seguire Soci: pulsante Filtri, pannello inferiore con campi completi e applicazione esplicita, filtri attivi rimovibili. Non usare una riga di select che lascia controlli parzialmente fuori schermo; verificare ogni valore visibile negli screenshot.
+
+## Oct 29, 2026 - Soci desktop: spazio utile e azioni distinte
+
+- Correzione utente: misurare dove appare la prima riga anche su portatili bassi, non soltanto su desktop alti. KPI compatti, azioni massive contestuali e nessuna barra vuota prima della tabella.
+- I KPI cliccabili devono mostrare lo stesso insieme contato dalla metrica. Distinguere apertura del profilo rapido da navigazione al profilo completo, con chiusura esplicita e overlay sotto1440px; non riaprire automaticamente il pannello appena chiuso.
+- Tradurre gli stati in ogni vista e nominare l'export secondo il suo ambito. Le date di esempio non autorizzano a cambiare anagrafiche reali; verificare formato e timezone.
+
+## Oct 29, 2026 - La creazione manuale deve avere un percorso completo
+
+- Correzione utente: successo del POST e record presente non bastano. Verificare email immediata, scelta password, primo upload documenti, approvazione e login con lo stesso flusso prima di considerare risolto il caso.
+- Non differire ogni comunicazione fino all'attivazione quando password e documenti sono prerequisiti dell'attivazione: crea un deadlock. Usare un invito di completamento con sessione limitata, distinto dai servizi per soci attivi.
+- Rendere visibili le azioni di completamento/attivazione nel Profilo, distinguere invito accodato da email consegnata e mostrare i motivi reali che ritardano l'emissione della tessera. Non correggere solo la visibilita nella lista.

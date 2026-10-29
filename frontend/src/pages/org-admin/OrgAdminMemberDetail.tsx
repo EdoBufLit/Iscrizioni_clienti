@@ -6,6 +6,7 @@ import {
   fetchOrgAdminMemberDetail,
   fetchOrgAdminMembershipSettings,
   sendOrgAdminMemberCardEmail,
+  sendOrgAdminMemberOnboarding,
   updateOrgAdminMemberProfile,
   type OrgAdminMemberActivity,
   type OrgAdminMemberDetail,
@@ -57,6 +58,10 @@ export default function OrgAdminMemberDetail() {
   const requestSequence = useRef(0);
   const [reviewingDocId, setReviewingDocId] = useState<number | null>(null);
   const [sendingAccess, setSendingAccess] = useState(false);
+  const [sendingOnboarding, setSendingOnboarding] = useState(false);
+  const onboardingBusy = useRef(false);
+  const decisionBusy = useRef(false);
+  const [activationFeedback, setActivationFeedback] = useState("");
   const [sendAccessMessage, setSendAccessMessage] = useState<string | null>(null);
   const [sendAccessError, setSendAccessError] = useState<string | null>(null);
   const [rejectingDoc, setRejectingDoc] = useState<OrgAdminMemberDocument | null>(null);
@@ -495,7 +500,8 @@ export default function OrgAdminMemberDetail() {
   };
 
   const confirmDecision = async () => {
-    if (!decisionDraft) return;
+    if (!decisionDraft || decisionBusy.current) return;
+    decisionBusy.current = true;
     setIsSubmittingDecision(true);
     setDecisionActionState(decisionDraft.decision, "loading");
     try {
@@ -504,19 +510,23 @@ export default function OrgAdminMemberDetail() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ decision: decisionDraft.decision, notes: decisionDraft.notes }),
       });
-      if (!res.ok) throw new Error("Errore durante il salvataggio della decisione");
+      const result = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(typeof result?.detail === "string" ? result.detail : "Errore durante il salvataggio della decisione");
 
-      await res.json();
+      const activation = result?.activation_status ?? result?.status?.toLowerCase();
+      const feedback = decisionDraft.decision === "reject" ? "Iscrizione rifiutata."
+        : activation === "active" ? "Socio attivato. La tessera è disponibile."
+        : activation === "payment_pending" ? "Iscrizione approvata. Registra la quota nella scheda Pagamenti per completare l’attivazione."
+        : activation === "card_stock_exhausted" ? "Iscrizione approvata. Servono tessere disponibili: richiedi un rifornimento e poi completa l’attivazione."
+        : "Iscrizione approvata. Controlla lo stato prima di completare l’attivazione.";
+      setActivationFeedback(feedback);
       await fetchMember(true);
       setDecisionDraft(null);
       setDecisionActionState(decisionDraft.decision, "success");
       showToast({
         tone: "success",
         title: "Decisione iscrizione",
-        message:
-          decisionDraft.decision === "approve"
-            ? "Iscrizione approvata correttamente."
-            : "Iscrizione rigettata correttamente.",
+        message: feedback,
       });
       resetActionStateLater(() => setDecisionActionState(decisionDraft.decision, "idle"));
     } catch (err) {
@@ -525,8 +535,24 @@ export default function OrgAdminMemberDetail() {
       showToast({ tone: "error", title: "Decisione iscrizione", message });
       resetActionStateLater(() => setDecisionActionState(decisionDraft.decision, "idle"));
     } finally {
+      decisionBusy.current = false;
       setIsSubmittingDecision(false);
     }
+  };
+
+  const handleSendOnboarding = async () => {
+    if (!member || !member.email || onboardingBusy.current) return;
+    onboardingBusy.current = true; setSendingOnboarding(true);
+    try {
+      await sendOrgAdminMemberOnboarding(member.id);
+      const feedback = "Invito accodato: il socio potrà scegliere la password e caricare i documenti prima dell’attivazione.";
+      setActivationFeedback(feedback);
+      showToast({ tone: "success", title: "Invito al socio", message: feedback });
+    } catch (reason) {
+      if (reason instanceof AuthError) { navigate("/org-admin/login", { replace: true }); return; }
+      setActivationFeedback(reason instanceof Error ? reason.message : "Invito non accodato. Riprova.");
+      showToast({ tone: "error", title: "Invito non accodato", message: reason instanceof Error ? reason.message : "Riprova." });
+    } finally { onboardingBusy.current = false; setSendingOnboarding(false); }
   };
 
   const handleManualPayment = async (payload: ManualPaymentPayload) => {
@@ -701,6 +727,8 @@ export default function OrgAdminMemberDetail() {
   const workflow = workflowMeta(workflowStatus);
   const documentState = documentMeta(documentStatus);
   const decisionMade = Boolean(member.decision_at) || ["active", "rejected"].includes(workflowStatus.toLowerCase());
+  const manualMember = member.signup_source === "admin";
+  const blockedMembership = Boolean(member.deleted_at) || ["deleted", "rejected", "expired"].includes(workflowStatus) || ["DELETED", "EXPIRED"].includes(member.status);
   const showCard = () => setCardSheetOpen(true);
   const openProfile = () => { setProfileError(null); setEditModalOpen(true); };
   const cardPanel = <section className="member-detail-panel member-detail-card" aria-label="Tessera socio">
@@ -727,6 +755,17 @@ export default function OrgAdminMemberDetail() {
   return <div className="member-detail">
     <Link to="/org-admin/soci" className="member-detail-back"><span aria-hidden="true">←</span> Soci</Link>
     <MemberDetailHeader member={member} activeTab={activeTab} onTabChange={setActiveTab} onEdit={openProfile} onShowCard={showCard} />
+    {!blockedMembership && (!member.is_active || (manualMember && !member.has_access)) && <section className="member-detail-panel" aria-label="Completamento e attivazione">
+      <div className="flex flex-wrap items-center justify-between gap-3"><div><h2>{member.is_active ? "Completa l’accesso del socio" : "Completa iscrizione e attivazione"}</h2>
+        {manualMember && <p className="member-detail-hint">Il link email permette di scegliere la password e caricare i documenti anche prima dell’attivazione.</p>}</div>
+        <div className="flex flex-wrap gap-2">
+          {manualMember && <button type="button" className="btn-secondary" disabled={!member.email || sendingOnboarding} onClick={handleSendOnboarding}>{sendingOnboarding ? "Invio…" : "Invia invito al socio"}</button>}
+          {!member.is_active && <button type="button" className="btn-primary" disabled={isSubmittingDecision} onClick={() => void handleDecision("approve", member.decision_notes ?? "")}>{decisionMade ? "Completa attivazione" : "Attiva socio"}</button>}
+        </div>
+      </div>
+      {manualMember && !member.email && <p className="member-detail-hint">Aggiungi l’email del socio per inviare il link di completamento.</p>}
+    </section>}
+    {activationFeedback && <p role="status" className="member-detail-panel text-sm">{activationFeedback}</p>}
     {refreshError && <div role="alert" className="member-detail-panel text-sm text-red-600">{refreshError} <button type="button" className="underline" onClick={() => void fetchMember(true)}>Riprova aggiornamento</button></div>}
     <div role="tabpanel" id={`member-panel-${activeTab}`} aria-labelledby={`member-tab-${activeTab}`} tabIndex={0} className="member-detail-content">
       {activeTab === "profile" && <div className="member-detail-profile-grid">
@@ -756,10 +795,10 @@ export default function OrgAdminMemberDetail() {
           <section className="member-detail-panel" data-tour="admin-send-access">
             <h2>Accesso area riservata</h2>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-              <div><p className="text-sm font-medium">{member.has_access ? "Account attivo" : "Accesso da attivare"}</p>{lastAccessLabel && <p className="member-detail-hint !mt-1">Ultimo invio: {lastAccessLabel}</p>}</div>
+              <div><p className="text-sm font-medium">{member.has_access ? "Password impostata" : "Password da impostare"}</p>{lastAccessLabel && <p className="member-detail-hint !mt-1">Ultimo invio: {lastAccessLabel}</p>}</div>
               {!member.has_access && <button type="button" onClick={handleSendAccess} disabled={sendingAccess || !member.email || !member.is_active} className="btn-ghost">{sendingAccess ? "Invio…" : "Invia accesso"}</button>}
             </div>
-            {!member.has_access && !member.is_active && <p className="member-detail-hint">Attiva il socio per inviare l'accesso.</p>}
+            {!member.has_access && !member.is_active && <p className="member-detail-hint">{manualMember ? "Invia il link di completamento per consentire al socio di scegliere la password e caricare i documenti." : "L’accesso completo sarà disponibile dopo l’attivazione."}</p>}
             {!member.has_access && !member.email && <p className="member-detail-hint">Aggiungi un'email per inviare l'accesso.</p>}
             {sendAccessError && <p role="alert" className="mt-3 text-sm text-red-600">{sendAccessError}</p>}
             {sendAccessMessage && <p role="status" className="mt-3 text-sm text-emerald-600">{sendAccessMessage}</p>}

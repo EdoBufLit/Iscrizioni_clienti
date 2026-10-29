@@ -544,6 +544,8 @@ def maybe_fulfill_member_card(
     if payment is not None and payment.id is not None:
         db.query(MembershipPayment).filter(MembershipPayment.id == payment.id).with_for_update().first()
     member = _lock_member_for_fulfillment(db, member)
+    if member.deleted_at is not None:
+        return FulfillmentResult(issued_card=False, reason="member_deleted")
 
     if organization_requires_membership_payment(org) and not payment_status_is_paid(
         member.payment_status

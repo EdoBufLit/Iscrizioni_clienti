@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   fetchMembers: vi.fn(),
   fetchMetrics: vi.fn(),
   fetchSettings: vi.fn(),
+  showToast: vi.fn(),
   admin: { organization: { name: "Club Futura", slug: "club-futura" } },
 }));
 
@@ -22,6 +23,8 @@ vi.mock("../../lib/api", () => ({
 vi.mock("./OrgAdminLayout", () => ({
   useOrgAdmin: () => ({ admin: mocks.admin, loading: false }),
 }));
+
+vi.mock("../../components/ui/ToastProvider", () => ({ useToast: () => ({ showToast: mocks.showToast }) }));
 
 vi.mock("./components/CreateMemberModal", () => ({ default: () => null }));
 vi.mock("./components/MemberImportModal", () => ({ default: () => null }));

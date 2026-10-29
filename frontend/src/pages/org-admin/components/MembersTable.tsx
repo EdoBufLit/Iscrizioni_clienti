@@ -1,6 +1,7 @@
 import { memo } from "react";
 import Skeleton from "../../../components/ui/Skeleton";
 import { type OrgAdminMember } from "../../../lib/api";
+import { formatMemberDate } from "../../../lib/memberDates";
 import {
   EMPTY_STATE_COPY,
   memberLifecycleStatusMeta,
@@ -9,8 +10,8 @@ import {
 } from "../../../lib/statusLabels";
 
 const thClass =
-  "px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.15em] text-neutral-400";
-const tdClass = "px-5 py-3.5 text-sm text-neutral-700";
+  "px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-400";
+const tdClass = "px-3 py-2.5 text-sm text-neutral-700";
 
 type MembersTableProps = {
   error: boolean;
@@ -70,7 +71,7 @@ const MembersTable = memo(function MembersTable({
               Impossibile caricare l'elenco dei soci
             </p>
             <p className="mt-1 text-sm leading-6 text-red-600">
-              Si ? verificato un errore. Ricarica la pagina per riprovare.
+              Si è verificato un errore. Ricarica la pagina per riprovare.
             </p>
           </div>
         </div>
@@ -80,17 +81,17 @@ const MembersTable = memo(function MembersTable({
 
   return (
     <div
-      className="surface-strong mt-0 overflow-hidden md:mt-4 md:min-h-[360px]"
+      className="org-admin-members-table surface-strong mt-0 min-w-0 overflow-hidden md:min-h-[360px]"
       data-tour="admin-members-list"
       data-component="orgadmin-members-table"
     >
-      <div className="hidden overflow-x-auto md:block">
-        <table className="w-full text-left">
+      <div className="org-admin-members-table__scroll hidden overflow-x-auto md:block">
+        <table className="org-admin-members-table__data w-full text-left">
           <thead className="border-b border-neutral-200/60 bg-slate-50/70">
             <tr>
               {onToggleMember && (
-                <th className="w-12 px-3 py-2">
-                  <label className="inline-flex min-h-11 min-w-11 items-center justify-center">
+                <th className="w-12 px-2 py-0">
+                  <label className="inline-flex min-h-10 min-w-10 items-center justify-center">
                     <input
                       type="checkbox"
                       aria-label="Seleziona tutti i soci della pagina"
@@ -158,14 +159,28 @@ const MembersTable = memo(function MembersTable({
                 return (
                   <tr
                     key={m.id}
-                    onClick={() => onSelectMember?.(m.id)}
-                    className={`cursor-pointer transition hover:bg-slate-50/70 ${
+                    data-member-id={m.id}
+                    data-testid={`member-row-${m.id}`}
+                    tabIndex={onSelectMember ? 0 : undefined}
+                    aria-label={onSelectMember ? `Mostra profilo rapido di ${m.name}` : undefined}
+                    aria-selected={onSelectMember ? isSelected : undefined}
+                    onClick={(event) => {
+                      if ((event.target as HTMLElement).closest("button, a, input, label, select, textarea")) return;
+                      onSelectMember?.(m.id);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.target !== event.currentTarget || !onSelectMember) return;
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      onSelectMember(m.id);
+                    }}
+                    className={`org-admin-members-table__row transition hover:bg-slate-50/70 ${onSelectMember ? "cursor-pointer" : ""} ${
                       isSelected ? "bg-emerald-50/70 ring-1 ring-inset ring-emerald-200" : i % 2 === 1 ? "bg-slate-50/50" : ""
                     }`}
                   >
                     {onToggleMember && (
-                      <td className="px-3 py-2" onClick={(event) => event.stopPropagation()}>
-                        <label className="inline-flex min-h-11 min-w-11 items-center justify-center">
+                      <td className="px-2 py-0" onClick={(event) => event.stopPropagation()}>
+                        <label className="inline-flex min-h-10 min-w-10 items-center justify-center">
                           <input
                             type="checkbox"
                             aria-label={`Seleziona ${m.name}`}
@@ -191,7 +206,7 @@ const MembersTable = memo(function MembersTable({
                         )}
                       </div>
                     </td>
-                    <td className={tdClass}>{m.email ?? "-"}</td>
+                    <td className={`${tdClass} org-admin-members-table__email break-words`}>{m.email ?? "-"}</td>
                     <td className={tdClass}>
                       <div className="flex flex-wrap items-center gap-2">
                         {m.status && (
@@ -224,7 +239,7 @@ const MembersTable = memo(function MembersTable({
                     </td>
                     <td className={`${tdClass} tabular-nums`}>
                       <div className="flex flex-col gap-1">
-                        <span>
+                        <span className="org-admin-members-table__card-number">
                           {m.card_number ?? m.card_no ?? "-"}
                           {m.card_year ? ` / ${m.card_year}` : ""}
                         </span>
@@ -235,22 +250,22 @@ const MembersTable = memo(function MembersTable({
                         ) : null}
                       </div>
                     </td>
-                    <td className={`${tdClass} tabular-nums`}>
-                      {m.joined_at
-                        ? new Date(m.joined_at).toLocaleDateString("it-IT")
-                        : "-"}
+                    <td className={`${tdClass} whitespace-nowrap tabular-nums`}>
+                      {formatMemberDate(m.joined_at)}
                     </td>
                     <td className={tdClass}>
                       <div className="flex justify-end">
                         <button
-                          className="text-sm font-medium text-brand hover:text-brand-dark"
+                          type="button"
+                          aria-label={`Apri profilo completo di ${m.name}`}
+                          className="inline-flex min-h-10 items-center text-sm font-medium text-brand hover:text-brand-dark"
                           onClick={(event) => {
                             event.stopPropagation();
                             onOpenMember(m.id);
                           }}
                           data-testid={`member-open-${m.id}`}
                         >
-                          Apri
+                          Profilo
                         </button>
                       </div>
                     </td>

@@ -37,6 +37,7 @@ from app.routes import (
     membership_payments,
     temporary_memberships,
     member,
+    member_onboarding,
     onboarding,
     org_admin,
     org_admin_accounting,
@@ -307,6 +308,7 @@ app.include_router(marketing_preferences.router)
 app.include_router(membership_payments.router)
 app.include_router(temporary_memberships.router)
 app.include_router(member.router)
+app.include_router(member_onboarding.router)
 app.include_router(renewals.router)
 # The historical HTML admin router carried a second password-only super-admin
 # login and mutation surface. The public `/admin` React demo remains available
