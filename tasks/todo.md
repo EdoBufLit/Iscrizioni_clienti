@@ -6275,15 +6275,24 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - [x] Esaminare dati, azioni e test esistenti; definire responsabilita dei componenti senza cambiare le regole di business.
 - [x] Implementare tre schede, pannelli e liste responsive, builder compatto accessibile; conservare filtri/salvataggi e gestione errori.
 - [x] Test pertinenti, build, review indipendente e collaudo browser chiaro/scuro su mobile/tablet/desktop con dati sintetici.
-- [ ] Pubblicare su Main, verificare deploy/canary/asset/servizi e documentare risultati e limiti.
+- [x] Pubblicare su Main, verificare deploy/canary/asset/servizi e documentare risultati e limiti.
+
+### Review Tessere
+- Pubblicato bac42de; seguito61b0ddc per errore layout pubblico emerso nel collaudo dei Form. Pipeline40943150977 e40943731154 riuscite, entrambe con Final canary passed. Nuova UI responsive, filtri mobili come Soci e branding conservato.
+- Frontend finale243 test/46file, backend pertinente63; build/typecheck e review indipendente superati. Magazzino, ordini, filtri/paging, rifornimento2027, salvataggi/logo e artwork dedicato verificati con dati sintetici. 37 controlli HTTPS/hash asset e440 controlli PostgreSQL16 readonly su tre associazioni; sette servizi healthy senza restart/OOM, schema invariato.
+- Rapporto docs/cards_forms_release_2026-10-29.md; screenshot/evidenze privati in output/cards-workspace-20261029/. Browser pubblico verificato, cache worker attuale in BYPASS; QA fermato e viewport ripristinato. Nessun invio, pagamento o modifica di dati reali per collaudo; limite dispositivi Safari/iOS fisici.
 
 ## Plan (Completare refactor Gemini form pubblici Org Admin - Oct 29, 2026)
 
 - L'utente autorizza esplicitamente completamento e push anche delle modifiche parallele di Gemini a Form pubblici nell'Org Admin. Preservare la correzione Tessere in corso e le altre funzioni esistenti.
 - [x] Esaminare diff Forms/Communications/stili e contratti API; completare le parti lasciate a meta e correggere errori di compilazione/azioni.
 - [x] Verificare lista, menu, link/copia, creazione/modifica, impostazioni email e conferma eliminazione con test e dati sintetici; collaudo responsive chiaro/scuro.
-- [ ] Includere nel rilascio Main verificato insieme a Tessere; controllare deploy, asset e servizi e registrare risultati.
+- [x] Includere nel rilascio Main verificato insieme a Tessere; controllare deploy, asset e servizi e registrare risultati.
 
 ### Correzione emersa dal collaudo del link pubblico
 - [x] Isolare l'errore GSAP con preferenza riduci animazioni: gli effetti del logo ricevevano riferimenti nulli sulle pagine senza intestazione pubblica.
-- [ ] Limitare le animazioni alle pagine con intestazione, aggiungere regressioni e verificare form pubblico/login e navigazione pubblica; pubblicare il seguito prima di concludere il rilascio.
+- [x] Limitare le animazioni alle pagine con intestazione, aggiungere regressioni e verificare form pubblico/login e navigazione pubblica; pubblicare il seguito prima di concludere il rilascio.
+
+### Review Form pubblici
+- Refactor Gemini completato e pubblicato con Tessere: card senza tagli a320/390/810/1440px, azioni contestuali, copia link con esito reale, menu tastiera, duplicazione atomica e conferma eliminazione sul target corretto. Default template stabile e stato conferma azzerato.
+- 14 regressioni card e quattro layout; creato/salvato form e campo, duplicata bozza, attivato form, inviata una risposta sintetica e verificati contatore/inbox. Notifiche disabilitate e conferma eliminazione annullata nel browser. Form reale, login e home verificati in produzione senza scritture/invii; esiti rollout e limiti nel rapporto comune sopra.
