@@ -6283,3 +6283,7 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - [x] Esaminare diff Forms/Communications/stili e contratti API; completare le parti lasciate a meta e correggere errori di compilazione/azioni.
 - [x] Verificare lista, menu, link/copia, creazione/modifica, impostazioni email e conferma eliminazione con test e dati sintetici; collaudo responsive chiaro/scuro.
 - [ ] Includere nel rilascio Main verificato insieme a Tessere; controllare deploy, asset e servizi e registrare risultati.
+
+### Correzione emersa dal collaudo del link pubblico
+- [x] Isolare l'errore GSAP con preferenza riduci animazioni: gli effetti del logo ricevevano riferimenti nulli sulle pagine senza intestazione pubblica.
+- [ ] Limitare le animazioni alle pagine con intestazione, aggiungere regressioni e verificare form pubblico/login e navigazione pubblica; pubblicare il seguito prima di concludere il rilascio.

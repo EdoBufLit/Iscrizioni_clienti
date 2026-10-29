@@ -63,7 +63,7 @@ const Layout = () => {
     location.pathname.includes("/iscrizione");
   const showPublicChrome = !isDashboardRoute && !isStandaloneAuthRoute && !isPublicFormRoute;
 
-  usePublicMotion({ enabled: !isDashboardRoute, key: location.pathname });
+  usePublicMotion({ enabled: showPublicChrome, key: location.pathname });
 
   useEffect(() => {
     document.body.classList.toggle("dashboard-perf-mode", isDashboardRoute);
@@ -105,7 +105,7 @@ const Layout = () => {
   }, [isDashboardRoute, location.pathname]);
 
   useEffect(() => {
-    if (isDashboardRoute) return;
+    if (!showPublicChrome) return;
 
     const headerElement = publicHeaderRef.current;
     const logoElement = logoRef.current;
@@ -151,23 +151,26 @@ const Layout = () => {
       gsap.killTweensOf([headerElement, logoElement]);
       headerShrinkRef.current = false;
     };
-  }, [isDashboardRoute, resolvedTheme]);
+  }, [showPublicChrome, resolvedTheme]);
 
   useEffect(() => {
-    if (isDashboardRoute) return;
+    if (!showPublicChrome) return;
+    const logo = logoRef.current;
+    const payoff = payoffRef.current;
+    if (!logo || !payoff) return;
     if (prefersReducedMotion()) {
-      gsap.set([logoRef.current, payoffRef.current], { clearProps: "all" });
+      gsap.set([logo, payoff], { clearProps: "all" });
       return;
     }
 
     const timeline = gsap.timeline();
     timeline.fromTo(
-      logoRef.current,
+      logo,
       { autoAlpha: 0, scale: 1.03 },
       { autoAlpha: 1, scale: 1, duration: 0.6, ease: "power2.out" }
     );
     timeline.fromTo(
-      payoffRef.current,
+      payoff,
       { autoAlpha: 0, y: 6 },
       { autoAlpha: 1, y: 0, duration: 0.4, ease: "power2.out" },
       0.24
@@ -176,10 +179,10 @@ const Layout = () => {
     return () => {
       timeline.kill();
     };
-  }, [isDashboardRoute, location.pathname]);
+  }, [showPublicChrome, location.pathname]);
 
   useEffect(() => {
-    if (isDashboardRoute) return;
+    if (!showPublicChrome) return;
     const panel = mobileMenuRef.current;
     if (!panel) return;
 
@@ -212,7 +215,7 @@ const Layout = () => {
         gsap.set(panel, { display: "none" });
       },
     });
-  }, [isDashboardRoute, menuOpen]);
+  }, [showPublicChrome, menuOpen]);
 
   const publicAccessTarget =
     publicAuth.authenticated && publicAuth.redirect_to

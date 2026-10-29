@@ -22,7 +22,9 @@
 
 ## Rilascio
 
-In attesa di commit/pipeline e verifiche sul runtime pubblicato. Nessuna migrazione prevista. Webhook WhatsApp/Pienissimo, endpoint legacy e pulizia P3 restano fuori dal perimetro.
+Push principale `bac42de`, pipeline40943150977. Il controllo aggiuntivo del link pubblico ha individuato un errore preesistente del layout: con preferenza riduci animazioni, GSAP riceveva riferimenti nulli nelle pagine senza intestazione, inclusi i form pubblici. Correzione limitata agli effetti delle pagine con intestazione; quattro regressioni dedicate superate e apertura reale del form pubblico confermata nel browser dopo rebuild. Il seguito viene pubblicato prima di concludere il rilascio.
+
+In attesa delle verifiche sul runtime finale. Nessuna migrazione prevista. Webhook WhatsApp/Pienissimo, endpoint legacy e pulizia P3 restano fuori dal perimetro.
 
 ## Limiti
 
