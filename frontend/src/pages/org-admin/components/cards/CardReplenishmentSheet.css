@@ -1,0 +1,28 @@
+.org-admin-v2 .card-replenishment-sheet.modal-shell-panel {
+  display: flex;
+  flex-direction: column;
+  max-height: 92vh !important;
+  max-height: 92dvh !important;
+  overflow: hidden !important;
+  border-radius: 22px 22px 0 0;
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+}
+.card-replenishment-sheet .modal-shell-header { flex-shrink: 0; }
+.card-replenishment-sheet .modal-shell-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.card-replenishment-sheet .modal-shell-body + div { flex-shrink: 0; }
+.card-replenishment-form { display: grid; gap: 16px; }
+.card-replenishment-form fieldset { display: grid; min-width: 0; gap: 14px; margin: 0; padding: 0; border: 0; }
+.card-replenishment-form__row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.card-replenishment-form label { display: grid; gap: 7px; min-width: 0; color: var(--theme-text); font-size: 14px; font-weight: 600; }
+.card-replenishment-form input, .card-replenishment-form select, .card-replenishment-form textarea { width: 100%; min-width: 0; border: 1px solid var(--theme-border-strong); border-radius: 10px; padding: 10px 12px; background: var(--theme-surface-solid); color: var(--theme-text); font-size: 16px; font-weight: 400; }
+.card-replenishment-form fieldset:disabled input, .card-replenishment-form fieldset:disabled select, .card-replenishment-form fieldset:disabled textarea { opacity: .65; }
+.card-replenishment-form__amount { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px; padding-top: 12px; border-top: 1px solid var(--theme-border); }
+.card-replenishment-form__amount span { color: var(--theme-text-muted); font-size: 13px; }
+.card-replenishment-form__amount strong { color: var(--theme-text); font-size: 18px; }
+.card-replenishment-form__impact { color: var(--theme-text-muted); font-size: 13px; line-height: 1.5; }
+.card-replenishment-form__error { color: var(--theme-danger); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+@media (max-width: 479px) {
+  .card-replenishment-sheet .modal-shell-body + div { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .card-replenishment-sheet .modal-shell-body + div button { justify-content: center; min-height: 44px; padding: 10px 12px; }
+  .card-replenishment-sheet .modal-shell-body + div .btn-primary { grid-row: 1; white-space: normal; text-align: center; }
+}

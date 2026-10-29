@@ -4314,19 +4314,38 @@ export type CardMovementsResponse = {
   items: CardMovement[];
   total: number;
   current_year?: number;
+  selected_year?: number | null;
+  available_years?: number[];
+  lot_options?: CardLotOption[];
 };
 
-export async function fetchCardMovements(params?: {
+export type CardLotOption = {
+  id: number;
+  year: number;
+  range_start: number;
+  range_end: number;
+  range_start_label?: string;
+  range_end_label?: string;
+};
+
+export type CardMovementsParams = {
   limit?: number;
   offset?: number;
-}): Promise<CardMovementsResponse> {
+  year?: number;
+  all_years?: boolean;
+  status?: string;
+  batch_id?: number;
+};
+
+export async function fetchCardMovements(params?: CardMovementsParams, signal?: AbortSignal): Promise<CardMovementsResponse> {
   const sp = new URLSearchParams();
-  if (params?.limit != null) sp.set("limit", String(params.limit));
-  if (params?.offset != null) sp.set("offset", String(params.offset));
+  for (const [key, value] of Object.entries(params ?? {})) {
+    if (value != null && String(value) !== "") sp.set(key, String(value));
+  }
   const qs = sp.toString();
-  const res = await fetch(`/api/org-admin/cards/movements${qs ? `?${qs}` : ""}`);
+  const res = await fetch(`/api/org-admin/cards/movements${qs ? `?${qs}` : ""}`, { signal });
   if (res.status === 401) throw new AuthError("Not authenticated");
-  if (!res.ok) throw new Error("Failed to fetch card movements");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Impossibile caricare i movimenti tessere"));
   return res.json();
 }
 
@@ -4425,15 +4444,40 @@ export type OrgAdminCardReplenishmentsResponse = {
   total: number;
   summary: CardReplenishmentSummary;
   capability: CardReplenishmentCapability;
+  current_year?: number;
+  selected_year?: number | null;
+  available_years?: number[];
+  lot_options?: CardLotOption[];
 };
 
-export async function fetchOrgAdminCardReplenishments(): Promise<OrgAdminCardReplenishmentsResponse> {
-  const res = await fetch("/api/org-admin/cards/replenishments");
+export type CardReplenishmentsParams = {
+  limit?: number;
+  offset?: number;
+  year?: number;
+  all_years?: boolean;
+  billing_status?: "paid" | "unpaid" | "not_applicable";
+  card_batch_id?: number;
+};
+
+export async function fetchOrgAdminCardReplenishments(params?: CardReplenishmentsParams, signal?: AbortSignal): Promise<OrgAdminCardReplenishmentsResponse> {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params ?? {})) {
+    if (value != null && String(value) !== "") query.set(key, String(value));
+  }
+  const suffix = query.size ? `?${query.toString()}` : "";
+  const res = await fetch(`/api/org-admin/cards/replenishments${suffix}`, { signal });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) {
     throw new Error(await parseApiErrorDetail(res, "Errore nel caricamento delle richieste tessere"));
   }
   return res.json();
+}
+
+export class CardReplenishmentError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+    this.name = "CardReplenishmentError";
+  }
 }
 
 export async function createOrgAdminCardReplenishment(
@@ -4450,7 +4494,7 @@ export async function createOrgAdminCardReplenishment(
   });
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) {
-    throw new Error(await parseApiErrorDetail(res, "Errore nella richiesta di rifornimento"));
+    throw new CardReplenishmentError(await parseApiErrorDetail(res, "Errore nella richiesta di rifornimento"), res.status);
   }
   return res.json();
 }

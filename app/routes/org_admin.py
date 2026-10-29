@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from datetime import datetime, timedelta, date
 from decimal import Decimal
 from typing import Literal, Optional
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, TypeAdapter, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, TypeAdapter, field_validator, model_validator
 
 from fastapi import UploadFile, File
 from app.db import get_db
@@ -188,6 +188,7 @@ from app.services.booking_rooms import (
 )
 from app.services.card_allocation import release_card_number
 from app.services.card_availability import CardBatchAvailability, card_batch_availability, card_lot_status
+from app.services.annual_memberships import as_rome_datetime
 from app.services.sqlite_card_allocation_guard import (
     sqlite_card_allocation_request_guard,
 )
@@ -1522,6 +1523,17 @@ def _serialize_org_admin_card_lot(batch: CardBatch, availability: CardBatchAvail
         "range_end_label": format_card_number(batch.end_no),
         "quantity": int(batch.end_no - batch.start_no + 1),
         "status_label": card_lot_status(batch, availability),
+    }
+
+
+def _serialize_org_admin_card_lot_option(batch: CardBatch) -> dict[str, object]:
+    return {
+        "id": batch.id,
+        "year": batch.year,
+        "range_start": batch.start_no,
+        "range_end": batch.end_no,
+        "range_start_label": format_card_number(batch.start_no),
+        "range_end_label": format_card_number(batch.end_no),
     }
 
 
@@ -2951,11 +2963,20 @@ class PatchOrgMembershipSettings(BaseModel):
 
     membership_fee_amount: Optional[float] = Field(default=None, gt=0)
     temporary_membership_fee_amount: Optional[float] = Field(default=None, gt=0)
-    membership_fee_currency: Optional[str] = Field(default=None, min_length=1, max_length=8)
+    membership_fee_currency: Optional[str] = Field(default=None, min_length=3, max_length=3, pattern=r"^[A-Z]{3}$")
     temporary_membership_duration_value: Optional[int] = Field(default=None, ge=1, le=8760)
     temporary_membership_duration_unit: Optional[Literal["hours", "days"]] = None
     cash_only_signup_payment: Optional[bool] = None
     card_style: Optional[dict[str, object]] = None
+
+    @field_validator("membership_fee_currency", mode="before")
+    @classmethod
+    def normalize_currency(cls, value):
+        if value is None:
+            return None
+        if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z]{3}", value.strip()):
+            raise ValueError("La valuta deve contenere tre lettere, ad esempio EUR.")
+        return value.strip().upper()
 
 
 class PatchOrgCardStyle(BaseModel):
@@ -7442,34 +7463,66 @@ def card_stock(request: Request, db: Session = Depends(get_db)):
 @router.get("/cards/movements")
 def card_movements(
     request: Request,
-    limit: int = 50,
-    offset: int = 0,
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    year: int | None = Query(default=None, ge=2000, le=9998),
+    all_years: bool = False,
+    status: str | None = Query(default=None, max_length=32),
+    batch_id: int | None = Query(default=None, gt=0),
     db: Session = Depends(get_db),
 ):
-    """Return current-year card lots assigned by ASSONAM for the org admin."""
+    """Return assigned lots, filtered before pagination and scoped to the admin."""
     admin = _get_current_org_admin(request, db)
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    current_year = int(datetime.utcnow().year)
+    if year is not None and all_years:
+        raise HTTPException(status_code=422, detail="Scegli un anno oppure tutti gli anni.")
+    status_labels = {
+        "attivo": "Attivo", "active": "Attivo",
+        "disattivo": "Disattivo", "inactive": "Disattivo",
+        "esaurito": "Esaurito", "exhausted": "Esaurito",
+    }
+    normalized_status = (status or "").strip().lower()
+    if normalized_status and normalized_status not in status_labels:
+        raise HTTPException(status_code=422, detail="Stato del lotto non valido.")
+    selected_status = status_labels.get(normalized_status)
+    current_year = as_rome_datetime().year
+    selected_year = None if all_years else (year if year is not None else current_year)
     query = db.query(CardBatch).filter(
         CardBatch.org_id == admin.org_id,
-        CardBatch.year == current_year,
         CardBatch.released_at.is_(None),
     )
-    total = query.count()
-    batches = (
-        query.order_by(CardBatch.created_at.desc(), CardBatch.id.desc())
-        .offset(offset)
-        .limit(min(limit, 100))
-        .all()
-    )
-
-    availability = card_batch_availability(db, batches)
+    available_years = sorted({current_year, *(row[0] for row in query.with_entities(CardBatch.year).distinct())}, reverse=True)
+    if selected_year is not None:
+        query = query.filter(CardBatch.year == selected_year)
+    lot_options = query.order_by(CardBatch.year.desc(), CardBatch.start_no, CardBatch.id).all()
+    if batch_id is not None:
+        query = query.filter(CardBatch.id == batch_id)
+    if selected_status == "Disattivo":
+        query = query.filter(CardBatch.is_enabled.is_(False))
+    elif selected_status:
+        query = query.filter(or_(CardBatch.is_enabled.is_(True), CardBatch.is_enabled.is_(None)))
+    query = query.order_by(CardBatch.created_at.desc(), CardBatch.id.desc())
+    if selected_status in {"Attivo", "Esaurito"}:
+        # The shared availability service accounts for live reservations and
+        # historical assignments. Filter its snapshot before slicing the page.
+        candidates = query.all()
+        availability = card_batch_availability(db, candidates)
+        matching = [batch for batch in candidates if card_lot_status(batch, availability[batch.id]) == selected_status]
+        total = len(matching)
+        batches = matching[offset:offset + limit]
+    else:
+        total = query.count()
+        batches = query.offset(offset).limit(limit).all()
+        availability = card_batch_availability(db, batches)
     return {
         "items": [_serialize_org_admin_card_lot(batch, availability[batch.id]) for batch in batches],
         "total": total,
         "current_year": current_year,
+        "selected_year": selected_year,
+        "available_years": available_years,
+        "lot_options": [_serialize_org_admin_card_lot_option(batch) for batch in lot_options],
     }
 
 
@@ -7478,6 +7531,10 @@ def list_card_replenishments(
     request: Request,
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    year: int | None = Query(default=None, ge=2000, le=9998),
+    all_years: bool = False,
+    billing_status: Literal["paid", "unpaid", "not_applicable"] | None = None,
+    card_batch_id: int | None = Query(default=None, gt=0),
     db: Session = Depends(get_db),
 ):
     admin = _get_current_org_admin(request, db)
@@ -7493,6 +7550,9 @@ def list_card_replenishments(
     if org is None:
         raise HTTPException(status_code=404, detail="Organization not found")
 
+    if year is not None and all_years:
+        raise HTTPException(status_code=422, detail="Scegli un anno oppure tutti gli anni.")
+
     query = (
         db.query(RechargeRequest)
         .options(joinedload(RechargeRequest.card_batch))
@@ -7501,6 +7561,20 @@ def list_card_replenishments(
             RechargeRequest.source.in_(["org_admin_portal", "whatsapp"]),
         )
     )
+    current_year = as_rome_datetime().year
+    available_years = sorted({current_year, *(row[0] for row in query.with_entities(RechargeRequest.requested_year).distinct())}, reverse=True)
+    # Historical replenishment lists have always included all years by default.
+    selected_year = year
+    if selected_year is not None:
+        query = query.filter(RechargeRequest.requested_year == selected_year)
+    lot_options = db.query(CardBatch).filter(
+        CardBatch.org_id == admin.org_id,
+        CardBatch.id.in_(query.with_entities(RechargeRequest.card_batch_id)),
+    ).order_by(CardBatch.year.desc(), CardBatch.start_no, CardBatch.id).all()
+    if billing_status is not None:
+        query = query.filter(RechargeRequest.billing_status == billing_status)
+    if card_batch_id is not None:
+        query = query.filter(RechargeRequest.card_batch_id == card_batch_id)
     total = int(query.count())
     items = (
         query.order_by(RechargeRequest.created_at.desc(), RechargeRequest.id.desc())
@@ -7513,6 +7587,10 @@ def list_card_replenishments(
         "total": total,
         "summary": replenishment_summary(db, query=query),
         "capability": replenishment_capability(db, org),
+        "current_year": current_year,
+        "selected_year": selected_year,
+        "available_years": available_years,
+        "lot_options": [_serialize_org_admin_card_lot_option(batch) for batch in lot_options],
     }
 
 

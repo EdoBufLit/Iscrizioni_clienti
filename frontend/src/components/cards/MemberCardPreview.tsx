@@ -22,6 +22,8 @@ export type MemberCardPreviewData = {
 type MemberCardPreviewProps = {
   cardData: MemberCardPreviewData;
   className?: string;
+  flipped?: boolean;
+  onFlippedChange?: (flipped: boolean) => void;
 };
 
 const EMPTY = "";
@@ -109,8 +111,14 @@ const LogoImg = ({ src, alt, className = "", style }: LogoProps) => {
   );
 };
 
-export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPreviewProps) => {
-  const [isFlipped, setIsFlipped] = useState(false);
+export const MemberCardPreview = ({ cardData, className = "", flipped, onFlippedChange }: MemberCardPreviewProps) => {
+  const [internalFlipped, setInternalFlipped] = useState(false);
+  const isFlipped = flipped ?? internalFlipped;
+  const toggleFlip = () => {
+    const next = !isFlipped;
+    if (flipped === undefined) setInternalFlipped(next);
+    onFlippedChange?.(next);
+  };
   const cardDescriptionId = useId();
   const rootClassName = className ? `w-full ${className}` : "w-full";
 
@@ -142,7 +150,7 @@ export const MemberCardPreview = ({ cardData, className = "" }: MemberCardPrevie
         type="button"
         className="member-card-flip group relative block w-full cursor-pointer select-none"
         data-card-branding="member"
-        onClick={() => setIsFlipped((prev) => !prev)}
+        onClick={toggleFlip}
         aria-pressed={isFlipped}
         aria-label={isFlipped ? "Mostra il fronte della tessera" : "Mostra il retro e il codice QR della tessera"}
         aria-describedby={cardDescriptionId}

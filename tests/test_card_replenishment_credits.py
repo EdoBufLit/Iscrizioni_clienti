@@ -496,6 +496,110 @@ def test_org_card_totals_include_whatsapp_accounting_without_duplicate_lots(clie
     assert accounting == listing["summary"]
 
 
+def test_org_order_filters_preserve_complete_options_and_summarize_before_pagination(client, db):
+    from app.services.annual_memberships import as_rome_datetime
+
+    org = _create_org(db, shared=True)
+    other_org = _create_org(db, shared=True)
+    admin = _create_org_admin(db, org)
+    year = as_rome_datetime().year
+    max_end = max((value[0] for value in db.query(CardBatch.end_no).all()), default=50000)
+    start = max_end + 100
+    items = []
+    for index in range(30):
+        owner = other_org if index == 28 else org
+        item_year = year if index < 24 or index == 29 else year - 1 if index < 26 else year + 1 if index < 28 else year + 3
+        quantity = index + 1 if index < 24 else index - 14
+        batch = None
+        if index != 23:
+            batch = CardBatch(org_id=owner.id, year=item_year, start_no=start + index * 100,
+                              end_no=start + index * 100 + quantity - 1,
+                              next_no=start + index * 100, is_enabled=True)
+            db.add(batch)
+            db.flush()
+        billing = ("paid", "unpaid", "not_applicable")[index % 3] if index < 24 else {
+            24: "paid", 25: "unpaid", 26: "not_applicable", 27: "unpaid", 28: "unpaid", 29: "unpaid",
+        }[index]
+        item = RechargeRequest(association_id=owner.id, association_name=owner.name,
+                               requester_whatsapp="synthetic:history", requested_cards=quantity,
+                               requested_year=item_year, card_batch_id=batch.id if batch else None,
+                               source="legacy_other" if index == 29 else "whatsapp" if index % 2 else "org_admin_portal",
+                               billing_status=billing, amount_due_cents=quantity * 100,
+                               currency="EUR")
+        db.add(item)
+        items.append(item)
+    db.commit()
+    _login_org_admin(client, db, admin)
+    base = "/api/org-admin/cards/replenishments"
+
+    default = client.get(base).json()
+    assert default["total"] == 28
+    assert len(default["items"]) == 20
+    assert default["current_year"] == year
+    assert default["selected_year"] is None
+    assert default["available_years"] == [year + 1, year, year - 1]
+    assert len(default["lot_options"]) == 27
+    assert items[28].card_batch_id not in {lot["id"] for lot in default["lot_options"]}
+    assert items[29].card_batch_id not in {lot["id"] for lot in default["lot_options"]}
+    assert default["summary"]["total"] == 28
+    assert default["summary"]["requested_cards"] == 346
+    assert default["summary"]["unpaid"] == 10
+    assert default["summary"]["paid"] == 9
+    assert default["summary"]["outstanding_cents"] == 12400
+    assert default["summary"]["paid_cents"] == 10200
+    second = client.get(base, params={"offset": 20}).json()
+    assert len(second["items"]) == 8
+    assert second["summary"] == default["summary"]
+    assert second["lot_options"] == default["lot_options"]
+    assert not ({item["id"] for item in default["items"]} & {item["id"] for item in second["items"]})
+
+    unpaid = client.get(base, params={"year": year, "billing_status": "unpaid", "limit": 2, "offset": 1}).json()
+    assert unpaid["total"] == 8
+    assert len(unpaid["items"]) == 2
+    assert unpaid["selected_year"] == year
+    assert all(item["billing_status"] == "unpaid" and item["requested_year"] == year for item in unpaid["items"])
+    assert unpaid["summary"]["total"] == unpaid["summary"]["unpaid"] == 8
+    assert unpaid["summary"]["outstanding_cents"] == 10000
+    assert unpaid["summary"]["paid_cents"] == 0
+    assert len(unpaid["lot_options"]) == 23
+
+    exact = client.get(base, params={"year": year, "billing_status": "paid", "card_batch_id": items[0].card_batch_id}).json()
+    assert exact["total"] == 1
+    assert exact["items"][0]["id"] == items[0].id
+    assert exact["summary"]["paid_cents"] == 100
+    assert len(exact["lot_options"]) == 23
+    historical = client.get(base, params={"billing_status": "not_applicable", "all_years": True, "limit": 1}).json()
+    assert historical["total"] == 9
+    assert historical["summary"]["paid_cents"] == historical["summary"]["outstanding_cents"] == 0
+    future = client.get(base, params={"year": year + 1}).json()
+    assert future["total"] == 2 and future["selected_year"] == year + 1
+    assert len(future["lot_options"]) == 2
+    foreign = client.get(base, params={"card_batch_id": items[28].card_batch_id}).json()
+    assert foreign["items"] == [] and foreign["total"] == 0
+    assert all(value == 0 for value in foreign["summary"].values())
+
+    for params in ({"year": year, "all_years": True}, {"billing_status": "inventato"},
+                   {"limit": 0}, {"limit": 101}, {"offset": -1}, {"card_batch_id": 0}):
+        assert client.get(base, params=params).status_code == 422
+
+
+def test_portal_order_invalid_quantity_does_not_create_lot_debt_or_notification(client, db):
+    org = _create_org(db, shared=True)
+    admin = _create_org_admin(db, org)
+    _login_org_admin(client, db, admin)
+    outbox_before = db.query(EmailOutbox).count()
+    for quantity in (0, -1, 5001, 1.5, None, "NaN", "Infinity"):
+        response = client.post(
+            "/api/org-admin/cards/replenishments",
+            json={"requested_cards": quantity},
+            headers={"Idempotency-Key": f"invalid-quantity-{uuid.uuid4().hex}"},
+        )
+        assert response.status_code == 422, response.text
+    assert db.query(RechargeRequest).filter_by(association_id=org.id).count() == 0
+    assert db.query(CardBatch).filter_by(org_id=org.id).count() == 0
+    assert db.query(EmailOutbox).count() == outbox_before
+
+
 def test_org_card_totals_are_zero_for_no_requests(client, db):
     org = _create_org(db, shared=True)
     _login_org_admin(client, db, _create_org_admin(db, org))

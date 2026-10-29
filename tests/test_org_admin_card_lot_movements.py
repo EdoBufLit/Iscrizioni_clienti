@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy import func
 
 from app.db import SessionLocal
-from app.models import AdminRole, AdminUser, CardBatch, Organization, OrgAdminToken
+from app.models import AdminRole, AdminUser, CardBatch, Member, MemberStatus, Organization, OrgAdminToken
 from app.security import get_password_hash
 from app.utils import hash_token
 
@@ -149,3 +149,90 @@ def test_org_admin_card_movements_show_live_current_year_lots_and_follow_super_a
     final_payload = final_response.json()
     assert final_payload["total"] == 0
     assert final_payload["items"] == []
+
+
+def test_card_movement_filters_precede_pagination_and_keep_complete_tenant_options(client, db):
+    from app.services.annual_memberships import as_rome_datetime
+
+    org = _create_org(db)
+    other_org = _create_org(db)
+    admin = _create_org_admin(db, org.id)
+    year = as_rome_datetime().year
+    start, _ = _next_free_range(db)
+    batches = []
+    for index in range(62):
+        owner = other_org.id if index == 61 else org.id
+        batch_year = year - 1 if index == 58 else year + 1 if index == 59 else year + 2 if index == 61 else year
+        number = start + index * 20
+        batches.append(CardBatch(org_id=owner, year=batch_year, start_no=number,
+                                 end_no=number if index == 57 else number + 1,
+                                 next_no=number, is_enabled=index not in (55, 56),
+                                 released_at=datetime.utcnow() if index == 60 else None))
+    db.add_all(batches)
+    db.flush()
+    db.add(Member(org_id=org.id, first_name="Socio", last_name="Lotto esaurito",
+                  status=MemberStatus.ACTIVE, card_no=batches[57].start_no,
+                  card_year=year, batch_id=batches[57].id))
+    db.commit()
+    _login_org_admin(client, db, admin.id)
+
+    base = "/api/org-admin/cards/movements"
+    default = client.get(base).json()
+    assert default["total"] == 58
+    assert len(default["items"]) == 50
+    assert default["current_year"] == year
+    assert default["selected_year"] == year
+    assert default["available_years"] == [year + 1, year, year - 1]
+    assert {item["id"] for item in default["lot_options"]} == {batch.id for batch in batches[:58]}
+    second = client.get(base, params={"offset": 50}).json()
+    assert len(second["items"]) == 8
+    assert not ({item["id"] for item in default["items"]} & {item["id"] for item in second["items"]})
+    assert second["lot_options"] == default["lot_options"]
+
+    active = client.get(base, params={"status": "active", "limit": 2, "offset": 2}).json()
+    assert active["total"] == 55
+    assert len(active["items"]) == 2
+    assert all(item["status_label"] == "Attivo" for item in active["items"])
+    assert active["lot_options"] == default["lot_options"]
+    inactive = client.get(base, params={"status": "Disattivo", "limit": 1}).json()
+    assert inactive["total"] == 2
+    assert inactive["items"][0]["status_label"] == "Disattivo"
+    exhausted = client.get(base, params={"status": "Esaurito"}).json()
+    assert exhausted["total"] == 1
+    assert exhausted["items"][0]["id"] == batches[57].id
+
+    previous = client.get(base, params={"year": year - 1}).json()
+    assert previous["selected_year"] == year - 1
+    assert previous["total"] == 1
+    assert previous["items"][0]["id"] == batches[58].id
+    all_years = client.get(base, params={"all_years": True, "limit": 100}).json()
+    assert all_years["selected_year"] is None
+    assert all_years["total"] == 60
+    assert {item["id"] for item in all_years["items"]} == {batch.id for batch in batches[:60]}
+    exact = client.get(base, params={"batch_id": batches[0].id, "status": "Attivo"}).json()
+    assert exact["total"] == 1
+    assert exact["items"][0]["id"] == batches[0].id
+    foreign = client.get(base, params={"all_years": True, "batch_id": batches[61].id}).json()
+    assert foreign["items"] == [] and foreign["total"] == 0
+    assert batches[61].id not in {item["id"] for item in foreign["lot_options"]}
+
+    for params in ({"year": year, "all_years": True}, {"status": "inventato"},
+                   {"limit": 0}, {"limit": 101}, {"offset": -1}, {"batch_id": 0}):
+        assert client.get(base, params=params).status_code == 422
+
+
+def test_card_history_default_year_uses_rome_not_utc(client, db, monkeypatch):
+    from datetime import timezone
+
+    org = _create_org(db)
+    admin = _create_org_admin(db, org.id)
+    _login_org_admin(client, db, admin.id)
+    monkeypatch.setattr("app.routes.org_admin.as_rome_datetime",
+                        lambda: datetime(2027, 1, 1, 0, 30, tzinfo=timezone(timedelta(hours=1))))
+    result = client.get("/api/org-admin/cards/movements").json()
+    assert result["current_year"] == result["selected_year"] == 2027
+    assert result["available_years"] == [2027]
+    requests = client.get("/api/org-admin/cards/replenishments").json()
+    assert requests["current_year"] == 2027
+    assert requests["selected_year"] is None
+    assert requests["available_years"] == [2027]

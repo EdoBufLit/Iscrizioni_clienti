@@ -366,3 +366,8 @@ Do not interpret "date without slots" as closed when a default booking schedule 
 
 - Correzione utente: magazzino, storico ordini, regole economiche e builder grafico non devono essere un'unica pagina lunga. Separare per frequenza d'uso, spostare il rifornimento in un pannello contestuale e usare righe leggibili su telefono.
 - Nel builder mostrare una sola faccia alla volta e comprimere le opzioni avanzate, conservando il progetto salvato. Gli importi e le percentuali degli esempi sono illustrativi: calcolarli sempre dai dati reali.
+
+## Oct 29, 2026 - I filtri devono restare leggibili, non solo entro la pagina
+
+- Correzione utente: nella nuova pagina Tessere il filtro anno era tagliato e lo stato abbreviato. L'assenza di overflow del documento non prova che i singoli controlli siano leggibili.
+- Su telefono e tablet seguire Soci: pulsante Filtri, pannello inferiore con campi completi e applicazione esplicita, filtri attivi rimovibili. Non usare una riga di select che lascia controlli parzialmente fuori schermo; verificare ogni valore visibile negli screenshot.

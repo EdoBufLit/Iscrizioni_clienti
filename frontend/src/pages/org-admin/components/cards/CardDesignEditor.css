@@ -1,0 +1,92 @@
+.card-design-editor { display: grid; gap: 20px; min-width: 0; }
+.card-design-editor__notice { margin: 0; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--theme-warning) 40%, var(--theme-border)); border-radius: 12px; color: var(--theme-text-muted); font-size: 13px; }
+.card-design-editor__preview { width: 100%; max-width: 540px; margin-inline: auto; min-width: 0; }
+.card-design-editor__flip { width: 100%; aspect-ratio: 1.586 / 1; perspective: 1400px; container-type: inline-size; }
+.card-design-editor__stage { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform 450ms ease; }
+.card-design-editor__stage[data-flipped="true"] { transform: rotateY(180deg); }
+.card-design-editor__face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.card-design-editor__face--back { transform: rotateY(180deg); }
+.card-design-editor__face > .card-builder-preview { width: 100%; height: 100%; }
+/* The generic front has three non-overlapping rows, sized from the card itself.
+   Keep these rules outside MemberCardPreview: dedicated artwork owns its layout. */
+.card-design-editor__face .card-builder-preview[data-card-side="front"] {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 3px;
+  gap: clamp(3px, 1cqw, 6px);
+  padding: 5% 7%;
+}
+.card-design-editor__face .card-builder-preview[data-card-side="front"] :is(.card-builder-preview__year, .card-builder-preview__identity, .card-builder-preview__footer) {
+  position: static;
+  min-width: 0;
+  max-width: 75%;
+  gap: 2px;
+  gap: clamp(2px, .7cqw, 4px);
+}
+.card-design-editor__face .card-builder-preview[data-card-side="front"] .card-builder-preview__year { justify-items: start; }
+.card-design-editor__face .card-builder-preview[data-card-side="front"] .card-builder-preview__identity { align-self: center; }
+.card-design-editor__face .card-builder-preview[data-card-side="front"] .card-builder-preview__footer { align-self: end; }
+.card-design-editor__face .card-builder-preview[data-card-side="front"] :is(.card-builder-preview__year, .card-builder-preview__identity, .card-builder-preview__footer) > span {
+  font-size: 8px;
+  font-size: clamp(7px, 2.1cqw, 10px);
+  line-height: 1.2;
+  letter-spacing: .12em;
+}
+.card-design-editor__face .card-builder-preview[data-card-side="front"] .card-builder-preview__year strong {
+  font-size: 28px;
+  font-size: clamp(27px, 8.5cqw, 46px);
+  line-height: .95;
+}
+.card-design-editor__face .card-builder-preview[data-card-side="front"] .card-builder-preview__year em {
+  font-size: 10px;
+  font-size: clamp(10px, 3cqw, 14px);
+  line-height: 1.3;
+  padding: .2em .7em;
+}
+.card-design-editor__face .card-builder-preview[data-card-side="front"] .card-builder-preview__identity strong {
+  font-size: 18px;
+  font-size: clamp(16px, 5.5cqw, 28px);
+  line-height: 1.05;
+}
+.card-design-editor__face .card-builder-preview[data-card-side="front"] .card-builder-preview__identity p {
+  font-size: 12px;
+  font-size: clamp(10px, 3.5cqw, 16px);
+  line-height: 1.2;
+}
+.card-design-editor__face .card-builder-preview[data-card-side="front"] .card-builder-preview__footer strong {
+  font-size: 22px;
+  font-size: clamp(19px, 6.2cqw, 32px);
+  line-height: 1;
+}
+.card-design-editor__face .card-builder-preview[data-card-side="front"] .card-builder-preview__chip { width: 16%; height: auto; aspect-ratio: 1.36; }
+.card-design-editor__flip-action { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; margin: 12px auto 0; padding: 10px 16px; font-size: 14px; }
+.card-design-editor__flip-action svg { width: 19px; height: 19px; }
+.card-design-editor__fields { display: grid; min-width: 0; gap: 18px; border: 0; margin: 0; padding: 0; }
+.card-design-editor__colors { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.card-design-editor__color { display: grid; justify-items: center; gap: 7px; min-width: 0; font-size: 12px; color: var(--theme-text-muted); }
+.org-admin-v2 .card-design-editor__color input[type="color"] { width: 44px; height: 44px; border: 1px solid var(--theme-border-strong); border-radius: 50%; background: transparent; padding: 3px; cursor: pointer; }
+.card-design-editor__color input::-webkit-color-swatch-wrapper { padding: 0; }
+.card-design-editor__color input::-webkit-color-swatch { border: 0; border-radius: 50%; }
+.card-design-editor__color input::-moz-color-swatch { border: 0; border-radius: 50%; }
+.card-design-editor__advanced { border: 1px solid var(--theme-border); border-radius: 14px; }
+.card-design-editor__advanced summary { padding: 12px 14px; min-height: 48px; font-size: 14px; font-weight: 600; cursor: pointer; color: var(--theme-text); }
+.card-design-editor__advanced-fields { display: grid; gap: 16px; padding: 4px 14px 16px; }
+.card-design-editor__advanced-fields input[type="file"] { min-width: 0; max-width: 100%; width: 100%; font-size: 13px; }
+.card-design-editor__options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.card-design-editor__options label, .card-design-editor__text, .card-design-editor__range { display: grid; min-width: 0; gap: 8px; font-size: 13px; font-weight: 600; color: var(--theme-text-muted); }
+.card-design-editor__options select { width: 100%; min-width: 0; font-size: 16px; padding-inline: 10px; }
+.card-design-editor__range input { width: 100%; min-height: 32px; }
+.card-design-editor__check { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; color: var(--theme-text-muted); }
+.card-design-editor__check input { margin-top: 2px; width: 18px; height: 18px; flex-shrink: 0; }
+.card-design-editor__text input, .card-design-editor__text textarea { min-width: 0; width: 100%; border: 1px solid var(--theme-border); border-radius: 10px; background: var(--theme-surface-solid); padding: 11px 12px; color: var(--theme-text); font-size: 16px; font-weight: 400; }
+.card-design-editor__save { justify-self: start; min-height: 44px; padding: 11px 20px; }
+.card-design-editor__fields:disabled input, .card-design-editor__fields:disabled select, .card-design-editor__fields:disabled textarea, .card-design-editor button:disabled { opacity: .5; cursor: not-allowed; }
+@media (max-width: 639px) {
+  .card-design-editor { gap: 16px; }
+  .card-design-editor__save { justify-self: stretch; justify-content: center; }
+  .card-design-editor__advanced summary { font-size: 13px; }
+  .card-design-editor__options { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-design-editor__stage { transition: none; }
+}

@@ -9727,6 +9727,12 @@ body.dashboard-perf-mode .surface-strong:hover {
     background: var(--oa-panel-muted) !important;
     padding: 0.25rem !important;
     overflow-x: auto;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .org-admin-v2 .communications-workspace .inline-flex.min-w-max::-webkit-scrollbar {
+    display: none;
   }
 
   .org-admin-v2 .communications-workspace .inline-flex.min-w-max button {

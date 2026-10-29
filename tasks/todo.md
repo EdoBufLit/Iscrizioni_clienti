@@ -6271,7 +6271,15 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 
 - Applicare il testo fornito dall'utente: tre schede Stato e magazzino, Movimenti e ordini, Configurazione e design. Uso frequente prima, impostazioni separate. Branding delle tessere preservato.
 - Magazzino: metriche2x2, disponibilita/progress calcolati, rifornimento solo da pulsante con bottom sheet. Ordini: sintesi contabile, filtri compatti, righe touch su mobile. Design: una sola anteprima fronte/retro con flip, quattro colori compatti, avanzate richiudibili e salvataggio esplicito.
-- [ ] Esaminare dati, azioni e test esistenti; definire responsabilita dei componenti senza cambiare le regole di business.
-- [ ] Implementare tre schede, pannelli e liste responsive, builder compatto accessibile; conservare filtri/salvataggi e gestione errori.
-- [ ] Test pertinenti, build, review indipendente e collaudo browser chiaro/scuro su mobile/tablet/desktop con dati sintetici.
+- Correzione utente29ottobre dopo prima anteprima: i filtri mobili devono seguire Soci, con pulsante Filtri e pannello inferiore, campi completi e filtri attivi rimovibili; sostituire la riga con anno tagliato. I filtri nell'ordine/anno della bozza iniziale erano illustrativi; la scelta successiva dell'utente prevale.
+- [x] Esaminare dati, azioni e test esistenti; definire responsabilita dei componenti senza cambiare le regole di business.
+- [x] Implementare tre schede, pannelli e liste responsive, builder compatto accessibile; conservare filtri/salvataggi e gestione errori.
+- [x] Test pertinenti, build, review indipendente e collaudo browser chiaro/scuro su mobile/tablet/desktop con dati sintetici.
 - [ ] Pubblicare su Main, verificare deploy/canary/asset/servizi e documentare risultati e limiti.
+
+## Plan (Completare refactor Gemini form pubblici Org Admin - Oct 29, 2026)
+
+- L'utente autorizza esplicitamente completamento e push anche delle modifiche parallele di Gemini a Form pubblici nell'Org Admin. Preservare la correzione Tessere in corso e le altre funzioni esistenti.
+- [x] Esaminare diff Forms/Communications/stili e contratti API; completare le parti lasciate a meta e correggere errori di compilazione/azioni.
+- [x] Verificare lista, menu, link/copia, creazione/modifica, impostazioni email e conferma eliminazione con test e dati sintetici; collaudo responsive chiaro/scuro.
+- [ ] Includere nel rilascio Main verificato insieme a Tessere; controllare deploy, asset e servizi e registrare risultati.

@@ -120,11 +120,11 @@ export default function OrgAdminCommunications() {
   };
 
   const createActionLabel =
-    activeTab === "modelli" ? "+ Modello"
-    : activeTab === "moduli" ? "+ Form"
-    : activeTab === "sondaggi" ? "+ Sondaggio"
-    : activeTab === "whatsapp" ? "+ Regola"
-    : "+ Campagna";
+    activeTab === "modelli" ? "+ Nuovo modello"
+    : activeTab === "moduli" ? "+ Nuovo form"
+    : activeTab === "sondaggi" ? "+ Nuovo sondaggio"
+    : activeTab === "whatsapp" ? "+ Nuova regola"
+    : "+ Nuova campagna";
 
   const openContextualCreate = () => {
     if (communicationsLocked) return;
@@ -174,55 +174,37 @@ export default function OrgAdminCommunications() {
   }
 
   return (
-    <div className="org-admin-communications-page container-shell py-8 space-y-5">
+    <div className="org-admin-communications-page container-shell py-8 pb-28 space-y-5">
       <div className="communications-mobile-head">
         <div>
           <p>Comunicazioni</p>
           <h1>{communicationsTabs.find((tab) => tab.key === activeTab)?.label || "Centro messaggi"}</h1>
         </div>
-        <button
-          type="button"
-          disabled={communicationsLocked}
-          onClick={openContextualCreate}
-        >
-          {createActionLabel}
-        </button>
+        {activeTab !== "email" && (
+          <button
+            type="button"
+            disabled={communicationsLocked}
+            onClick={openContextualCreate}
+          >
+            {createActionLabel}
+          </button>
+        )}
       </div>
       <PageHeader
         eyebrow="Comunicazioni"
         title="Centro messaggi"
         subtitle="Gestisci campagne, modelli, form pubblici e canali di comunicazione in un workspace operativo."
         actions={
-          <>
+          activeTab === "email" ? null : (
             <button
               type="button"
               className="btn-primary"
               disabled={communicationsLocked}
-              onClick={() => {
-                const nextParams = new URLSearchParams(searchParams);
-                nextParams.set("tab", "campagne");
-                nextParams.set("mode", "create");
-                setSearchParams(nextParams, { replace: true });
-                setActiveTab("campagne");
-              }}
+              onClick={openContextualCreate}
             >
-              + Nuova campagna
+              {createActionLabel}
             </button>
-            <button
-              type="button"
-              className="btn-secondary"
-              disabled={communicationsLocked}
-              onClick={() => {
-                const nextParams = new URLSearchParams(searchParams);
-                nextParams.set("tab", "moduli");
-                nextParams.set("mode", "create");
-                setSearchParams(nextParams, { replace: true });
-                setActiveTab("moduli");
-              }}
-            >
-              + Nuovo form
-            </button>
-          </>
+          )
         }
       />
 
@@ -251,8 +233,8 @@ export default function OrgAdminCommunications() {
                 <StatusChip tone="info">Email configurabile</StatusChip>
               </div>
             </div>
-            <div className="overflow-x-auto pb-1">
-              <div className="inline-flex min-w-max rounded-lg border border-neutral-200 bg-neutral-50 p-1">
+            <div className="overflow-x-auto scrollbar-none pb-1">
+              <div className="inline-flex min-w-max rounded-lg border border-neutral-200 bg-neutral-50 p-1 scrollbar-none">
                 {communicationsTabs.map((tab) => (
                   <button
                     key={tab.key}

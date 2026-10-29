@@ -132,6 +132,42 @@ def test_super_admin_cannot_create_member(client):
     client.post("/api/super-admin/auth/logout")
 
 
+def test_membership_currency_is_validated_only_when_updated(client, db):
+    suffix = uuid.uuid4().hex[:8]
+    org = Organization(name=f"Legacy Currency {suffix}", slug=f"legacy-currency-{suffix}",
+                       is_active=True, membership_fee_amount=30, membership_fee_currency="EURO")
+    other = Organization(name=f"Other Currency {suffix}", slug=f"other-currency-{suffix}",
+                         is_active=True, membership_fee_currency="JPY")
+    db.add_all([org, other])
+    db.flush()
+    admin = AdminUser(email=f"currency-admin-{suffix}@example.com", role=AdminRole.ORG_ADMIN,
+                      org_id=org.id, is_active=True)
+    db.add(admin)
+    db.commit()
+    _login_org_admin(client, db, admin.id)
+    endpoint = "/api/org-admin/organization/membership-settings"
+    read = client.get(endpoint)
+    assert read.status_code == 200
+    assert read.json()["membership_fee_currency"] == "EURO"
+    unrelated = client.patch(endpoint, json={"membership_fee_amount": 31})
+    assert unrelated.status_code == 200, unrelated.text
+    assert unrelated.json()["settings"]["membership_fee_currency"] == "EURO"
+
+    for invalid in ("", "EU", "EURO", "EU1", "123", "€UR", "ＡＢＣ", "uſd", None):
+        result = client.patch(endpoint, json={"membership_fee_currency": invalid, "membership_fee_amount": 40})
+        assert result.status_code == 422, result.text
+        db.refresh(org)
+        assert org.membership_fee_currency == "EURO"
+        assert float(org.membership_fee_amount) == 31
+
+    for value, expected in ((" eur ", "EUR"), ("uSd", "USD"), ("XXX", "XXX")):
+        result = client.patch(endpoint, json={"membership_fee_currency": value})
+        assert result.status_code == 200, result.text
+        assert result.json()["settings"]["membership_fee_currency"] == expected
+    db.refresh(other)
+    assert other.membership_fee_currency == "JPY"
+
+
 def test_org_admin_can_manage_membership_settings_and_create_temporary_member(client, db):
     suffix = uuid.uuid4().hex[:8]
     org = Organization(

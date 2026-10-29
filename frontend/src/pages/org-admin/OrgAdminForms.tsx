@@ -7,6 +7,7 @@ import {
   createOrgAdminFormField,
   deleteOrgAdminForm,
   deleteOrgAdminFormField,
+  duplicateOrgAdminForm,
   fetchOrgAdminBookingEventSeries,
   fetchOrgAdminForm,
   fetchOrgAdminFormSummaries,
@@ -556,11 +557,13 @@ type OrgAdminFormsWorkspaceProps = {
   mode?: "forms" | "surveys";
 };
 
+const EMPTY_TEMPLATES: OrgAdminEmailTemplate[] = [];
+
 export function OrgAdminFormsWorkspace({
   embedded = false,
   locked = false,
   lockedMessage = "I Form richiedono il modulo Comunicazioni attivo.",
-  availableTemplates = [],
+  availableTemplates = EMPTY_TEMPLATES,
   mode = "forms",
 }: OrgAdminFormsWorkspaceProps) {
   const { admin, loading: adminLoading } = useOrgAdmin();
@@ -586,7 +589,16 @@ export function OrgAdminFormsWorkspace({
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
 
   const [deleteFormOpen, setDeleteFormOpen] = useState(false);
+  const [deleteTargetForm, setDeleteTargetForm] = useState<{ id: number; title: string } | null>(null);
   const [deleteActionState, setDeleteActionState] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [openCardMenuId, setOpenCardMenuId] = useState<number | null>(null);
+  const [copiedFormId, setCopiedFormId] = useState<number | null>(null);
+  const [busyCardFormId, setBusyCardFormId] = useState<number | null>(null);
+  const cardActionLock = useRef(false);
+  const deleteFormLock = useRef(false);
+  const copyLinkLock = useRef(false);
+  const copiedResetTimer = useRef<number | undefined>();
+  const cardMenuTriggers = useRef(new Map<number, HTMLButtonElement>());
   const [activeTab, setActiveTab] = useState<EditorTab>("builder");
   const [userEmailDraft, setUserEmailDraft] = useState<UserConfirmationEmailDraft>(() =>
     defaultUserConfirmationEmailDraft(""),
@@ -1340,15 +1352,21 @@ export function OrgAdminFormsWorkspace({
       showToast({ tone: "error", title: "Form bloccati", message: lockedMessage });
       return;
     }
+    setDeleteActionState("idle");
+    setDeleteTargetForm(
+      selectedForm ? { id: selectedForm.id, title: selectedForm.title } : { id: selectedFormId, title: "Modulo selezionato" },
+    );
     setDeleteFormOpen(true);
     return;
   }
 
   async function confirmDeleteForm() {
-    if (!selectedFormId) return;
+    const targetId = deleteTargetForm?.id ?? selectedFormId;
+    if (!targetId || locked || deleteFormLock.current || cardActionLock.current) return;
+    deleteFormLock.current = true;
     setDeleteActionState("loading");
     try {
-      await deleteOrgAdminForm(selectedFormId);
+      await deleteOrgAdminForm(targetId);
       showToast({
         tone: "success",
         title: "Form eliminato",
@@ -1356,8 +1374,12 @@ export function OrgAdminFormsWorkspace({
       });
       setDeleteActionState("success");
       setDeleteFormOpen(false);
-      resetEditorState();
-      await loadForms();
+      setDeleteTargetForm(null);
+      if (selectedFormId === targetId) {
+        resetEditorState();
+      }
+      setForms(current => current.filter(form => form.id !== targetId));
+      await refreshFormCards();
     } catch (err) {
       setDeleteActionState("error");
       showToast({
@@ -1365,7 +1387,168 @@ export function OrgAdminFormsWorkspace({
         title: "Eliminazione non riuscita",
         message: err instanceof Error ? err.message : "Errore eliminazione form.",
       });
+    } finally {
+      deleteFormLock.current = false;
     }
+  }
+
+  useEffect(() => {
+    if (openCardMenuId === null) return;
+    const frame = window.requestAnimationFrame(() => {
+      cardMenuTriggers.current.get(openCardMenuId)?.parentElement?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
+    });
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("[data-form-card-menu]")) return;
+      setOpenCardMenuId(null);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        cardMenuTriggers.current.get(openCardMenuId)?.focus();
+        setOpenCardMenuId(null);
+      }
+    };
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [openCardMenuId]);
+
+  function buildCardPublicDisplayPath(form: AssociationFormSummary) {
+    const path =
+      form.public_path
+      || (orgSlug ? `/forms/${orgSlug}/${form.public_slug}` : `/forms/${form.public_slug}`);
+    const host =
+      typeof window !== "undefined" && window.location.host ? window.location.host : "assonam.it";
+    return `${host}${path}`;
+  }
+
+  function buildCardPublicFullUrl(form: AssociationFormSummary) {
+    const path =
+      form.public_path
+      || (orgSlug ? `/forms/${orgSlug}/${form.public_slug}` : `/forms/${form.public_slug}`);
+    const origin =
+      typeof window !== "undefined" && window.location.origin
+        ? window.location.origin
+        : "https://assonam.it";
+    return `${origin}${path}`;
+  }
+
+  function restoreCardFocus(id: number) {
+    window.requestAnimationFrame(() => {
+      const trigger = cardMenuTriggers.current.get(id);
+      if (document.activeElement === document.body && trigger?.isConnected && !trigger.disabled) trigger.focus();
+    });
+  }
+
+  async function refreshFormCards() {
+    try { setForms((await fetchOrgAdminFormSummaries()).items); }
+    catch (reason) {
+      showToast({tone: "info", title: "Operazione salvata", message: reason instanceof Error ? `Aggiorna l'elenco: ${reason.message}` : "Aggiorna l'elenco per vedere le modifiche."});
+    }
+  }
+
+  useEffect(() => () => { if (copiedResetTimer.current) window.clearTimeout(copiedResetTimer.current); }, []);
+
+  async function handleCopyCardLink(form: AssociationFormSummary) {
+    if (copyLinkLock.current) return;
+    copyLinkLock.current = true;
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Copia automatica non disponibile. Apri il link pubblico dal builder e copialo dalla barra degli indirizzi.");
+      await navigator.clipboard.writeText(buildCardPublicFullUrl(form));
+      setCopiedFormId(form.id);
+      if (copiedResetTimer.current) window.clearTimeout(copiedResetTimer.current);
+      copiedResetTimer.current = window.setTimeout(() => setCopiedFormId(null), 2000);
+      showToast({tone: "success", title: "Link copiato", message: "Il link pubblico del form è stato copiato negli appunti."});
+    } catch (reason) {
+      showToast({tone: "error", title: "Copia non riuscita", message: reason instanceof Error ? reason.message : "Apri il link pubblico e copialo dalla barra degli indirizzi."});
+    } finally { copyLinkLock.current = false; }
+  }
+
+  async function handleCardToggleActive(form: AssociationFormSummary) {
+    if (locked) {
+      showToast({ tone: "error", title: "Form bloccati", message: lockedMessage });
+      return;
+    }
+    if (cardActionLock.current) return;
+    cardActionLock.current = true;
+    setOpenCardMenuId(null);
+    setBusyCardFormId(form.id);
+    try {
+      const response = await setOrgAdminFormActive(form.id, !form.is_active);
+      setForms((current) =>
+        current.map((item) =>
+          item.id === form.id ? { ...item, is_active: response.form.is_active } : item,
+        ),
+      );
+      if (selectedForm?.id === form.id) {
+        setSelectedForm(response.form);
+      }
+      showToast({
+        tone: "success",
+        title: response.form.is_active ? "Form attivato" : "Form disattivato",
+        message: response.form.is_active
+          ? "Il link pubblico è ora online."
+          : "Il link pubblico è stato chiuso.",
+      });
+    } catch (err) {
+      showToast({
+        tone: "error",
+        title: "Stato non aggiornato",
+        message: err instanceof Error ? err.message : "Errore aggiornamento stato.",
+      });
+    } finally {
+      cardActionLock.current = false;
+      setBusyCardFormId(null);
+      restoreCardFocus(form.id);
+    }
+  }
+
+  async function handleCardDuplicateForm(form: AssociationFormSummary) {
+    if (locked) {
+      showToast({ tone: "error", title: "Form bloccati", message: lockedMessage });
+      return;
+    }
+    if (cardActionLock.current) return;
+    cardActionLock.current = true;
+    setOpenCardMenuId(null);
+    setBusyCardFormId(form.id);
+    try {
+      const response = await duplicateOrgAdminForm(form.id);
+      const copyTitle = response.form.title;
+      showToast({
+        tone: "success",
+        title: "Form duplicato",
+        message: `Creata la copia "${copyTitle}" in bozza.`,
+      });
+      await refreshFormCards();
+    } catch (err) {
+      showToast({
+        tone: "error",
+        title: "Duplicazione non riuscita",
+        message: err instanceof Error ? err.message : "Errore durante la duplicazione del form.",
+      });
+    } finally {
+      cardActionLock.current = false;
+      setBusyCardFormId(null);
+      restoreCardFocus(form.id);
+    }
+  }
+
+  function handleCardRequestDelete(form: AssociationFormSummary) {
+    if (locked) {
+      showToast({ tone: "error", title: "Form bloccati", message: lockedMessage });
+      return;
+    }
+    if (cardActionLock.current) return;
+    setOpenCardMenuId(null);
+    setDeleteActionState("idle");
+    setDeleteTargetForm({ id: form.id, title: form.title });
+    setDeleteFormOpen(true);
   }
 
   function handleEditField(field: AssociationFormField) {
@@ -2847,102 +3030,288 @@ export function OrgAdminFormsWorkspace({
         ) : null}
 
         {!isEditorOpen && !loading && !adminLoading && visibleForms.length > 0 && (
-          <section className="rounded-[1.25rem] bg-white p-8 ring-1 ring-inset ring-slate-200/60 shadow-sm">
-            <div className="border-b border-slate-100 pb-6 mb-8">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Gestione Moduli</p>
-                  <h2 className="mt-2 text-2xl font-light tracking-tight text-slate-900">Le tue pagine modulo</h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    {mode === "surveys" ? "Seleziona un sondaggio esistente o creane uno nuovo." : "Seleziona una pagina esistente o creane una nuova."}
-                  </p>
-                </div>
-                <button className="btn-primary !rounded-full !px-6" type="button" onClick={handleCreateNewForm} disabled={locked}>
-                  {locked ? "Modulo richiesto" : mode === "surveys" ? "Nuovo sondaggio" : "Nuovo form"}
+          <div className="space-y-4 pb-28">
+            {!embedded && (
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-lg font-semibold text-[var(--oa-text)]">
+                  {mode === "surveys" ? "Sondaggi pubblici" : "Form pubblici"}
+                </h2>
+                <button
+                  className="btn-primary !px-4 !py-2 text-xs font-semibold"
+                  type="button"
+                  onClick={handleCreateNewForm}
+                  disabled={locked}
+                >
+                  {mode === "surveys" ? "+ Nuovo sondaggio" : "+ Nuovo form"}
                 </button>
               </div>
-            </div>
-            <div>
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {visibleForms.map((form) => (
-                  <div
+            )}
+
+            <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {visibleForms.map((form) => {
+                const totalResponses = form.submission_status_counts?.total ?? form.submission_count ?? 0;
+                const pendingCount = form.submission_status_counts?.pending ?? 0;
+                const confirmedCount = form.submission_status_counts?.confirmed ?? 0;
+                const rejectedCount = form.submission_status_counts?.rejected ?? 0;
+                const isCopied = copiedFormId === form.id;
+                const isMenuOpen = openCardMenuId === form.id;
+
+                return (
+                  <article
                     key={form.id}
-                    onClick={() => {
-                      void openFormEditor(form.id);
-                    }}
-                    className="group cursor-pointer rounded-[1.25rem] bg-white p-5 ring-1 ring-inset ring-slate-200/60 transition-all hover:-translate-y-1 hover:shadow-sm hover:bg-slate-50"
+                    className="group relative flex min-w-0 max-w-full flex-col justify-between gap-4 rounded-2xl border border-[var(--oa-line-strong)] bg-[var(--oa-panel)] p-4 sm:p-5 shadow-sm transition hover:border-[var(--oa-brand)]/50"
                   >
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <h3 className="text-lg font-medium tracking-tight text-slate-900">{form.title}</h3>
-                        <p className="mt-1 text-sm text-slate-400">/{form.public_slug}</p>
+                    <div className="space-y-3.5">
+                      {/* 1. Card Header */}
+                      <div className="flex items-start justify-between gap-3">
+                        <h3 className="min-w-0 break-words text-base font-bold tracking-tight text-[var(--oa-text)]">
+                          {form.title}
+                        </h3>
+                        <div className="flex shrink-0 items-center gap-1.5" data-form-card-menu>
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider ${
+                              form.is_active
+                                ? "border-emerald-500/35 bg-emerald-500/15 text-emerald-500"
+                                : "border-[var(--oa-line-strong)] bg-[var(--oa-panel-soft)] text-[var(--oa-muted)]"
+                            }`}
+                          >
+                            {form.is_active ? "Attivo" : "Bozza"}
+                          </span>
+
+                          <div className="relative">
+                            <button
+                              type="button"
+                              disabled={busyCardFormId !== null || locked}
+                              ref={node => { if (node) cardMenuTriggers.current.set(form.id, node); else cardMenuTriggers.current.delete(form.id); }}
+                              aria-haspopup="menu"
+                              aria-label={`Azioni per ${form.title}`}
+                              aria-expanded={isMenuOpen}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setOpenCardMenuId((curr) => (curr === form.id ? null : form.id));
+                              }}
+                              className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-[var(--oa-line)] bg-[var(--oa-panel-soft)] text-[var(--oa-muted)] transition hover:border-[var(--oa-line-strong)] hover:text-[var(--oa-text)] disabled:opacity-50"
+                            >
+                              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                <circle cx="5" cy="12" r="1.8" />
+                                <circle cx="12" cy="12" r="1.8" />
+                                <circle cx="19" cy="12" r="1.8" />
+                              </svg>
+                            </button>
+
+                            {isMenuOpen && (
+                              <div
+                                role="menu"
+                                aria-label={`Menu opzioni ${form.title}`}
+                                onKeyDown={event => {
+                                  if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+                                  event.preventDefault();
+                                  const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'));
+                                  const index = items.indexOf(document.activeElement as HTMLButtonElement);
+                                  const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+                                  items[next]?.focus();
+                                }}
+                                onBlur={event => {
+                                  if (event.relatedTarget && !event.currentTarget.parentElement?.contains(event.relatedTarget as Node)) setOpenCardMenuId(null);
+                                }}
+                                className="absolute right-0 top-12 z-30 w-44 overflow-hidden rounded-xl border border-[var(--oa-line-strong)] bg-[var(--oa-panel)] p-1 shadow-xl"
+                              >
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  tabIndex={-1}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    void handleCardDuplicateForm(form);
+                                  }}
+                                  className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[var(--oa-text)] transition hover:bg-[var(--oa-panel-soft)]"
+                                >
+                                  <svg className="h-4 w-4 text-[var(--oa-muted)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+                                    <rect x="9" y="9" width="11" height="11" rx="2" />
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                  </svg>
+                                  <span>Duplica</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  tabIndex={-1}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    void handleCardToggleActive(form);
+                                  }}
+                                  className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[var(--oa-text)] transition hover:bg-[var(--oa-panel-soft)]"
+                                >
+                                  <svg className="h-4 w-4 text-[var(--oa-muted)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5.636 5.636a9 9 0 1 0 12.728 0M12 3v9" />
+                                  </svg>
+                                  <span>{form.is_active ? "Disattiva" : "Attiva"}</span>
+                                </button>
+                                <div className="my-1 border-t border-[var(--oa-line)]" />
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  tabIndex={-1}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleCardRequestDelete(form);
+                                  }}
+                                  className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-semibold text-rose-500 transition hover:bg-rose-500/10"
+                                >
+                                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                                  </svg>
+                                  <span>Elimina</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <span className={`inline-flex rounded-full px-3 py-1 text-[9px] font-bold uppercase tracking-[0.2em] ${form.is_active ? 'bg-emerald-100/50 text-emerald-700 ring-1 ring-inset ring-emerald-500/20' : 'bg-slate-100/80 text-slate-600'}`}>
-                        {form.is_active ? 'Attivo' : 'Bozza'}
-                      </span>
-                    </div>
-                    <div className="mt-6 space-y-3 border-t border-slate-100 pt-4">
-                      <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">
-                        <span>{form.submission_status_counts?.total ?? form.submission_count} risposte</span>
-                        <span>{form.field_count} campi</span>
-                      </div>
-                      <div className="flex flex-wrap gap-2 text-[11px]">
-                        <span className="rounded-full bg-amber-50 px-2.5 py-1 font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">
-                          {form.submission_status_counts?.pending ?? 0} in attesa
+
+                      {/* 2. Public Link + Copy button */}
+                      <div className="flex items-center justify-between gap-2 rounded-xl border border-[var(--oa-line)] bg-[var(--oa-panel-soft)] px-3 py-2">
+                        <span className="min-w-0 flex-1 truncate font-mono text-xs text-[var(--oa-muted)]">
+                          {buildCardPublicDisplayPath(form)}
                         </span>
-                        <span className="rounded-full bg-emerald-50 px-2.5 py-1 font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-200">
-                          {form.submission_status_counts?.confirmed ?? 0} confermate
-                        </span>
-                        <span className="rounded-full bg-rose-50 px-2.5 py-1 font-semibold text-rose-800 ring-1 ring-inset ring-rose-200">
-                          {form.submission_status_counts?.rejected ?? 0} rigettate
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
-                          className="btn-primary !px-4 !py-2 !text-sm"
                           onClick={(event) => {
                             event.stopPropagation();
-                            void openFormEditor(form.id, { initialTab: "responses" });
+                            void handleCopyCardLink(form);
                           }}
+                          title="Copia link pubblico"
+                          aria-label={`Copia link di ${form.title}`}
+                          className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-md border border-[var(--oa-line-strong)] bg-[var(--oa-panel)] px-2 py-1 text-[11px] font-semibold text-[var(--oa-text)] transition hover:border-[var(--oa-brand)] hover:text-[var(--oa-brand-strong)]"
                         >
-                          Gestisci risposte
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-secondary !px-4 !py-2 !text-sm"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void openFormEditor(form.id, { initialTab: "builder" });
-                          }}
-                        >
-                          Apri builder
+                          {isCopied ? (
+                            <>
+                              <svg className="h-3.5 w-3.5 text-emerald-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                <path fillRule="evenodd" d="M16.704 5.29a1 1 0 0 1 .006 1.414l-7.25 7.313a1 1 0 0 1-1.42 0l-3-3.024a1 1 0 1 1 1.42-1.408l2.29 2.308 6.54-6.597a1 1 0 0 1 1.414-.006Z" clipRule="evenodd" />
+                              </svg>
+                              <span className="text-emerald-500">Copiato!</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg className="h-3.5 w-3.5 text-[var(--oa-muted)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+                                <rect x="9" y="9" width="11" height="11" rx="2" />
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                              </svg>
+                              <span>Copia link</span>
+                            </>
+                          )}
                         </button>
                       </div>
+
+                      {/* 3. Response Metrics Mini-Grid */}
+                      <div className="grid grid-cols-2 gap-1.5 rounded-xl border border-[var(--oa-line)] bg-[var(--oa-panel-soft)] p-2 text-center 2xl:grid-cols-4">
+                        <div className="rounded-lg px-1.5 py-1">
+                          <p className="text-sm font-bold tabular-nums text-[var(--oa-text)]">{form.field_count}</p>
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--oa-muted)]">Campi</p>
+                        </div>
+                        <div
+                          className={`rounded-lg px-1.5 py-1 ${
+                            pendingCount > 0 ? "bg-amber-500/15 text-amber-500" : ""
+                          }`}
+                        >
+                          <p
+                            className={`text-sm font-bold tabular-nums ${
+                              pendingCount > 0 ? "text-amber-500" : "text-[var(--oa-muted)]"
+                            }`}
+                          >
+                            {pendingCount}
+                          </p>
+                          <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-[var(--oa-muted)]">
+                            In attesa
+                          </p>
+                        </div>
+                        <div
+                          className={`rounded-lg px-1.5 py-1 ${
+                            confirmedCount > 0 ? "bg-emerald-500/15 text-emerald-500" : ""
+                          }`}
+                        >
+                          <p
+                            className={`text-sm font-bold tabular-nums ${
+                              confirmedCount > 0 ? "text-emerald-500" : "text-[var(--oa-muted)]"
+                            }`}
+                          >
+                            {confirmedCount}
+                          </p>
+                          <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-[var(--oa-muted)]">
+                            Confermate
+                          </p>
+                        </div>
+                        <div
+                          className={`rounded-lg px-1.5 py-1 ${
+                            rejectedCount > 0 ? "bg-rose-500/15 text-rose-500" : ""
+                          }`}
+                        >
+                          <p
+                            className={`text-sm font-bold tabular-nums ${
+                              rejectedCount > 0 ? "text-rose-500" : "text-[var(--oa-muted)]"
+                            }`}
+                          >
+                            {rejectedCount}
+                          </p>
+                          <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-[var(--oa-muted)]">
+                            Rigettate
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+
+                    {/* 4. Cohesive Action Footer */}
+                    <div className="grid grid-cols-2 gap-2.5 border-t border-[var(--oa-line)] pt-3.5">
+                      <button
+                        type="button"
+                        className="btn-secondary !min-h-11 min-w-0 w-full justify-center !whitespace-normal !rounded-xl !px-3 !py-2 !text-xs font-semibold"
+                        onClick={() => {
+                          void openFormEditor(form.id, { initialTab: "responses" });
+                        }}
+                      >
+                        Risposte ({totalResponses})
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-primary !min-h-11 min-w-0 w-full justify-center !whitespace-normal !rounded-xl !px-3 !py-2 !text-xs font-semibold"
+                        onClick={() => {
+                          void openFormEditor(form.id, { initialTab: "builder" });
+                        }}
+                      >
+                        Modifica nel Builder
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
-          </section>
+          </div>
         )}
 
         {!isEditorOpen && !loading && !adminLoading && visibleForms.length === 0 && (
-          <section className="rounded-[1.25rem] bg-white p-12 ring-1 ring-inset ring-slate-200/60 shadow-sm text-center">
-            <div className="mx-auto max-w-xl">
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
-                {mode === "surveys" ? "Sondaggi" : "Pagine e moduli"}
-              </p>
-              <h2 className="mt-4 text-3xl font-light tracking-tight text-slate-900">
+          <section className="org-section-panel mb-28 p-10 text-center">
+            <div className="mx-auto max-w-md">
+              <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--oa-brand)]/15 text-[var(--oa-brand-strong)]">
+                <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+                  <rect x="4" y="4" width="16" height="16" rx="2.5" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 9h8M8 13h8M8 17h5" />
+                </svg>
+              </span>
+              <h2 className="mt-4 text-lg font-semibold tracking-tight text-[var(--oa-text)]">
                 {mode === "surveys" ? "Nessun sondaggio creato" : "Nessun form creato"}
               </h2>
-              <p className="mt-3 text-base text-slate-500">
+              <p className="mt-2 text-sm text-[var(--oa-muted)]">
                 {mode === "surveys"
-                  ? "Crea un sondaggio pubblico e, se vuoi, invialo automaticamente ai partecipanti segnati come presenti in agenda."
-                  : "Crea il primo modulo pubblico per raccogliere iscrizioni, richieste o prenotazioni."}
+                  ? "Crea un sondaggio pubblico e invialo ai partecipanti segnati come presenti in agenda."
+                  : "Crea il tuo primo modulo pubblico per raccogliere iscrizioni, richieste o prenotazioni."}
               </p>
-              <button className="btn-primary !rounded-full !px-8 !py-3.5 text-sm font-medium mt-8" type="button" onClick={handleCreateNewForm} disabled={locked}>
-                {mode === "surveys" ? "Crea un sondaggio" : "Crea un nuovo form"}
+              <button
+                className="btn-primary mt-6 !px-6 !py-2.5 text-sm font-semibold"
+                type="button"
+                onClick={handleCreateNewForm}
+                disabled={locked}
+              >
+                {mode === "surveys" ? "Crea il tuo primo sondaggio" : "Crea il tuo primo form"}
               </button>
             </div>
           </section>
@@ -3207,8 +3576,8 @@ export function OrgAdminFormsWorkspace({
         open={deleteFormOpen}
         title={DESTRUCTIVE_ACTION_COPY.deleteForm.title}
         description="Il link pubblico verrà chiuso e le risposte non saranno più consultabili da questa pagina."
-        objectName={formatActionObject(selectedForm?.title, "Modulo selezionato")}
-        impact="Usa questa azione solo se il modulo non serve più. L'operazione non ? pensata come archiviazione temporanea."
+        objectName={formatActionObject(deleteTargetForm?.title ?? selectedForm?.title, "Modulo selezionato")}
+        impact="Usa questa azione solo se il modulo non serve più. L'operazione non è pensata come archiviazione temporanea."
         confirmLabel={DESTRUCTIVE_ACTION_COPY.deleteForm.confirmLabel}
         tone="danger"
         confirmState={deleteActionState}
@@ -3216,8 +3585,11 @@ export function OrgAdminFormsWorkspace({
         checkboxLabel="Confermo l'eliminazione del modulo"
         onClose={() => {
           if (deleteActionState === "loading") return;
+          const returnId = deleteTargetForm?.id;
           setDeleteFormOpen(false);
+          setDeleteTargetForm(null);
           setDeleteActionState("idle");
+          if (returnId) restoreCardFocus(returnId);
         }}
         onConfirm={() => void confirmDeleteForm()}
       />
