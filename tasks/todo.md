@@ -6305,7 +6305,7 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Badge italiani, esportazione singola esplicita e funzionante, date italiane coerenti Europe/Rome senza modificare i dati reali.
 - [x] Verificare contratti metriche/filtri/export e componenti; implementare densita, interazioni e pannello responsive con impatto minimo.
 - [x] Test pertinenti e build; review indipendente e browser chiaro/scuro a390/1280x720/1366x768/1440/1920, misurando la prima riga e la leggibilita delle colonne.
-- [ ] Pubblicare su Main nel seguito UI/UX autorizzato; verificare deploy/canary/asset/servizi e documentare risultati/limiti con screenshot.
+- [x] Pubblicare su Main nel seguito UI/UX autorizzato; verificare deploy/canary/asset/servizi e documentare risultati/limiti con screenshot.
 
 ### Bug segnalato durante il lavoro: socio manuale non visibile
 - [x] Verificare il caso reale in sola lettura: record presente, non eliminato, in attesa documenti, escluso dal filtro iniziale Attivi. Nessun duplicato o modifica del record reale.
@@ -6320,3 +6320,8 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 ### Review prima del rilascio
 - Backend completo1025 passed/13 skipped, frontend306 passed/52file e build riuscita.21 controlli PostgreSQL16 su schema QA isolato, poi rimosso; concorrenza monouso, rollback, lock e retry verificati. Nessuna email reale.
 - Browser chiaro/scuro390/1280/1366/1440/1920px senza overflow; prima riga353px a1280x720 con cinque righe complete. Verificate selezione/cronologia, pannello/X/Escape/focus, export singolo e creazione con apertura immediata del profilo. Invito utilizzabile prima dell'attivazione; flusso completo verificato tramite API sintetiche. Rapporto docs/members_desktop_onboarding_release_2026-10-29.md.
+
+### Rilascio completato Soci desktop e iscrizioni manuali
+- Pubblicato a6c85dc su Main, pipeline40954807826 riuscita; Final canary passed verificato nel job123732778015.43 controlli HTTPS/hash asset superati e sette servizi runtime aggiornati/healthy, zero restart/OOM, schema invariato.
+- Nuovi endpoint presenti in produzione, metriche verificate readonly su tre associazioni, invito senza token correttamente protetto nel browser senza errori console. Trasporto email normale configurato, link sull'origine corretta; ultimi42 messaggi dell'outbox in stato sent. Nessun invito retroattivo o modifica del profilo reale per collaudo.
+- Worker PWA corrente BYPASS/noAge e contenuto effettivo aggiornato. Schema PostgreSQL QA rimosso, server locale fermato, schede temporanee chiuse e viewport ripristinato. Rapporto docs/members_desktop_onboarding_release_2026-10-29.md; limite Safari/iOS fisico e consegna effettiva dell'invito reale da eseguire dall'amministratore.

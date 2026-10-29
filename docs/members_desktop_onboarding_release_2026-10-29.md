@@ -30,7 +30,12 @@
 
 ## Rilascio
 
-Da completare dopo push: identificativo commit, pipeline/canary, corrispondenza degli asset pubblici e stato dei sette servizi runtime.
+- Commit applicativo `a6c85dced9cb5fd5c74fcea4fd8519757ab949d5`, pubblicato su Main; pipeline 40954807826.
+- **43 controlli HTTPS riusciti**, con hash degli asset effettivi uguali alla build locale, compresi pagina di completamento, elenco/dettaglio Soci e funzioni precedenti. API di completamento protetta senza sessione; nel browser pubblico compare il messaggio di invito necessario, senza errori console.
+- Tutti e sette i servizi runtime usano il nuovo commit e risultano healthy, con zero restart/OOM. Revision schema invariata. Query dei conteggi documenti verificate in sola lettura su tre associazioni; nessuno schema QA residuo.
+- Email in modalità normale, trasporto Cloudflare configurato, origine dei link corretta; outbox delle ultime 24 ore con 42 messaggi nello stato sent e nessuno in attesa/fallito al momento del controllo. Questo è un controllo del servizio esistente, non una consegna dell'invito al profilo segnalato.
+- Service worker corrente in BYPASS, senza Age, contenuto aggiornato, Cache-Control di rivalidazione e CDN no-store.
+- Server QA arrestato, schede temporanee chiuse e viewport ripristinato. Pipeline build/deploy completata con successo; log del job123732778015: Final canary passed, servizi stabili, health200 e Alembic alla revisione prevista, alle22:12 del29ottobre (Europe/Rome).
 
 ## Limiti e operazioni amministrative
 
