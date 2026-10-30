@@ -37,6 +37,11 @@
 
 ## Rilascio e limiti
 
-Rilascio Main, pipeline/canary, asset e stato dei servizi da annotare al completamento.
+- Codice pubblicato su Main con `f8eb170eb5ecdba1901854b40558e9a5d3f14210`; pipeline 41128856669.
+- 56 controlli HTTPS superati, inclusi hash degli asset effettivi di dashboard socio, editor e pagine contabili. Health pubblico200 con database disponibile; accesso anonimo a documenti/notifiche correttamente negato.
+- Browser pubblico: `/dashboard/documenti` porta al login senza sessione, pagina utilizzabile e nessun errore console.
+- Sette servizi runtime sul nuovo commit, healthy con zero restart/OOM; trasporto email normale configurato e schema invariato. Endpoint nuovi verificati nell'app distribuita, conteggi controllati in sola lettura su tre associazioni.
+- Service worker attuale in BYPASS senza Age, con rivalidazione browser e CDN no-store; contenuto corrispondente alla nuova shell.
+- QA locale arrestato, schede temporanee chiuse e viewport ripristinato. Pipeline build/deploy completata con successo; Final canary passed verificato nei log del job124315148519 alle22:16 del30ottobre2026 (Europe/Rome): servizi stabili, health200 e Alembic alla revisione prevista.
 
 Le prove mobili usano viewport Chromium, senza dispositivo Safari/iOS fisico. Le immagini esterne devono essere pubblicamente accessibili e consentire l'incorporamento: un server terzo può impedirlo. L'accodamento email non certifica la consegna nella casella del destinatario. Nessuna migrazione, nessuna modifica alle integrazioni escluse o al vecchio `/api/join/continue`.

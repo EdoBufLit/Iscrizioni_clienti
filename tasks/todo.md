@@ -6338,9 +6338,13 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Estensione utente: stesso intervento di densita in Incassi e riconciliazione. Nell'Archivio contabile mostrato correggere header bianco in dark mode, file/testi/azioni tagliati e presentazione responsive; mantenere saldi, riconciliazioni, rettifiche, download e permessi esistenti.
 - [x] Analisi dei contratti e dei percorsi esistenti, implementazione parallela per ambiti separati e integrazione frontend/backend.
 - [x] Test funzionali e sicurezza pertinenti, build e review; collaudo con dati sintetici su mobile/desktop chiaro/scuro, misurando tessera e allineamenti.
-- [ ] Pubblicare su Main nel flusso autorizzato, monitorare deploy/canary e verificare sito e servizi; rapporto con dettagli, screenshot e limiti.
+- [x] Pubblicare su Main nel flusso autorizzato, monitorare deploy/canary e verificare sito e servizi; rapporto con dettagli, screenshot e limiti.
 
 ### Review area socio e piattaforma prima del rilascio - Oct30,2026
 - Documenti dal primo upload al rigetto/reinvio/approvazione verificati nel browser con due ruoli sintetici; note, email accodata e campanelli entrambi funzionanti, finaldecision senza comandi ripetuti. Protezioni server, retry e inviti scaduti coperti dai test.
 - Tessera/QR nel primo schermo320/390px, logout nelProfilo, statuto compatto; editor sicuro con stili/emoji/immagine/anteprima; Quote/Incassi/Archivio compatti e senzaoverflow nei temi chiaro/scuro. Brand e banner OrgAdmin con bordi allineati; SuperAdmin ha header orizzontale.
 - Backend1077 passed/13skipped, frontend369 passed/59file, build e review indipendenti riusciti. Corrette risposte fuoriordine, cambio socio con operazioni pendenti e cambio annualita prima del pagamento. Rapporto docs/member_area_platform_release_2026-10-30.md; nessun dato reale modificato per collaudo.
+
+### Rilascio area socio, piattaforma e contabilita completato - Oct30,2026
+- Pubblicato f8eb170 su Main; pipeline41128856669 build/deploy riuscita, Final canary passed verificato nel job124315148519.56 controlliHTTPS e hashasset riusciti; sette servizi sulnuovoSHAhealthy, zero restart/OOM, schema invariato.
+- Nuovi endpoint e trasporto email normale verificati, nessun dato reale modificato per collaudo; browser pubblico Documenti richiedeaccesso e login senzaerrori. WorkerPWAaggiornatoBYPASS/noAge, serverQAfermato, schede chiuse e viewport ripristinato. Rapporto docs/member_area_platform_release_2026-10-30.md.
