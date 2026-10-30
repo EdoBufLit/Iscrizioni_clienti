@@ -1,0 +1,20 @@
+.platform-message { --message-accent: var(--cc-brand, var(--theme-brand)); --message-surface: var(--theme-brand-soft); color: var(--cc-text, var(--theme-text)); font-size: .95rem; line-height: 1.8; overflow-wrap: anywhere; min-width: 0; }
+.platform-message--notice { --message-accent: #a06918; --message-surface: #fff5de; }
+.platform-message--news { --message-accent: #386aa7; --message-surface: #edf4ff; }
+:root[data-theme="dark"] .platform-message--notice { --message-accent: #f0ca77; --message-surface: #392f1f; }
+:root[data-theme="dark"] .platform-message--news { --message-accent: #a5c9f1; --message-surface: #203449; }
+.platform-message__category { display: inline-flex; margin-bottom: 1rem; padding: .35rem .7rem; border-radius: .5rem; color: var(--message-accent); background: var(--message-surface); font-size: .78rem; font-weight: 700; }
+.platform-message p { white-space: pre-wrap; margin: 0 0 1rem; }
+.platform-message h3 { font-size: 1.2rem; font-weight: 700; line-height: 1.4; margin: 1.4rem 0 .7rem; }
+.platform-message ul, .platform-message ol { margin: .75rem 0 1rem; padding-left: 1.5rem; }
+.platform-message ul { list-style: disc; }
+.platform-message ol { list-style: decimal; }
+.platform-message li { white-space: pre-wrap; padding-left: .2rem; }
+.platform-message blockquote { white-space: pre-wrap; margin: 1rem 0; padding: .8rem 1rem; border-left: 3px solid var(--message-accent); border-radius: 0 .6rem .6rem 0; background: var(--message-surface); }
+.platform-message a { color: var(--cc-brand, var(--theme-brand)); text-decoration: underline; text-underline-offset: 3px; }
+.platform-message mark { color: #362b12; background: #fff0b8; padding: 0 .1rem; border-radius: .15rem; }
+.platform-message strong { font-weight: 700; }
+.platform-message em { font-style: italic; }
+.platform-message figure { margin: 1.25rem 0; }
+.platform-message img { display: block; max-width: 100%; width: auto; height: auto; max-height: 38rem; border-radius: .75rem; object-fit: contain; }
+.platform-message figcaption { color: var(--cc-muted, var(--theme-text-muted)); font-size: .78rem; line-height: 1.5; margin-top: .5rem; }

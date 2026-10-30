@@ -4,6 +4,7 @@
 
 /* ORG ADMIN 2026 rehaul: scoped to the private association workspace. */
 .org-admin-v2 {
+  --oa-header-height: 5rem;
   --oa-topbar: var(--theme-chrome);
   --oa-topbar-2: var(--theme-chrome-strong);
   --oa-brand: var(--theme-brand);
@@ -1649,7 +1650,7 @@
 
 .org-admin-sidebar__brand {
   display: flex;
-  min-height: 5rem;
+  min-height: var(--oa-header-height);
   align-items: center;
   gap: 0.8rem;
   border-bottom: 1px solid var(--oa-line);
@@ -1736,7 +1737,7 @@
   top: 0;
   z-index: 40;
   display: flex;
-  min-height: 5rem;
+  min-height: var(--oa-header-height);
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
@@ -1747,8 +1748,22 @@
 }
 
 .org-admin-content {
-  min-height: calc(100vh - 5rem);
+  min-height: calc(100vh - var(--oa-header-height));
   background: var(--oa-bg);
+}
+
+@media (min-width: 1024px) {
+  /* A single border-box height keeps both halves of the workspace header aligned. */
+  .org-admin-sidebar__brand,
+  .org-admin-topbar {
+    height: var(--oa-header-height);
+    min-height: var(--oa-header-height);
+  }
+
+  .org-admin-sidebar__brand {
+    flex: 0 0 var(--oa-header-height);
+    padding-block: 0;
+  }
 }
 
 .org-admin-topbar__profile {

@@ -1,4 +1,6 @@
 import {
+  type FormEvent,
+  useCallback,
   useDeferredValue,
   useEffect,
   useMemo,
@@ -21,6 +23,9 @@ import {
   type OrgAdminAccountingDocument,
 } from "../../lib/api";
 import { useOrgAdmin } from "./OrgAdminLayout";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { PageHeader } from "./components/OrgAdminPrimitives";
+import "./OrgAdminAccounting.css";
 
 const formatDateTime = (value: string | null | undefined) => {
   if (!value) return "-";
@@ -68,6 +73,7 @@ const OrgAdminAccounting = () => {
   const navigate = useNavigate();
   const { admin, loading: adminLoading } = useOrgAdmin();
   const { showToast } = useToast();
+  const mobileView = useMediaQuery("(max-width: 767px)");
 
   const [items, setItems] = useState<OrgAdminAccountingArchiveFolder[]>([]);
   const [folderOptions, setFolderOptions] = useState<Array<{ id: number; name: string; year: number | null; slug: string }>>([]);
@@ -76,6 +82,13 @@ const OrgAdminAccounting = () => {
   const [selectedFolderId, setSelectedFolderId] = useState<number | "">("");
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | "">("");
   const [loading, setLoading] = useState(true);
+  const [initialLoaded, setInitialLoaded] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [draftFolderId, setDraftFolderId] = useState<number | "">("");
+  const [draftCategoryId, setDraftCategoryId] = useState<number | "">("");
+  const closeFilters = useCallback(() => setFiltersOpen(false), []);
+  const openFilters = () => { setDraftFolderId(selectedFolderId); setDraftCategoryId(selectedCategoryId); setFiltersOpen(true); };
+  const applyFilters = (event: FormEvent) => { event.preventDefault(); setSelectedFolderId(draftFolderId); setSelectedCategoryId(draftCategoryId); closeFilters(); };
   const [error, setError] = useState("");
   const [totalDocuments, setTotalDocuments] = useState(0);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
@@ -99,12 +112,14 @@ const OrgAdminAccounting = () => {
     }
 
     setLoading(true);
+    let cancelled = false;
     fetchOrgAdminAccountingArchive({
       q: deferredQuery || undefined,
       folderId: selectedFolderId === "" ? undefined : selectedFolderId,
       categoryId: selectedCategoryId === "" ? undefined : selectedCategoryId,
     })
       .then((payload) => {
+        if (cancelled) return;
         setItems(payload.items);
         setFolderOptions(payload.filters.folders);
         setCategoryOptions(payload.filters.categories);
@@ -120,13 +135,15 @@ const OrgAdminAccounting = () => {
         );
       })
       .catch((err) => {
+        if (cancelled) return;
         if (err instanceof AuthError) {
           navigate("/org-admin/login", { replace: true });
           return;
         }
         setError(err instanceof Error ? err.message : "Errore nel caricamento archivio contabile.");
       })
-      .finally(() => setLoading(false));
+      .finally(() => { if (!cancelled) { setLoading(false); setInitialLoaded(true); } });
+    return () => { cancelled = true; };
   }, [admin, adminLoading, deferredQuery, navigate, selectedCategoryId, selectedFolderId]);
 
   const flatDocuments = useMemo(
@@ -244,7 +261,7 @@ const OrgAdminAccounting = () => {
       await reloadShareLinks(shareDocument.id);
       showToast({
         title: "Link revocato",
-        message: "La condivisione non ? più valida.",
+        message: "La condivisione non è più valida.",
         tone: "success",
       });
     } catch (err) {
@@ -267,9 +284,24 @@ const OrgAdminAccounting = () => {
     return flatDocuments.find((document) => document.id === shareDocument.id) ?? shareDocument;
   }, [flatDocuments, shareDocument]);
 
-  if (adminLoading || loading) {
+  const documentActions = (document: OrgAdminAccountingDocument) => <div className="accounting-document-actions">
+    {document.preview_available && <button type="button" onClick={() => handleOpenPreview(document)} aria-label={`Visualizza ${document.title}`}>Visualizza</button>}
+    <button type="button" onClick={() => void handleDownload(document)} disabled={downloadingId === document.id} aria-label={`Scarica ${document.title}`} aria-busy={downloadingId === document.id}>{downloadingId === document.id ? "Download…" : "Scarica"}</button>
+    {document.is_share_enabled && <button type="button" onClick={() => setShareDocument(document)} aria-label={`Condividi ${document.title}`}>Condividi</button>}
+  </div>;
+  const documentIdentity = (document: OrgAdminAccountingDocument) => <div className="accounting-document-identity">
+    <DocumentIcon mimeType={document.mime_type} />
+    <div>
+      {document.preview_available ? <button type="button" className="accounting-document-title" onClick={() => handleOpenPreview(document)}>{document.title}</button> : <strong className="accounting-document-title">{document.title}</strong>}
+      {document.description && <p className="accounting-document-description">{document.description}</p>}
+      <p className="accounting-document-filename">{document.original_filename}</p>
+      {document.is_share_enabled && <span className="accounting-document-shareable">Condivisibile</span>}
+    </div>
+  </div>;
+
+  if (adminLoading || !initialLoaded) {
     return (
-      <div className="container-shell py-10 space-y-8">
+      <div className="container-shell org-admin-mobile-page org-admin-accounting-page">
         <Skeleton className="h-12 w-80" />
         <Skeleton className="h-24 w-full rounded-[1.25rem]" />
         <Skeleton className="h-80 w-full rounded-[1.25rem]" />
@@ -278,69 +310,17 @@ const OrgAdminAccounting = () => {
   }
 
   return (
-    <div className="container-shell py-10 space-y-8">
-      {/* Header and Filters in a unified clean card */}
-      <section className="rounded-[1.25rem] border border-neutral-200 bg-white shadow-sm overflow-hidden">
-        <div className="px-8 py-7 border-b border-neutral-100 bg-gradient-to-r from-neutral-50 to-white">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-brand">Contabilità</p>
-              <h2 className="mt-2 text-3xl font-bold tracking-tight text-neutral-900">Archivio contabile</h2>
-              <p className="mt-2 text-sm font-medium text-neutral-500 max-w-2xl">
-                Consulta e condividi i documenti contabili suddivisi per anno e categoria.
-              </p>
-            </div>
-            <div className="inline-flex flex-col items-end">
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 flex items-center gap-3">
-                <div className="h-2 w-2 rounded-full bg-emerald-500" />
-                <span className="text-sm font-bold text-emerald-800">{totalDocuments} Documenti attivi</span>
-              </div>
-            </div>
-          </div>
+    <div className="container-shell org-admin-mobile-page org-admin-accounting-page">
+      <PageHeader title="Archivio contabile" actions={<span className="accounting-document-count" role="status">{totalDocuments} documenti</span>} />
+      <section className="accounting-archive-toolbar" aria-label="Ricerca e filtri archivio">
+        <div className="accounting-archive-query">
+          <label className="accounting-archive-search"><span className="sr-only">Cerca documenti contabili</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 5 5" /></svg><input type="search" placeholder="Titolo, file o descrizione" value={query} onChange={event => setQuery(event.target.value)} /></label>
+          <button type="button" className="accounting-filter-trigger" onClick={openFilters} aria-haspopup="dialog" aria-expanded={filtersOpen}>Filtri{(selectedFolderId !== "" || selectedCategoryId !== "") && <span>{Number(selectedFolderId !== "") + Number(selectedCategoryId !== "")}</span>}</button>
         </div>
-
-        <div className="p-6 bg-white">
-          <div className="flex flex-col lg:flex-row gap-4">
-            <div className="flex-1 relative">
-              <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-neutral-400">
-                <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <input
-                type="search"
-                className="w-full rounded-2xl border border-neutral-200 bg-neutral-50/50 pl-11 pr-4 py-3 text-sm font-medium text-neutral-800 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20 focus:bg-white"
-                placeholder="Cerca per titolo, file o descrizione..."
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-            </div>
-            <div className="lg:w-64">
-              <select
-                className="w-full rounded-2xl border border-neutral-200 bg-neutral-50/50 px-4 py-3 text-sm font-medium text-neutral-800 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20 focus:bg-white appearance-none"
-                value={selectedFolderId}
-                onChange={(event) => setSelectedFolderId(event.target.value ? Number(event.target.value) : "")}
-              >
-                <option value="">Tutti gli anni / cartelle</option>
-                {folderOptions.map((folder) => (
-                  <option key={folder.id} value={folder.id}>{folder.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="lg:w-64">
-              <select
-                className="w-full rounded-2xl border border-neutral-200 bg-neutral-50/50 px-4 py-3 text-sm font-medium text-neutral-800 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20 focus:bg-white appearance-none"
-                value={selectedCategoryId}
-                onChange={(event) => setSelectedCategoryId(event.target.value ? Number(event.target.value) : "")}
-              >
-                <option value="">Tutte le categorie</option>
-                {categoryOptions.map((category) => (
-                  <option key={category.id} value={category.id}>{category.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
+        {(selectedFolderId !== "" || selectedCategoryId !== "") && <div className="accounting-filter-pills">
+          {selectedFolderId !== "" && <button type="button" aria-label="Rimuovi filtro cartella" onClick={() => setSelectedFolderId("")}>{folderOptions.find(folder => folder.id === selectedFolderId)?.name ?? "Cartella selezionata"}<span aria-hidden="true">×</span></button>}
+          {selectedCategoryId !== "" && <button type="button" aria-label="Rimuovi filtro categoria" onClick={() => setSelectedCategoryId("")}>{categoryOptions.find(category => category.id === selectedCategoryId)?.name ?? "Categoria selezionata"}<span aria-hidden="true">×</span></button>}
+        </div>}
       </section>
 
       {error && (
@@ -366,15 +346,16 @@ const OrgAdminAccounting = () => {
           </p>
         </div>
       ) : (
-        <div className="space-y-8">
+        <div className="accounting-archive-folders" aria-busy={loading}>
           {items.map((folder) => {
             const folderOpen = expandedFolders.includes(folder.id);
             return (
-              <section key={folder.id} className="rounded-[1.25rem] border border-neutral-200 bg-white shadow-sm overflow-hidden">
+              <section key={folder.id} className="accounting-archive-folder">
                 {/* Folder Header */}
                 <button
                   type="button"
-                  className="flex w-full items-center justify-between px-8 py-5 bg-neutral-50/50 hover:bg-neutral-50 transition-colors"
+                  className="accounting-folder-trigger"
+                  aria-expanded={folderOpen}
                   onClick={() => toggleFolder(folder.id)}
                 >
                   <div className="flex items-center gap-4">
@@ -413,11 +394,12 @@ const OrgAdminAccounting = () => {
                         <div key={category.id} className="bg-white">
                           <button
                             type="button"
-                            className="flex w-full items-center justify-between px-8 py-4 hover:bg-neutral-50/50 transition-colors"
+                            className="accounting-category-trigger"
+                            aria-expanded={categoryOpen}
                             onClick={() => toggleCategory(category.id)}
                           >
                             <div className="flex items-center gap-3">
-                              <span className="text-xs font-bold uppercase tracking-wider text-neutral-500 w-24 text-left">
+                              <span className="accounting-category-label">
                                 Categoria
                               </span>
                               <h4 className="text-sm font-bold text-neutral-900">{category.name}</h4>
@@ -429,97 +411,24 @@ const OrgAdminAccounting = () => {
                           </button>
 
                           {categoryOpen && (
-                            <div className="px-8 pb-6">
-                              <div className="border border-neutral-200 rounded-2xl overflow-hidden">
-                                <table className="w-full text-left border-collapse">
-                                  <thead>
-                                    <tr className="bg-neutral-50/80 border-b border-neutral-200">
-                                      <th className="px-5 py-3 text-xs font-bold uppercase tracking-wider text-neutral-500">Documento</th>
-                                      <th className="px-5 py-3 text-xs font-bold uppercase tracking-wider text-neutral-500 w-48">Dettagli</th>
-                                      <th className="px-5 py-3 text-xs font-bold uppercase tracking-wider text-neutral-500 w-32 text-right">Azioni</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-neutral-100 bg-white">
-                                    {category.documents.map((document) => (
-                                      <tr key={document.id} className="hover:bg-neutral-50/30 transition-colors group">
-                                        <td className="px-5 py-4">
-                                          <div className="flex items-start gap-3">
-                                            <div className="mt-1">
-                                              <DocumentIcon mimeType={document.mime_type} />
-                                            </div>
-                                            <div>
-                                              <p className="text-sm font-bold text-neutral-900 group-hover:text-brand transition-colors cursor-pointer" onClick={() => handleOpenPreview(document)}>
-                                                {document.title}
-                                              </p>
-                                              <p className="text-xs text-neutral-500 mt-1 max-w-lg truncate">
-                                                {document.description || document.original_filename}
-                                              </p>
-                                              {document.is_share_enabled && (
-                                                <span className="inline-flex items-center gap-1 mt-2 rounded-md bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">
-                                                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
-                                                  Condivisibile
-                                                </span>
-                                              )}
-                                            </div>
-                                          </div>
-                                        </td>
-                                        <td className="px-5 py-4 align-top">
-                                          <div className="text-xs font-medium text-neutral-600 space-y-1">
-                                            <p>{formatDateTime(document.created_at)}</p>
-                                            <p className="text-neutral-400">{formatBytes(document.file_size)}</p>
-                                          </div>
-                                        </td>
-                                        <td className="px-5 py-4 align-top text-right">
-                                          <div className="flex items-center justify-end gap-2 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
-                                            {document.preview_available && (
-                                              <button
-                                                type="button"
-                                                onClick={() => handleOpenPreview(document)}
-                                                className="p-2 text-neutral-500 hover:text-brand hover:bg-brand/5 rounded-lg transition-colors"
-                                                title="Visualizza"
-                                              >
-                                                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                </svg>
-                                              </button>
-                                            )}
-                                            <button
-                                              type="button"
-                                              onClick={() => void handleDownload(document)}
-                                              className="p-2 text-neutral-500 hover:text-brand hover:bg-brand/5 rounded-lg transition-colors"
-                                              disabled={downloadingId === document.id}
-                                              title="Scarica"
-                                            >
-                                              {downloadingId === document.id ? (
-                                                <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                                </svg>
-                                              ) : (
-                                                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                                </svg>
-                                              )}
-                                            </button>
-                                            {document.is_share_enabled && (
-                                              <button
-                                                type="button"
-                                                onClick={() => setShareDocument(document)}
-                                                className="p-2 text-neutral-500 hover:text-brand hover:bg-brand/5 rounded-lg transition-colors"
-                                                title="Condividi"
-                                              >
-                                                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                                                </svg>
-                                              </button>
-                                            )}
-                                          </div>
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
+                            <div className="accounting-category-documents">
+                              {mobileView ? <ul className="accounting-mobile-documents" aria-label={`Documenti ${category.name}`}>
+                                {category.documents.map(document => <li key={document.id}>
+                                  {documentIdentity(document)}
+                                  <p className="accounting-document-meta">{formatDateTime(document.created_at)} · {formatBytes(document.file_size)}</p>
+                                  {documentActions(document)}
+                                </li>)}
+                              </ul> : <div className="accounting-documents-table-shell">
+                                <table className="accounting-documents-table">
+                                  <caption className="sr-only">Documenti {category.name}</caption>
+                                  <thead><tr><th>Documento</th><th>Dettagli</th><th>Azioni</th></tr></thead>
+                                  <tbody>{category.documents.map(document => <tr key={document.id}>
+                                    <td>{documentIdentity(document)}</td>
+                                    <td><p className="accounting-document-meta">{formatDateTime(document.created_at)}</p><p className="accounting-document-meta">{formatBytes(document.file_size)}</p></td>
+                                    <td>{documentActions(document)}</td>
+                                  </tr>)}</tbody>
                                 </table>
-                              </div>
+                              </div>}
                             </div>
                           )}
                         </div>
@@ -532,6 +441,14 @@ const OrgAdminAccounting = () => {
           })}
         </div>
       )}
+
+      <ModalShell open={filtersOpen} title="Filtri archivio contabile" onClose={closeFilters} placement="bottom" sizeClassName="max-w-lg accounting-archive-filters">
+        <form className="accounting-archive-filters-form" onSubmit={applyFilters}>
+          <label>Anno o cartella<select className="premium-select" value={draftFolderId} onChange={event => setDraftFolderId(event.target.value ? Number(event.target.value) : "")}><option value="">Tutti gli anni e cartelle</option>{folderOptions.map(folder => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></label>
+          <label>Categoria<select className="premium-select" value={draftCategoryId} onChange={event => setDraftCategoryId(event.target.value ? Number(event.target.value) : "")}><option value="">Tutte le categorie</option>{categoryOptions.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+          <div className="accounting-archive-filters-actions"><button type="button" className="btn-secondary" onClick={() => { setDraftFolderId(""); setDraftCategoryId(""); }}>Reset</button><button type="submit" className="btn-primary">Applica filtri</button></div>
+        </form>
+      </ModalShell>
 
       <AccountingDocumentPreviewModal
         document={previewDocument}

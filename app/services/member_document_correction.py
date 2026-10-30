@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException, Request, UploadFile
@@ -11,7 +12,7 @@ from itsdangerous import BadData, SignatureExpired, URLSafeTimedSerializer
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import DocStatus, Member, MemberDocument, MemberStatus
+from app.models import DocStatus, EmailOutbox, Member, MemberDocument, MemberNotification, MemberNotificationType, MemberStatus
 from app.services.system_email_layout import build_system_email_html
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
@@ -360,6 +361,8 @@ def enqueue_document_rejection_email(
     db: Session,
     request: Request,
     document: MemberDocument,
+    *,
+    dedupe_key: str | None = None,
 ) -> str | None:
     member = document.member
     if member is None or not (member.email or "").strip() or member.organization is None:
@@ -415,9 +418,73 @@ def enqueue_document_rejection_email(
                 "member_id": member.id,
                 "org_id": member.org_id,
                 "document_id": document.id,
+                "correction_issued_at": int(time.time()),
                 "communication_purpose": "service",
             },
         ),
         priority=1,
-        dedupe_key=f"member-document-rejected:{document.id}:{_review_marker(document)}",
+        dedupe_key=dedupe_key or f"member-document-rejected:{document.id}:{_review_marker(document)}",
     )
+
+
+def notify_member_about_document_rejection(db: Session, document: MemberDocument) -> bool:
+    """Keep the reason in the member bell, in the review transaction."""
+    member = document.member
+    if member is None or member.deleted_at is not None:
+        return False
+    key = f"member-document-rejected:{document.id}:{_review_marker(document)}"
+    if db.query(MemberNotification.id).filter(MemberNotification.dedupe_key == key).first():
+        return False
+    label = {"identity": "documento di identità", "fiscal_code": "codice fiscale"}.get(document.doc_type, "documento")
+    reason = (document.rejection_note or "Invia una copia completa e leggibile.").strip()
+    db.add(MemberNotification(member_id=member.id, org_id=member.org_id,
+        type=MemberNotificationType.DOCUMENT_REJECTED.value, title="Documento da correggere",
+        body=f"Il tuo {label} non è stato approvato. Motivo: {reason}\nCarica una nuova versione dalla Documentazione.",
+        href=f"/dashboard/documenti?document_id={document.id}", dedupe_key=key))
+    return True
+
+
+def resend_document_correction_email(db: Session, request: Request, document: MemberDocument) -> str:
+    """Explicit resend, separate from an immutable review decision.
+
+    The caller holds the member/document locks and commits. Repeated requests
+    reuse queued work; a sent message has a ten-minute cooldown. The review
+    marker is unchanged, so links already delivered keep their own TTL.
+    """
+    if document.status != DocStatus.REJECTED.value or _has_replacement(db, document.id):
+        raise HTTPException(status_code=409, detail="La richiesta è disponibile solo per un documento ancora da correggere.")
+    member = document.member
+    member_status = str(getattr(member.status, "value", member.status)) if member is not None else ""
+    if (member is None or member.deleted_at is not None or member.organization is None
+            or not member.organization.is_active or member.organization.deleted_at is not None
+            or member_status not in _ELIGIBLE_MEMBER_STATUSES or not (member.email or "").strip()):
+        raise HTTPException(status_code=400, detail="Non è possibile inviare la richiesta. Controlla l'iscrizione e l'email del socio.")
+    prefix = f"member-document-rejected:{document.id}:{_review_marker(document)}"
+    previous = db.query(EmailOutbox).filter(EmailOutbox.dedupe_key.like(prefix + "%")).order_by(
+        EmailOutbox.created_at.desc(), EmailOutbox.id.desc()).first()
+    now = datetime.now(timezone.utc)
+    if previous:
+        created = previous.created_at
+        created = created.replace(tzinfo=timezone.utc) if created.tzinfo is None else created.astimezone(timezone.utc)
+        elapsed = (now-created).total_seconds()
+        issued_at = ((previous.payload_json or {}).get("meta") or {}).get("correction_issued_at")
+        age = int(time.time())-int(issued_at) if isinstance(issued_at, (int, float)) else elapsed
+        if previous.status in {"queued", "sending", "failed"}:
+            if age >= DOCUMENT_CORRECTION_TOKEN_TTL_SECONDS:
+                if previous.status == "sending":
+                    raise HTTPException(status_code=409, detail="Un invio è in corso. Riprova tra qualche minuto.")
+                enqueue_document_rejection_email(db, request, document, dedupe_key=previous.dedupe_key)
+            if previous.status == "failed":
+                previous.status = "queued"
+                previous.attempts = 0
+                previous.last_error = None
+                previous.next_retry_at = now
+            return previous.id
+        if elapsed < 600:
+            raise HTTPException(status_code=429, detail="La richiesta è già stata inviata di recente. Riprova tra qualche minuto.",
+                headers={"Retry-After": str(max(1, int(600-elapsed)))})
+    key = prefix if previous is None else f"{prefix}:resend:{int(time.time())//600}"
+    outbox_id = enqueue_document_rejection_email(db, request, document, dedupe_key=key)
+    if outbox_id is None:
+        raise HTTPException(status_code=400, detail="La richiesta non può essere inviata per questa iscrizione.")
+    return outbox_id

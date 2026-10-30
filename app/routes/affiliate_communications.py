@@ -20,6 +20,7 @@ from app.services.affiliate_communications import (
 )
 from app.services.org_admin_sessions import get_current_org_admin_from_request
 from app.services.super_admin_auth import resolve_super_admin_session
+from app.services.communication_content import CommunicationDocument, encode_communication_body
 
 super_admin_router = APIRouter(prefix="/api/super-admin/communications", tags=["Central communications"])
 org_admin_router = APIRouter(prefix="/api/org-admin/communications/inbox", tags=["Central communications"])
@@ -30,6 +31,7 @@ class CommunicationDraft(BaseModel):
     body: str = Field(min_length=1, max_length=20000)
     audience: Literal["all", "selected"]
     organization_ids: list[int] = Field(default_factory=list, max_length=10000)
+    document: CommunicationDocument | None = None
 
     @field_validator("subject", "body", mode="before")
     @classmethod
@@ -45,6 +47,7 @@ class CommunicationDraft(BaseModel):
 
     @model_validator(mode="after")
     def validate_selection(self):
+        encode_communication_body(self.body, self.document)
         if self.audience == "selected" and not self.organization_ids:
             raise ValueError("Seleziona almeno un'associazione.")
         if self.audience == "all" and self.organization_ids:

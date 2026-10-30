@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, status, UploadFile, File
 from fastapi.responses import RedirectResponse, FileResponse
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, EmailStr, Field, TypeAdapter
 from sqlalchemy import func, update
 from sqlalchemy.orm import Session, joinedload
@@ -42,12 +43,17 @@ from app.services.booking_customer_actions import submit_booking_customer_note
 from app.services.bookings import serialize_member_booking
 from app.services.member_document_correction import (
     clear_document_correction_session,
-    create_replacement_document,
     establish_document_correction_session,
     get_document_correction_context,
     serialize_document_correction_context,
 )
 from app.services.renewals import can_access_member_account
+from app.services.member_documents import (
+    MEMBER_DOCUMENT_TYPES,
+    latest_member_documents,
+    stage_member_document,
+    store_member_document,
+)
 from app.services.member_contact_changes import (
     create_contact_change,
     decrypt_contact_value,
@@ -307,6 +313,7 @@ def get_my_organization_statute(request: Request, db: Session = Depends(get_db))
         return {
             "available": False,
             "filename": None,
+            "size_bytes": None,
             "mime_type": None,
             "download_url": None,
         }
@@ -321,6 +328,7 @@ def get_my_organization_statute(request: Request, db: Session = Depends(get_db))
         return {
             "available": False,
             "filename": None,
+            "size_bytes": None,
             "mime_type": None,
             "download_url": None,
         }
@@ -328,6 +336,7 @@ def get_my_organization_statute(request: Request, db: Session = Depends(get_db))
     return {
         "available": True,
         "filename": f"statuto_{org.slug}.pdf",
+        "size_bytes": os.path.getsize(full_path),
         "mime_type": "application/pdf",
         "download_url": "/api/me/organization/statute/download",
     }
@@ -829,6 +838,27 @@ def create_google_wallet_save_link(request: Request, db: Session = Depends(get_d
     }
 
 
+@router.post("/api/member/documents")
+async def upload_member_document(
+    request: Request,
+    doc_type: Literal["identity", "fiscal_code"] = Form(...),
+    document: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    def preflight():
+        member = get_current_member(request, db)
+        if not member:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        snapshot = member.id, member.org_id, member.auth_version
+        db.rollback()
+        return snapshot
+
+    member_id, org_id, auth_version = await run_in_threadpool(preflight)
+    staged = await stage_member_document(document, member_id=member_id, org_id=org_id, doc_type=doc_type)
+    return await run_in_threadpool(store_member_document, request, db, staged,
+        member_id=member_id, expected_auth_version=auth_version)
+
+
 @router.post("/api/member/documents/{doc_id}/resubmit")
 async def resubmit_document(
     request: Request,
@@ -836,43 +866,23 @@ async def resubmit_document(
     document: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
-    member = get_current_member(request, db)
-    if not member:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+    def preflight():
+        member = get_current_member(request, db)
+        if not member:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        doc = db.query(MemberDocument).filter(MemberDocument.id == doc_id, MemberDocument.member_id == member.id).first()
+        if doc is None:
+            raise HTTPException(status_code=404, detail="Document not found")
+        if doc.status != DocStatus.REJECTED.value:
+            raise HTTPException(status_code=400, detail="Il documento può essere reinviato solo se rigettato.")
+        snapshot = member.id, member.org_id, member.auth_version, doc.doc_type
+        db.rollback()
+        return snapshot
 
-    doc = (
-        db.query(MemberDocument)
-        .filter(
-            MemberDocument.id == doc_id,
-            MemberDocument.member_id == member.id,
-        )
-        .with_for_update()
-        .first()
-    )
-    if not doc:
-        raise HTTPException(status_code=404, detail="Document not found")
-
-    new_doc = await create_replacement_document(
-        db,
-        member=member,
-        document=doc,
-        upload=document,
-    )
-    db.commit()
-    db.refresh(new_doc)
-
-    audit.log_operation(
-        db,
-        action="member.document.resubmit",
-        entity_type="member_document",
-        entity_id=new_doc.id,
-        actor_member_id=member.id,
-        metadata={"replaces_document_id": doc.id, "doc_type": doc.doc_type},
-        ip=get_client_ip(request),
-    )
-    db.commit()
-
-    return {"ok": True, "id": new_doc.id, "status": new_doc.status}
+    member_id, org_id, auth_version, doc_type = await run_in_threadpool(preflight)
+    staged = await stage_member_document(document, member_id=member_id, org_id=org_id, doc_type=doc_type)
+    return await run_in_threadpool(store_member_document, request, db, staged,
+        member_id=member_id, expected_auth_version=auth_version, replace_document_id=doc_id)
 
 
 @router.post("/api/member/document-correction/session")
@@ -902,39 +912,18 @@ async def resubmit_document_from_correction_session(
     document: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
-    context = get_document_correction_context(
-        request,
-        db,
-        document_id=doc_id,
-        lock_document=True,
-    )
+    def preflight():
+        context = get_document_correction_context(request, db, document_id=doc_id)
+        snapshot = context.member.id, context.member.org_id, context.document.doc_type
+        db.rollback()
+        return snapshot
 
-    new_doc = await create_replacement_document(
-        db,
-        member=context.member,
-        document=context.document,
-        upload=document,
-    )
-    db.commit()
-    db.refresh(new_doc)
-
-    audit.log_operation(
-        db,
-        action="member.document.resubmit_limited_session",
-        entity_type="member_document",
-        entity_id=new_doc.id,
-        actor_member_id=context.member.id,
-        metadata={
-            "replaces_document_id": context.document.id,
-            "doc_type": context.document.doc_type,
-            "limited_session": True,
-        },
-        ip=get_client_ip(request),
-    )
-    db.commit()
+    member_id, org_id, doc_type = await run_in_threadpool(preflight)
+    staged = await stage_member_document(document, member_id=member_id, org_id=org_id, doc_type=doc_type)
+    result = await run_in_threadpool(store_member_document, request, db, staged,
+        member_id=member_id, replace_document_id=doc_id, limited_correction=True)
     clear_document_correction_session(request, doc_id)
-
-    return {"ok": True, "id": new_doc.id, "status": new_doc.status}
+    return result
 
 
 @router.get("/api/member/documents")
@@ -953,8 +942,12 @@ def list_member_documents(
         .all()
     )
 
+    latest = latest_member_documents(db, member.id)
     return {
-        "required_types": ["identity", "fiscal_code"],
+        "allowed_types": list(MEMBER_DOCUMENT_TYPES),
+        "required_types": ["identity"] if member.organization.require_membership_document else [],
+        "uploadable_types": [doc_type for doc_type in MEMBER_DOCUMENT_TYPES
+            if doc_type not in latest or latest[doc_type].status == DocStatus.REJECTED.value],
         "items": [
             {
                 "id": d.id,

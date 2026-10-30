@@ -1,0 +1,72 @@
+.org-admin-v2 .org-admin-incassi-page { display: grid; min-width: 0; gap: 12px; padding-block: 14px !important; }
+.org-admin-incassi-page > .org-page-header { align-items: center; gap: 12px; margin: 0; }
+.org-admin-incassi-page > .org-page-header .org-eyebrow,
+.org-admin-incassi-page > .org-page-header .org-page-header__subtitle { display: none; }
+.org-admin-v2 .org-admin-incassi-page .org-page-header__title { margin: 0; font-size: 26px; line-height: 1.2; }
+.org-admin-v2 .org-admin-incassi-page .org-page-header__actions { gap: 8px; }
+.org-admin-v2 .org-admin-incassi-page .org-page-header__actions > * { min-height: 38px; padding: 8px 12px; font-size: 12px; letter-spacing: 0; text-transform: none; }
+.incassi-guidance { color: var(--theme-text-muted); font-size: 12px; }
+.incassi-guidance summary { width: fit-content; max-width: 100%; cursor: pointer; }
+.incassi-guidance p { max-width: 80ch; margin-top: 8px; line-height: 1.5; }
+.incassi-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; min-width: 0; }
+.org-admin-v2 .incassi-kpis .org-kpi-card { min-height: 78px; padding: 10px 12px; gap: 6px; }
+.org-admin-v2 .incassi-kpis .org-kpi-card__body { min-width: 0; gap: 4px; }
+.org-admin-v2 .incassi-kpis .org-kpi-card__label { font-size: 12px; line-height: 1.3; }
+.org-admin-v2 .incassi-kpis .org-kpi-card__value { font-size: clamp(21px, 1.9vw, 26px); line-height: 1.15; overflow-wrap: anywhere; }
+.org-admin-v2 .incassi-kpis .org-kpi-card__hint { font-size: 11px; line-height: 1.3; }
+.org-admin-v2 .incassi-register { min-width: 0; padding: 12px; }
+.incassi-query { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; min-width: 0; }
+.incassi-search { display: flex; min-width: 0; align-items: center; gap: 8px; }
+.incassi-search svg { flex: 0 0 18px; width: 18px; height: 18px; color: var(--theme-text-muted); }
+.incassi-search input { width: 100%; min-width: 0; height: 40px; border: 0; background: transparent; color: var(--theme-text); font-size: 14px; }
+.incassi-search input:focus { outline: 2px solid var(--theme-brand); outline-offset: 2px; border-radius: 6px; }
+.incassi-filter-trigger { display: inline-flex; min-height: 40px; align-items: center; justify-content: center; gap: 6px; padding: 8px 10px; border: 1px solid var(--theme-border); border-radius: 10px; background: var(--theme-surface-solid); color: var(--theme-text); font-size: 13px; font-weight: 600; }
+.incassi-filter-trigger svg { width: 16px; height: 16px; }
+.incassi-filter-count { display: grid; width: 18px; height: 18px; place-items: center; border-radius: 50%; background: var(--theme-brand); color: var(--theme-on-brand); font-size: 11px; }
+.incassi-filter-context { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; min-width: 0; gap: 8px; margin: 6px 0 10px; color: var(--theme-text-muted); font-size: 12px; }
+.incassi-filter-pill { display: inline-flex; align-items: center; gap: 8px; min-height: 30px; max-width: 100%; margin-right: auto; padding: 4px 9px; border: 1px solid var(--theme-border); border-radius: 999px; color: var(--theme-text); font-size: 12px; overflow-wrap: anywhere; }
+.incassi-receipt-row { min-width: 0; padding: 12px; }
+.incassi-receipt-row__layout { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.incassi-receipt-row__layout > div { min-width: 0; }
+.incassi-receipt-row__amount { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.org-admin-v2 .incassi-receipt-row__amount h3 { font-size: 17px; line-height: 1.3; }
+.incassi-receipt-row__identity { margin-top: 5px; font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+.incassi-receipt-row__meta { margin-top: 3px; color: var(--theme-text-muted); font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+.incassi-receipt-row__balance { margin-top: 5px; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.org-admin-v2 .incassi-receipt-row__layout > button { min-height: 38px; flex-shrink: 0; padding: 8px 10px; font-size: 12px; letter-spacing: 0; text-transform: none; }
+.incassi-pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; }
+.incassi-pagination > span { font-size: 12px; }
+.org-admin-v2 .incassi-pagination button { min-height: 38px; padding: 8px 10px; font-size: 12px; letter-spacing: 0; text-transform: none; }
+.incassi-filters-form { display: grid; gap: 20px; }
+.incassi-filters-form > label { display: grid; min-width: 0; gap: 8px; color: var(--theme-text); font-size: 14px; font-weight: 600; }
+.incassi-filters-form__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+.org-admin-v2 .incassi-filters-sheet.modal-shell-panel { max-height: 90vh; max-height: 90dvh; border-radius: 20px 20px 0 0; padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+.org-admin-v2 .incassi-member-context { padding: 14px; }
+.incassi-member-context .org-section-panel__header { margin-bottom: 10px; }
+.org-admin-v2 .incassi-member-context .org-section-panel__title { font-size: 18px; }
+.incassi-member-context dl { gap: 12px; }
+@media (max-width: 767px) {
+  .org-admin-v2 .org-admin-incassi-page { gap: 9px; padding: 10px 12px calc(6rem + env(safe-area-inset-bottom, 0px)) !important; }
+  .org-admin-incassi-page > .org-page-header { gap: 8px; }
+  .org-admin-v2 .org-admin-incassi-page .org-page-header__title { font-size: 23px; }
+  .org-admin-v2 .org-admin-incassi-page .org-page-header__actions { gap: 6px; }
+  .org-admin-v2 .org-admin-incassi-page .org-page-header__actions > * { min-height: 36px; padding: 7px 9px; font-size: 11px; }
+  .incassi-guidance { font-size: 11px; }
+  .incassi-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+  .org-admin-v2 .incassi-kpis .org-kpi-card { min-height: 65px; padding: 8px 10px; border-radius: 10px; }
+  .org-admin-v2 .incassi-kpis .org-kpi-card__body { gap: 3px; }
+  .org-admin-v2 .incassi-kpis .org-kpi-card__value { font-size: 21px; }
+  .org-admin-v2 .incassi-kpis .org-kpi-card__label { font-size: 11px; }
+  .org-admin-v2 .incassi-kpis .org-kpi-card__hint { display: none; }
+  .org-admin-v2 .incassi-register { padding: 8px 10px; }
+  .incassi-search input { font-size: 16px; height: 38px; }
+  .incassi-receipt-row { padding: 10px; }
+  .incassi-receipt-row__layout { flex-wrap: wrap; gap: 8px; }
+  .org-admin-v2 .incassi-receipt-row__amount h3 { font-size: 16px; }
+  .incassi-receipt-row__amount > span { font-size: 10px; padding: 3px 6px; }
+  .org-admin-v2 .incassi-receipt-row__layout > button { min-height: 40px; margin-left: auto; }
+  .incassi-member-context .org-section-panel__header { flex-direction: column; align-items: stretch; }
+  .incassi-member-context dl { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .incassi-member-context dt { font-size: 11px; }
+  .incassi-member-context dd { font-size: 17px; overflow-wrap: anywhere; }
+}

@@ -152,6 +152,46 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Incassi e riconciliazione", () => {
+  it("applica lo stato solo dal pannello filtri, conserva la ricerca e azzera la pagina", async () => {
+    mocks.list.mockResolvedValue(listResult([receipt], 26));
+    renderPage();
+    await screen.findByRole("button", { name: "Apri incasso #7" });
+    expect(screen.queryByLabelText("Stato abbinamento")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Successiva" }));
+    await waitFor(() => expect(mocks.list).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 25 }), expect.any(AbortSignal)));
+    fireEvent.change(screen.getByLabelText("Cerca incassi"), { target: { value: "BON-123" } });
+    await waitFor(() => expect(mocks.list).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 0, q: "BON-123" }), expect.any(AbortSignal)));
+    fireEvent.click(screen.getByRole("button", { name: "Filtri" }));
+    const dialog = screen.getByRole("dialog", { name: "Filtri incassi" });
+    const calls = mocks.list.mock.calls.length;
+    fireEvent.change(within(dialog).getByLabelText("Stato abbinamento"), { target: { value: "matched" } });
+    expect(mocks.list).toHaveBeenCalledTimes(calls);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Applica filtri" }));
+    await waitFor(() => expect(mocks.list).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 0, q: "BON-123", state: "matched" }), expect.any(AbortSignal)));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Rimuovi filtro Stato:/ }));
+    await waitFor(() => expect(mocks.list).toHaveBeenLastCalledWith(expect.objectContaining({ q: "BON-123", state: "" }), expect.any(AbortSignal)));
+    expect(mocks.sync).not.toHaveBeenCalled();
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it("annulla le modifiche ai filtri con Escape e conserva la guida alle rettifiche", async () => {
+    renderPage();
+    await screen.findByRole("button", { name: "Apri incasso #7" });
+    const trigger = screen.getByRole("button", { name: "Filtri" });
+    trigger.focus(); fireEvent.click(trigger);
+    fireEvent.change(screen.getByLabelText("Stato abbinamento"), { target: { value: "voided" } });
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+    fireEvent.click(trigger);
+    expect(screen.getByLabelText("Stato abbinamento")).toHaveValue("");
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi finestra" }));
+    const guidance = screen.getByText("Come funzionano incassi e rettifiche").closest("details")!;
+    expect(guidance).not.toHaveAttribute("open");
+    expect(guidance.textContent).toContain("non eseguono rimborsi");
+  });
+
   it("non seleziona implicitamente ricevute e rispetta la chiusura del dettaglio", async () => {
     renderPage();
     await screen.findByRole("button", { name: "Apri incasso #7" });

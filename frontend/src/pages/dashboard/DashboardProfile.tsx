@@ -10,6 +10,7 @@ import {
   type MemberContactChange,
 } from "../../lib/api";
 import type { DashboardContext } from "./DashboardLayout";
+import MemberLogoutButton from "./MemberLogoutButton";
 
 const PERSONAL_FIELDS = [
   { key: "first_name", label: "Nome" },
@@ -149,6 +150,7 @@ const DashboardProfile = () => {
 
       {/* Password section */}
       {!loading && user && <ChangePasswordSection />}
+      {!loading && user && <section className="member-profile-logout" aria-label="Sessione account"><MemberLogoutButton /></section>}
     </div>
   );
 };

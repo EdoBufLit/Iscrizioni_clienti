@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
-import { fetchMe, apiLogout, AuthError, type MemberProfile } from "../../lib/api";
+import { fetchMe, AuthError, type MemberProfile } from "../../lib/api";
 import { applySeo } from "../../lib/seo";
 import Skeleton from "../../components/ui/Skeleton";
 import MobileDashboardNav, { type MobileDashboardNavItem } from "../../components/ui/MobileDashboardNav";
 import { OnboardingTour, ReviewGuideButton } from "../../components/onboarding";
 import ThemeToggle from "../../components/theme/ThemeToggle";
+import MemberLogoutButton from "./MemberLogoutButton";
+import MemberNotificationBell from "./MemberNotificationBell";
+import "./MemberDashboard.css";
+import { memberAccountStatus } from "../../lib/memberAccount";
 
 export type DashboardContext = {
   user: MemberProfile | null;
@@ -15,6 +19,7 @@ export type DashboardContext = {
 };
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
+  inactive: { label: "Tessera non attiva", color: "border-amber-200 bg-amber-50 text-amber-700" },
   active: {
     label: "Attiva",
     color: "border-emerald-200 bg-emerald-50 text-emerald-700",
@@ -118,25 +123,15 @@ const DashboardLayout = () => {
 
   const displayName = user ? `${user.first_name} ${user.last_name}` : null;
   const orgName = user?.organization?.name ?? null;
-  const statusInfo = user ? STATUS_MAP[user.status] ?? null : null;
+  const statusInfo = user ? STATUS_MAP[memberAccountStatus(user)] ?? null : null;
   const mobileNavItems = useMemo(
     (): MobileDashboardNavItem[] => [
       { key: "home", label: "Riepilogo", to: "/dashboard", exact: true, icon: "home" as const },
       { key: "bookings", label: "Prenotazioni", to: "/dashboard/prenotazioni", activeMatch: ["/dashboard/prenotazioni"], icon: "book" as const },
-      { key: "profile", label: "Profilo", to: "/dashboard/profilo", activeMatch: ["/dashboard/profilo"], icon: "user" as const },
       { key: "documents", label: "Documenti", to: "/dashboard/documenti", activeMatch: ["/dashboard/documenti"], icon: "docs" as const },
-      {
-        key: "logout",
-        label: "Esci",
-        icon: "logout" as const,
-        tone: "danger" as const,
-        onSelect: async () => {
-          await apiLogout();
-          navigate("/login", { replace: true });
-        },
-      },
+      { key: "profile", label: "Profilo", to: "/dashboard/profilo", activeMatch: ["/dashboard/profilo"], icon: "user" as const },
     ],
-    [navigate],
+    [],
   );
 
   return (
@@ -144,7 +139,7 @@ const DashboardLayout = () => {
       {/* Header band */}
       <header className="app-header sticky top-0 z-50 transition-all">
         <div className="container-shell flex items-center justify-between h-16 md:h-20">
-          <div className="flex items-center gap-6">
+          <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-6">
             <div className="hidden shrink-0 sm:block">
               <Link to="/" className="flex items-center gap-3 transition-transform hover:scale-95 group">
                 <img
@@ -203,30 +198,22 @@ const DashboardLayout = () => {
               </div>
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-4">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-4">
             <ThemeToggle />
+            {!loading && user && <MemberNotificationBell />}
             <Link className="link-muted hidden text-sm font-bold tracking-tight sm:block" to="/">
               Sito pubblico
             </Link>
             <div className="app-divider hidden h-4 w-px sm:block" />
             {!loading && user && (
-              <button
-                className="btn-ghost !px-4 !py-2 !text-xs font-bold tracking-normalr"
-                type="button"
-                onClick={async () => {
-                  await apiLogout();
-                  navigate("/login", { replace: true });
-                }}
-              >
-                Esci
-              </button>
+              <div className="hidden md:block"><MemberLogoutButton compact /></div>
             )}
           </div>
         </div>
       </header>
 
       {/* Main content */}
-      <main className="dashboard-mobile-safe mx-auto w-full max-w-[100rem] px-6 py-8 md:pb-8">
+      <main className="member-dashboard-main dashboard-mobile-safe mx-auto w-full max-w-[100rem] px-6 py-8 md:pb-8">
         <div className="md:flex md:gap-12">
           {/* Sidebar — desktop */}
           <aside className="hidden w-60 shrink-0 md:block">
@@ -300,7 +287,7 @@ const DashboardLayout = () => {
             ))}
           </nav>
 
-          <div className="mt-8 min-w-0 flex-1 md:mt-0">
+          <div className="member-dashboard-content mt-8 min-w-0 flex-1 md:mt-0">
             <Outlet context={{ user, loading, profileError, reloadProfile: loadProfile } satisfies DashboardContext} />
           </div>
         </div>

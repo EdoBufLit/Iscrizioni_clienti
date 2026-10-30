@@ -24,6 +24,7 @@ const formatDateTime = (value: string | null | undefined) => {
 };
 
 const notificationTone = (type: string) => {
+  if (type === "member_document") return "bg-amber-50 text-amber-700 ring-amber-200/60";
   if (type === "booking_request") {
     return "bg-emerald-50 text-emerald-700 ring-emerald-200/60";
   }
@@ -40,6 +41,7 @@ const notificationTone = (type: string) => {
 };
 
 const notificationLabel = (type: string) => {
+  if (type === "member_document") return "Documenti socio";
   if (type === "central_communication") return "ASSONAM";
   if (type === "booking_request") return "Prenotazione";
   if (type === "form_submission") return "Richiesta";
@@ -78,20 +80,25 @@ const OrgAdminNotificationBell = () => {
       }
     };
     const reload = () => {
+      if (document.hidden) return;
       void loadCount();
       setRefresh((value) => value + 1);
     };
 
     void loadCount();
     window.addEventListener(NOTIFICATIONS_UPDATED_EVENT, reload);
+    window.addEventListener("focus", reload);
+    document.addEventListener("visibilitychange", reload);
     const intervalId = window.setInterval(() => {
-      void loadCount();
-    }, 60000);
+      if (!document.hidden) void loadCount();
+    }, 30000);
 
     return () => {
       active = false;
       window.clearInterval(intervalId);
       window.removeEventListener(NOTIFICATIONS_UPDATED_EVENT, reload);
+      window.removeEventListener("focus", reload);
+      document.removeEventListener("visibilitychange", reload);
     };
   }, [navigate]);
 

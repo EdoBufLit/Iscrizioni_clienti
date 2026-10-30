@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { AuthError } from "../../lib/api";
+import ModalShell from "../../components/ui/ModalShell";
 import {
   fetchMemberAccounting,
   fetchReceipt,
@@ -30,6 +31,7 @@ import {
   receiptSourceLabels,
   receiptStatusLabels,
 } from "./components/accounting/accountingUi";
+import "./OrgAdminIncassi.css";
 
 const PAGE_SIZE = 25;
 
@@ -44,6 +46,11 @@ export default function OrgAdminIncassi() {
   const initialYear = Number.isInteger(requestedYear) && requestedYear >= 2000 && requestedYear <= 2200 ? requestedYear : new Date().getFullYear();
   const [state, setState] = useState<ReceiptStatus | "">("");
   const [query, setQuery] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [draftState, setDraftState] = useState<ReceiptStatus | "">("");
+  const closeFilters = useCallback(() => setFiltersOpen(false), []);
+  const openFilters = () => { setDraftState(state); setFiltersOpen(true); };
+  const applyFilters = (event: FormEvent) => { event.preventDefault(); setState(draftState); setPage(0); closeFilters(); };
   const [page, setPage] = useState(0);
   const [data, setData] = useState<ReceiptList | null>(null);
   const [loading, setLoading] = useState(true);
@@ -260,7 +267,7 @@ export default function OrgAdminIncassi() {
   };
 
   return (
-    <div className="container-shell org-admin-mobile-page space-y-6 py-8">
+    <div className="container-shell org-admin-mobile-page org-admin-incassi-page">
       <PageHeader
         eyebrow="Contabilità"
         title="Incassi e riconciliazione"
@@ -294,11 +301,11 @@ export default function OrgAdminIncassi() {
           </>
         }
       />
-      <p className="text-sm text-[var(--theme-text-muted)]">
+      <details className="incassi-guidance"><summary>Come funzionano incassi e rettifiche</summary><p>
         Aggiorna pagamenti allinea gli incassi già confermati dall'app, compresi
         quelli online. Le rettifiche sono contabili: non eseguono rimborsi e non
         revocano tessere già emesse.
-      </p>
+      </p></details>
       {notice ? (
         <p
           role="status"
@@ -317,6 +324,7 @@ export default function OrgAdminIncassi() {
       ) : null}
       {memberId ? (
         <SectionPanel
+          className="incassi-member-context"
           title={`Saldo del socio #${memberId}`}
           eyebrow="Contesto selezionato"
           action={
@@ -395,7 +403,7 @@ export default function OrgAdminIncassi() {
       ) : null}
 
       {data ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="incassi-kpis" aria-label="Riepilogo incassi">
           <KpiCard
             label="Incassi registrati"
             value={formatCents(data.kpis.total_cents)}
@@ -419,12 +427,11 @@ export default function OrgAdminIncassi() {
         </div>
       ) : null}
 
-      <SectionPanel title="Registro incassi" eyebrow="Ricevute e movimenti">
-        <div className="mb-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_15rem]">
-          <label className={accountingLabel}>
-            Cerca incassi
+      <SectionPanel className="incassi-register">
+        <div className="incassi-query">
+          <label className="incassi-search"><span className="sr-only">Cerca incassi</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 5 5" /></svg>
             <input
-              className={accountingInput}
               type="search"
               maxLength={160}
               value={query}
@@ -435,24 +442,14 @@ export default function OrgAdminIncassi() {
               placeholder="Pagante, riferimento o descrizione"
             />
           </label>
-          <label className={accountingLabel}>
-            Stato abbinamento
-            <select
-              className={accountingInput}
-              value={state}
-              onChange={(event) => {
-                setState(event.target.value as ReceiptStatus | "");
-                setPage(0);
-              }}
-            >
-              <option value="">Tutti gli stati</option>
-              {Object.entries(receiptStatusLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <button type="button" className="incassi-filter-trigger" onClick={openFilters} aria-haspopup="dialog" aria-expanded={filtersOpen}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16M8 4v6M16 9v6M10 14v6" /></svg>
+            Filtri{state && <span className="incassi-filter-count">1</span>}
+          </button>
+        </div>
+        <div className="incassi-filter-context">
+          {state && <button type="button" className="incassi-filter-pill" aria-label={`Rimuovi filtro Stato: ${receiptStatusLabels[state]}`} onClick={() => { setState(""); setPage(0); }}>{receiptStatusLabels[state]}<span aria-hidden="true">×</span></button>}
+          <span>{data?.total ?? 0} incassi</span>
         </div>
         {loading ? (
           <p
@@ -469,14 +466,14 @@ export default function OrgAdminIncassi() {
           />
         ) : (
           <ul
-            className="divide-y divide-[var(--theme-border)] rounded-xl border border-[var(--theme-border)]"
+            className="incassi-receipt-list divide-y divide-[var(--theme-border)] rounded-xl border border-[var(--theme-border)]"
             aria-label="Elenco incassi"
           >
             {data?.items.map((receipt) => (
-              <li key={receipt.id} className="p-4 sm:p-5">
-                <div className="flex flex-wrap items-start justify-between gap-4">
+              <li key={receipt.id} className="incassi-receipt-row">
+                <div className="incassi-receipt-row__layout">
                   <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-3">
+                    <div className="incassi-receipt-row__amount">
                       <h3 className="text-lg font-semibold">
                         {formatCents(receipt.amount_cents, receipt.currency)}
                       </h3>
@@ -484,16 +481,16 @@ export default function OrgAdminIncassi() {
                         {receiptStatusLabels[receipt.status]}
                       </span>
                     </div>
-                    <p className="mt-2 break-words text-sm">
+                    <p className="incassi-receipt-row__identity">
                       {receipt.payer || "Pagante non indicato"}
                       {receipt.reference ? ` · ${receipt.reference}` : ""}
                     </p>
-                    <p className="mt-1 text-sm text-[var(--theme-text-muted)]">
+                    <p className="incassi-receipt-row__meta">
                       {formatReceiptDate(receipt.paid_on)} ·{" "}
                       {receiptMethodLabels[receipt.method]} ·{" "}
                       {receiptSourceLabels[receipt.source]} · #{receipt.id}
                     </p>
-                    <p className="mt-2 text-sm">
+                    <p className="incassi-receipt-row__balance">
                       Abbinato {formatCents(receipt.allocated_cents)} · Da
                       abbinare {formatCents(receipt.unallocated_cents)}
                     </p>
@@ -523,7 +520,7 @@ export default function OrgAdminIncassi() {
           </ul>
         )}
         <nav
-          className="mt-5 flex flex-wrap items-center justify-between gap-3"
+          className="incassi-pagination"
           aria-label="Pagine incassi"
         >
           <span className="text-sm text-[var(--theme-text-muted)]">
@@ -550,6 +547,12 @@ export default function OrgAdminIncassi() {
           </div>
         </nav>
       </SectionPanel>
+      <ModalShell open={filtersOpen} title="Filtri incassi" onClose={closeFilters} placement="bottom" sizeClassName="max-w-lg incassi-filters-sheet">
+        <form className="incassi-filters-form" onSubmit={applyFilters}>
+          <label>Stato abbinamento<select className={accountingInput} value={draftState} onChange={event => setDraftState(event.target.value as ReceiptStatus | "")}><option value="">Tutti gli stati</option>{Object.entries(receiptStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <div className="incassi-filters-form__actions"><button type="button" className="btn-secondary" onClick={() => setDraftState("")}>Reset</button><button type="submit" className="btn-primary">Applica filtri</button></div>
+        </form>
+      </ModalShell>
       {selectedId !== null && detailLoading ? (
         <p role="status" className="text-sm">
           Caricamento dettaglio incasso…

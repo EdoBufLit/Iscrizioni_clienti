@@ -14,6 +14,18 @@ import { EmptyState, KpiCard, PageHeader, SectionPanel, StatusChip } from "./com
 import MemberBulkActions from "./components/MemberBulkActions";
 import { useOrgAdmin } from "./OrgAdminLayout";
 import { FIRST_QUOTE_REMINDER_YEAR, isQuoteReminderYearAvailable, romeYear } from "../../lib/quoteReminders";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
+import "./OrgAdminQuote.css";
+
+const STATUS_OPTIONS = [
+  { value: "", label: "Tutti gli stati" },
+  { value: "due", label: "Da rinnovare" },
+  { value: "renewed", label: "Rinnovati" },
+  { value: "payment_pending", label: "Pagamento in corso" },
+  { value: "approved_waiting_card", label: "Approvati, attesa tessera" },
+  { value: "paid_waiting_card", label: "Pagati, attesa tessera" },
+  { value: "unpaid", label: "Non pagati" },
+];
 
 const euro = (value: number, currency = "EUR") =>
   new Intl.NumberFormat("it-IT", { style: "currency", currency }).format(value);
@@ -42,6 +54,8 @@ const OrgAdminQuote = () => {
   const navigate = useNavigate();
   const { admin } = useOrgAdmin();
   const currentYear = romeYear();
+  const defaultYear = Math.max(FIRST_QUOTE_REMINDER_YEAR, currentYear);
+  const mobileView = useMediaQuery("(max-width: 767px)");
   const [year, setYear] = useState(() => Math.max(FIRST_QUOTE_REMINDER_YEAR, romeYear()));
   const canRemind = isQuoteReminderYearAvailable(year);
   const [status, setStatus] = useState("");
@@ -52,9 +66,21 @@ const OrgAdminQuote = () => {
   const [notice, setNotice] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [paymentRow, setPaymentRow] = useState<QuoteCenterRow | null>(null);
+  const [paymentYear, setPaymentYear] = useState(year);
   const [saving, setSaving] = useState(false);
   const [page, setPage] = useState(0);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [draftYear, setDraftYear] = useState(year);
+  const [draftStatus, setDraftStatus] = useState(status);
   const requestId = useRef(0);
+  const closeFilters = useCallback(() => setFiltersOpen(false), []);
+  const openFilters = () => { setDraftYear(year); setDraftStatus(status); setFiltersOpen(true); };
+  const applyFilters = (event: FormEvent) => {
+    event.preventDefault(); if (draftYear !== year || draftStatus !== status || page !== 0) setLoading(true); setSelected(new Set()); setPage(0); setYear(draftYear); setStatus(draftStatus); closeFilters();
+  };
+  const changeStatus = (value: string) => { setLoading(true); setSelected(new Set()); setPage(0); setStatus(value); };
+  const changeSearch = (value: string) => { setLoading(true); setSelected(new Set()); setPage(0); setSearch(value); };
+  const changePage = (value: number) => { setLoading(true); setPage(value); };
 
   const load = useCallback(async () => {
     const generation = ++requestId.current;
@@ -98,7 +124,7 @@ const OrgAdminQuote = () => {
     setError("");
     try {
       await recordOrgAdminRenewalPayment(paymentRow.member_id, {
-        membership_year: year,
+        membership_year: paymentYear,
         amount: Number(form.get("amount")),
         method: String(form.get("method") || ""),
         paid_at: String(form.get("paid_at") || ""),
@@ -129,15 +155,29 @@ const OrgAdminQuote = () => {
     }
   };
 
+  const toggleMember = (id: number, checked: boolean) => setSelected(previous => {
+    const next = new Set(previous); if (checked) next.add(id); else next.delete(id); return next;
+  });
+  const rowActionsDisabled = saving || loading || data?.year !== year;
+  const rowActions = (row: QuoteCenterRow) => <div className="quotes-row-actions">
+    {row.payment_state === "partial" ? <Link className="btn-secondary" to={`/org-admin/incassi?member_id=${row.member_id}&year=${data?.year ?? year}`}>Completa saldo</Link> : row.payment_state !== "paid" && row.fee_amount > 0 ? <button type="button" className="btn-secondary" disabled={rowActionsDisabled} onClick={() => { setPaymentYear(data?.year ?? year); setPaymentRow(row); }}>Registra pagamento</button> : null}
+    {!row.renewed && row.can_confirm_without_payment && row.payment_state !== "paid" && row.renewal_status !== "approved_waiting_card" ? <button type="button" className="btn-ghost" disabled={rowActionsDisabled} onClick={() => void handleConfirm(row)}>Conferma rinnovo</button> : null}
+    {canRemind && row.payment_state !== "paid" && row.fee_amount > 0 ? <button type="button" className="btn-ghost" disabled={rowActionsDisabled} onClick={() => toggleMember(row.member_id, true)}>Seleziona per sollecito</button> : null}
+  </div>;
+  const paymentStatus = (row: QuoteCenterRow) => <>
+    <StatusChip tone={row.payment_state === "paid" ? "success" : ["pending", "partial"].includes(row.payment_state) ? "warning" : "muted"}>{row.payment_state === "paid" ? "Pagato" : row.payment_state === "partial" ? "Parzialmente pagato" : row.payment_state === "pending" ? "In corso" : row.payment_state === "not_required" ? "Non richiesta" : "Da pagare"}</StatusChip>
+    {row.accounting_balance && row.accounting_balance.outstanding_cents > 0 && <span className="quotes-row-outstanding">Residuo {euro(row.accounting_balance.outstanding_cents / 100, row.accounting_balance.currency)}</span>}
+  </>;
+
   return (
-    <div className="container-shell org-admin-mobile-page space-y-6 py-10">
+    <div className="container-shell org-admin-mobile-page org-admin-quotes-page">
       <PageHeader
         eyebrow="Soci e tessere"
         title="Quote e rinnovi"
         subtitle="Scadenze, incassi e nuove tessere riuniti per annualità."
         actions={
-          <div className="flex flex-wrap gap-3">
-          <Link className="btn-secondary" to="/org-admin/incassi">Incassi e riconciliazione</Link>
+          <div className="quotes-page-actions">
+          <Link className="btn-secondary" to="/org-admin/incassi" aria-label="Incassi e riconciliazione">Incassi</Link>
           <a
             className="btn-secondary"
             href={`/api/org-admin/quotes.csv?year=${year}&status=${encodeURIComponent(status)}&q=${encodeURIComponent(search)}`}
@@ -152,45 +192,37 @@ const OrgAdminQuote = () => {
       {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm font-semibold text-rose-800" role="alert">{error}</div> : null}
 
       {loading && !data ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {[0, 1, 2, 3].map((item) => <Skeleton key={item} className="h-32 rounded-2xl" />)}
+        <div className="quotes-kpis">
+          {[0, 1, 2, 3].map((item) => <Skeleton key={item} className="quotes-kpi-skeleton rounded-xl" />)}
         </div>
       ) : data ? (
         <>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="quotes-kpis" aria-label={`Riepilogo quote ${year}`}>
             <KpiCard label="Da rinnovare" value={data.kpis.due} hint={`Annualità ${year}`} tone="warning" />
             <KpiCard label="Rinnovati" value={data.kpis.renewed} hint="Tessera assegnata" tone="success" />
             <KpiCard label="Incassato" value={euro(data.kpis.collected_total, data.kpis.currency)} hint={`Teorico ${euro(data.kpis.theoretical_total, data.kpis.currency)}`} tone="info" />
             <KpiCard label="Residuo" value={euro(data.kpis.outstanding_total, data.kpis.currency)} hint={`${data.kpis.paid_waiting_card} pagati e ${data.kpis.approved_waiting_card} approvati in attesa tessera`} tone={data.kpis.outstanding_total > 0 ? "warning" : "success"} />
           </div>
 
-          <SectionPanel title="Elenco rinnovi" eyebrow={`${data.total} soci`}>
-            <div className="mb-5 grid gap-3 lg:grid-cols-[10rem_13rem_minmax(16rem,1fr)_auto]">
-              <label className="block text-sm font-semibold text-slate-700">
-                Annualità
-                <select className="premium-select mt-2" value={year} onChange={(event) => setYear(Number(event.target.value))}>
-                  {[currentYear - 1, currentYear, currentYear + 1, currentYear + 2].map((item) => <option key={item} value={item}>{item}</option>)}
-                </select>
+          <SectionPanel className="quotes-toolbar">
+            <div className="quotes-query">
+              <label className="quotes-search"><span className="sr-only">Cerca socio</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 5 5" /></svg>
+                <input type="search" value={search} onChange={event => changeSearch(event.target.value)} placeholder="Nome, cognome o email" />
               </label>
-              <label className="block text-sm font-semibold text-slate-700">
-                Stato
-                <select className="premium-select mt-2" value={status} onChange={(event) => setStatus(event.target.value)}>
-                  <option value="">Tutti gli stati</option>
-                  <option value="due">Da rinnovare</option>
-                  <option value="renewed">Rinnovati</option>
-                  <option value="payment_pending">Pagamento in corso</option>
-                  <option value="approved_waiting_card">Approvati, attesa tessera</option>
-                  <option value="paid_waiting_card">Pagati, attesa tessera</option>
-                  <option value="unpaid">Non pagati</option>
-                </select>
-              </label>
-              <label className="block text-sm font-semibold text-slate-700">
-                Cerca socio
-                <input className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Nome, cognome o email" />
-              </label>
+              <button type="button" className="quotes-filter-trigger" onClick={openFilters} aria-expanded={filtersOpen} aria-haspopup="dialog">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16M8 4v6M16 9v6M10 14v6" /></svg>
+                Filtri{status && <span className="quotes-filter-count">1</span>}
+              </button>
+            </div>
+            <div className="quotes-filter-context">
+              <button type="button" className="quotes-year-trigger" aria-label={`Annualità ${year}, cambia filtri`} onClick={openFilters}>{year}<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m6 8 4 4 4-4" /></svg></button>
+              {year !== defaultYear && <button type="button" className="quotes-filter-pill" onClick={() => { setLoading(true); setSelected(new Set()); setPage(0); setYear(defaultYear); }} aria-label={`Ripristina annualità ${defaultYear}`}>Torna al {defaultYear}<span aria-hidden="true">×</span></button>}
+              {status && <button type="button" className="quotes-filter-pill" onClick={() => changeStatus("")} aria-label={`Rimuovi filtro Stato: ${STATUS_OPTIONS.find(item => item.value === status)?.label}`}>{STATUS_OPTIONS.find(item => item.value === status)?.label}<span aria-hidden="true">×</span></button>}
+              <span className="quotes-results-count" role="status">{data.total ? `${page * 25 + 1}-${Math.min(page * 25 + data.items.length, data.total)} di ${data.total} soci` : "Nessun risultato"}</span>
             </div>
 
-            {canRemind ? <MemberBulkActions
+            {canRemind ? <MemberBulkActions contextual
               selection={{ mode: "ids", member_ids: [...selected] }} count={selected.size}
               total={data.total} pageCount={data.items.length} allPageChecked={allVisibleSelected}
               disabled={saving || loading} storageKey={`assonam-member-bulk:${admin?.org_id ?? "org"}:${admin?.id ?? "self"}`}
@@ -201,14 +233,32 @@ const OrgAdminQuote = () => {
                 return next;
               })}
               onClear={() => setSelected(new Set())} onSelectAll={() => {}} onCompleted={() => { void load(); }}
-            /> : <p className="mb-5 text-sm text-[var(--theme-text-muted)]">
+            /> : null}
+          </SectionPanel>
+
+          {!canRemind && <p className="quotes-reminder-note">
               {year >= FIRST_QUOTE_REMINDER_YEAR
                 ? `I solleciti per il ${year} saranno disponibili a partire da gennaio ${year}, dopo la scadenza della tessera precedente e solo per le quote ancora dovute.`
                 : "I solleciti sono disponibili per le annualità dal 2027, una volta iniziate."}
             </p>}
 
+          <section className="quotes-renewals" aria-label="Elenco rinnovi" aria-busy={loading}>
             {data.items.length === 0 ? (
               <EmptyState title="Nessun socio in questo elenco" description="Modifica annualità o filtri per vedere altri rinnovi." />
+            ) : mobileView ? (
+              <>
+                {canRemind && <label className="quotes-mobile-page-selection"><input type="checkbox" aria-label="Seleziona tutti i soci visibili" disabled={rowActionsDisabled} checked={allVisibleSelected} onChange={event => setSelected(previous => { const next = new Set(previous); for (const item of data.items) { if (event.target.checked) next.add(item.member_id); else next.delete(item.member_id); } return next; })} />Seleziona pagina</label>}
+                <ul className="quotes-mobile-list">{data.items.map(row => <li key={row.member_id} className="quotes-mobile-row">
+                  <div className="quotes-mobile-row__head">
+                    {canRemind && <input type="checkbox" aria-label={`Seleziona ${row.first_name ?? ""} ${row.last_name ?? ""}`} disabled={rowActionsDisabled} checked={selected.has(row.member_id)} onChange={event => toggleMember(row.member_id, event.target.checked)} />}
+                    <div className="quotes-mobile-row__identity"><Link to={`/org-admin/soci/${row.member_id}`}>{row.first_name} {row.last_name}</Link>{row.email && <span>{row.email}</span>}</div>
+                    <StatusChip tone={renewalTone(row)}>{renewalLabel(row)}</StatusChip>
+                  </div>
+                  <div className="quotes-mobile-row__summary"><strong>{euro(row.fee_amount, row.currency)}</strong>{paymentStatus(row)}</div>
+                  <dl className="quotes-mobile-row__details"><div><dt>Scadenza precedente</dt><dd>{formatDate(row.previous_valid_through)}</dd></div>{row.new_card_no != null && <div><dt>Tessera {row.new_card_year ?? year}</dt><dd>#{row.new_card_no}</dd></div>}</dl>
+                  {rowActions(row)}
+                </li>)}</ul>
+              </>
             ) : (
               <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                 <div className="overflow-x-auto">
@@ -220,6 +270,7 @@ const OrgAdminQuote = () => {
                           <input
                             type="checkbox"
                             aria-label="Seleziona tutti i soci visibili"
+                            disabled={rowActionsDisabled}
                             checked={allVisibleSelected}
                             onChange={(event) => setSelected((previous) => {
                               const next = new Set(previous);
@@ -244,12 +295,9 @@ const OrgAdminQuote = () => {
                             <input
                               type="checkbox"
                               aria-label={`Seleziona ${row.first_name ?? ""} ${row.last_name ?? ""}`}
+                              disabled={rowActionsDisabled}
                               checked={selected.has(row.member_id)}
-                              onChange={(event) => setSelected((previous) => {
-                                const next = new Set(previous);
-                                if (event.target.checked) next.add(row.member_id); else next.delete(row.member_id);
-                                return next;
-                              })}
+                              onChange={event => toggleMember(row.member_id, event.target.checked)}
                             />
                           </td>}
                           <td className="px-4 py-4"><strong className="block text-slate-950">{row.first_name} {row.last_name}</strong><span className="text-xs text-slate-500">{row.email}</span></td>
@@ -257,16 +305,11 @@ const OrgAdminQuote = () => {
                           <td className="px-4 py-4"><StatusChip tone={renewalTone(row)}>{renewalLabel(row)}</StatusChip></td>
                           <td className="px-4 py-4 font-semibold tabular-nums">{euro(row.fee_amount, row.currency)}</td>
                           <td className="px-4 py-4">
-                            <StatusChip tone={row.payment_state === "paid" ? "success" : ["pending", "partial"].includes(row.payment_state) ? "warning" : "muted"}>{row.payment_state === "paid" ? "Pagato" : row.payment_state === "partial" ? "Parzialmente pagato" : row.payment_state === "pending" ? "In corso" : row.payment_state === "not_required" ? "Non richiesta" : "Da pagare"}</StatusChip>
-                            {row.accounting_balance && row.accounting_balance.outstanding_cents > 0 && <p className="mt-1 text-xs">Residuo {euro(row.accounting_balance.outstanding_cents / 100, row.accounting_balance.currency)}</p>}
+                            {paymentStatus(row)}
                           </td>
                           <td className="px-4 py-4 tabular-nums">{row.new_card_no ?? "-"}</td>
                           <td className="px-4 py-4">
-                            <div className="flex justify-end gap-2">
-                              {row.payment_state === "partial" ? <Link className="btn-secondary !px-3 !py-2 !text-xs" to={`/org-admin/incassi?member_id=${row.member_id}&year=${year}`}>Completa saldo</Link> : row.payment_state !== "paid" && row.fee_amount > 0 ? <button type="button" className="btn-secondary !px-3 !py-2 !text-xs" onClick={() => setPaymentRow(row)}>Registra pagamento</button> : null}
-                              {!row.renewed && row.can_confirm_without_payment && row.payment_state !== "paid" && row.renewal_status !== "approved_waiting_card" ? <button type="button" className="btn-ghost !px-3 !py-2 !text-xs" disabled={saving} onClick={() => void handleConfirm(row)}>Conferma</button> : null}
-                              {canRemind && row.payment_state !== "paid" && row.fee_amount > 0 ? <button type="button" className="btn-ghost !px-3 !py-2 !text-xs" disabled={saving} onClick={() => setSelected((previous) => new Set([...previous, row.member_id]))}>Seleziona per sollecito</button> : null}
-                            </div>
+                            {rowActions(row)}
                           </td>
                         </tr>
                       ))}
@@ -275,19 +318,27 @@ const OrgAdminQuote = () => {
                 </div>
               </div>
             )}
-            <nav className="mt-4 flex justify-end gap-3" aria-label="Pagine quote">
-              <button className="btn-secondary" type="button" disabled={loading || page === 0} onClick={() => setPage((value) => value - 1)}>Precedente</button>
+            <nav className="quotes-pagination" aria-label="Pagine quote">
+              <button className="btn-secondary" type="button" disabled={loading || page === 0} onClick={() => changePage(page - 1)}>Precedente</button>
               <span className="self-center text-sm">Pagina {page + 1} di {Math.max(1, Math.ceil(data.total / 25))}</span>
-              <button className="btn-secondary" type="button" disabled={loading || (page + 1) * 25 >= data.total} onClick={() => setPage((value) => value + 1)}>Successiva</button>
+              <button className="btn-secondary" type="button" disabled={loading || (page + 1) * 25 >= data.total} onClick={() => changePage(page + 1)}>Successiva</button>
             </nav>
-          </SectionPanel>
+          </section>
         </>
       ) : null}
+
+      <ModalShell open={filtersOpen} title="Filtri quote e rinnovi" onClose={closeFilters} placement="bottom" sizeClassName="max-w-lg quotes-filters-sheet">
+        <form className="quotes-filters-form" onSubmit={applyFilters}>
+          <label>Annualità<select className="premium-select" value={draftYear} onChange={event => setDraftYear(Number(event.target.value))}>{[currentYear - 1, currentYear, currentYear + 1, currentYear + 2].map(item => <option key={item} value={item}>{item}</option>)}</select></label>
+          <label>Stato<select className="premium-select" value={draftStatus} onChange={event => setDraftStatus(event.target.value)}>{STATUS_OPTIONS.map(item => <option key={item.value || "all"} value={item.value}>{item.label}</option>)}</select></label>
+          <div className="quotes-filters-form__actions"><button type="button" className="btn-secondary" onClick={() => { setDraftYear(defaultYear); setDraftStatus(""); }}>Reset</button><button type="submit" className="btn-primary">Applica filtri</button></div>
+        </form>
+      </ModalShell>
 
       <ModalShell
         open={paymentRow !== null}
         title="Registra pagamento rinnovo"
-        description={paymentRow ? `${paymentRow.first_name ?? ""} ${paymentRow.last_name ?? ""} · annualità ${year}` : undefined}
+        description={paymentRow ? `${paymentRow.first_name ?? ""} ${paymentRow.last_name ?? ""} · annualità ${paymentYear}` : undefined}
         onClose={() => !saving && setPaymentRow(null)}
       >
         <form className="space-y-4" onSubmit={handlePayment}>

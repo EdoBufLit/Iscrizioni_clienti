@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { Link, useOutletContext } from "react-router-dom";
 import {
   MemberCardPreview,
   isMemberCardPreviewData,
@@ -7,7 +7,10 @@ import {
 } from "../../components/cards/MemberCardPreview";
 import Skeleton from "../../components/ui/Skeleton";
 import TemporaryMembershipPanel from "./TemporaryMembershipPanel";
-import { formatTemporaryDate } from "../../lib/temporaryMemberships";
+import { formatMemberDate } from "../../lib/memberDates";
+import "./MemberDashboard.css";
+import { MEMBER_NOTIFICATIONS_UPDATED } from "./MemberNotificationBell";
+import { memberAccountStatus, memberNotificationHref } from "../../lib/memberAccount";
 import type { DashboardContext } from "./DashboardLayout";
 import {
   AuthError,
@@ -22,6 +25,7 @@ import {
 } from "../../lib/api";
 
 const STATUS_STYLE: Record<string, { label: string; color: string }> = {
+  inactive: { label: "Tessera non attiva", color: "border-amber-200 bg-amber-50 text-amber-700" },
   active: {
     label: "Attiva",
     color: "border-emerald-200 bg-emerald-50 text-emerald-700",
@@ -43,24 +47,6 @@ const STATUS_STYLE: Record<string, { label: string; color: string }> = {
     color: "border-rose-200 bg-rose-50 text-rose-700",
   },
 };
-
-const SUMMARY_CARDS = [
-  {
-    key: "status",
-    label: "Stato iscrizione",
-    icon: "M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
-  },
-  {
-    key: "org",
-    label: "Associazione",
-    icon: "M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21",
-  },
-  {
-    key: "membership",
-    label: "Iscrizione",
-    icon: "M12 6v6l4 2m5-2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
-  },
-] as const;
 
 type MemberCardProfileCompat = {
   organization_slug?: string | null;
@@ -122,21 +108,9 @@ const buildMemberCardDataFromProfile = (
   };
 };
 
-const toSummaryValue = (value?: string | number | null): string => {
-  if (value === null || value === undefined) return "-";
-  const text = String(value).trim();
-  return text.length ? text : "-";
-};
-
-const toDateText = (value?: string | null): string => {
-  if (!value) return "Data non disponibile";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "Data non disponibile";
-  return parsed.toLocaleDateString("it-IT");
-};
-
 const DashboardHome = () => {
   const { user, loading, profileError, reloadProfile } = useOutletContext<DashboardContext>();
+  const [cardFlipped, setCardFlipped] = useState(false);
   const [walletLoading, setWalletLoading] = useState(false);
   const [walletError, setWalletError] = useState<string | null>(null);
   const [membership, setMembership] = useState<MemberMembershipResponse | null>(null);
@@ -171,7 +145,7 @@ const DashboardHome = () => {
   }, [user?.id, user?.card_no, user?.membership_type, user?.status]);
 
   const statusInfo = user
-    ? STATUS_STYLE[user.status] ?? { label: user.status, color: "border-neutral-200 bg-neutral-50 text-neutral-600" }
+    ? STATUS_STYLE[memberAccountStatus(user)] ?? { label: "Iscrizione in verifica", color: "border-neutral-200 bg-neutral-50 text-neutral-600" }
     : null;
 
   const cardDataCandidate = buildMemberCardDataFromProfile(user);
@@ -182,7 +156,7 @@ const DashboardHome = () => {
     user &&
       cardData.cardNumber != null &&
       cardData.verificationUrl &&
-      String(cardData.cardStatus ?? "").toLowerCase() === "attiva",
+      memberAccountStatus(user) === "active" && ["attiva", "active"].includes(String(cardData.cardStatus ?? "").toLowerCase()),
   );
 
   const handleAddToGoogleWallet = async () => {
@@ -240,6 +214,7 @@ const DashboardHome = () => {
   const handleNotificationRead = async (notificationId: number) => {
     try {
       await markMemberNotificationRead(notificationId);
+      window.dispatchEvent(new Event(MEMBER_NOTIFICATIONS_UPDATED));
       setNotifications((current) => current.map((item) => (
         item.id === notificationId ? { ...item, is_read: true } : item
       )));
@@ -248,275 +223,89 @@ const DashboardHome = () => {
     }
   };
 
+  const validCard = Boolean(user && memberAccountStatus(user) === "active" && cardData.cardNumber != null && ["attiva", "active"].includes(String(cardData.cardStatus ?? "").toLowerCase()));
+  const expiry = user?.membership_type === "temporary" ? user.valid_until : membership?.current?.valid_through ?? user?.valid_until;
+  const renewalNeeded = Boolean(membership?.can_renew || membership?.renewal);
+
   return (
-    <div data-tour="member-dashboard-home" className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-neutral-900">Riepilogo</h1>
-        <p className="mt-1 text-sm font-medium text-neutral-500">
-          Benvenuto nella tua area riservata ASSO.N.A.M.
-        </p>
-      </div>
-
+    <div data-tour="member-dashboard-home" className="member-home">
+      <header className="member-home__heading">
+        <h1>Riepilogo</h1>
+        <p>La tua tessera, sempre a portata di mano.</p>
+      </header>
       {loading ? (
-        <>
-          <div className="grid gap-6 md:grid-cols-3">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="surface p-7">
-                <Skeleton className="h-9 w-9 rounded-lg" />
-                <Skeleton className="mt-5 h-3 w-24" />
-                <Skeleton className="mt-4 h-6 w-32" />
-                <Skeleton className="mt-3 h-4 w-full" />
-              </div>
-            ))}
-          </div>
-
-          <section className="surface-strong p-8">
-            <Skeleton className="h-4 w-32" />
-            <Skeleton className="mt-4 h-8 w-64" />
-            <Skeleton className="mt-3 h-4 w-full max-w-[28rem]" />
-            <div className="mx-auto mt-10 max-w-2xl">
-              <Skeleton className="h-64 w-full rounded-[28px]" />
-            </div>
-          </section>
-        </>
+        <section className="surface-strong member-home__card-section" aria-label="Caricamento tessera">
+          <Skeleton className="h-5 w-36" />
+          <Skeleton className="mt-4 h-52 w-full rounded-2xl" />
+        </section>
       ) : user ? (
         <>
-          {membership?.current && (user.membership_type !== "temporary" || membership.can_renew || membership.renewal) ? (
-            <section
-              className="surface-strong border border-brand/10 p-6 sm:flex sm:items-center sm:justify-between sm:gap-8"
-              aria-labelledby="membership-renewal-title"
-            >
-              <div className="min-w-0">
-                <p className="text-[10px] font-bold tracking-normal text-brand">Annualità associativa</p>
-                <h2 id="membership-renewal-title" className="mt-2 text-xl font-bold text-neutral-900">
-                  {membership.renewal?.card_no != null
-                    ? `Rinnovo ${membership.renewal.membership_year} completato`
-                    : `${user.membership_type === "temporary" ? "Ultima tessera annuale, scadenza" : user.status === "expired" ? "La tessera è scaduta il" : "La tessera scade il"} ${new Date(`${membership.current.valid_through}T12:00:00`).toLocaleDateString("it-IT")}`}
-                </h2>
-                <p className="mt-2 text-sm font-medium leading-relaxed text-neutral-600">
-                  {membership.renewal?.card_no != null
-                    ? `La nuova tessera sarà valida dal ${new Date(`${membership.renewal.starts_on}T12:00:00`).toLocaleDateString("it-IT")}.`
-                    : membership.renewal?.status === "payment_pending"
-                      ? "Il rinnovo è in attesa del pagamento."
-                      : membership.can_renew
-                        ? "Puoi rinnovare ora senza ripetere l'iscrizione."
-                        : membership.renewal_opens_on && new Date(`${membership.renewal_opens_on}T00:00:00`) > new Date()
-                          ? `Il rinnovo sarà disponibile dal ${new Date(`${membership.renewal_opens_on}T12:00:00`).toLocaleDateString("it-IT")}.`
-                          : "Il rinnovo non è disponibile mentre è in corso un'altra richiesta."}
-                </p>
-                {renewalMessage ? <p className="mt-3 text-sm font-semibold text-emerald-700" role="status">{renewalMessage}</p> : null}
-                {renewalError ? <p className="mt-3 text-sm font-semibold text-red-600" role="alert">{renewalError}</p> : null}
+          <section className="surface-strong member-home__card-section" aria-labelledby="member-digital-card-title">
+            <div className="member-home__card-header">
+              <h2 id="member-digital-card-title">Tessera digitale</h2>
+              <button type="button" className="member-home__qr-toggle" disabled={!cardData.verificationUrl} aria-pressed={cardFlipped} onClick={() => setCardFlipped(value => !value)}>
+                {cardFlipped ? "Mostra fronte" : "Mostra QR"}
+              </button>
+            </div>
+            <div className="member-home__preview" data-tour="member-card-number">
+              <MemberCardPreview cardData={cardData} flipped={cardFlipped} onFlippedChange={setCardFlipped} />
+            </div>
+            <div className="member-home__status" data-tour="member-status" role="status">
+              <span className={`member-home__status-label ${statusInfo?.color ?? ""}`}>{statusInfo?.label}</span>
+              {expiry ? <span>{memberAccountStatus(user) === "expired" ? "Scaduta il" : "Scadenza"} {formatMemberDate(expiry)}</span> : null}
+            </div>
+            {canShowGoogleWalletButton ? (
+              <button type="button" className="btn-primary member-home__wallet" onClick={() => void handleAddToGoogleWallet()} disabled={walletLoading}>
+                {walletLoading ? "Generazione in corso…" : "Aggiungi a Google Wallet"}
+              </button>
+            ) : null}
+            {walletError ? <p className="member-home__error" role="alert">{walletError}</p> : null}
+          </section>
+
+          {renewalNeeded && membership ? (
+            <section className="surface member-home__renewal" aria-labelledby="membership-renewal-title">
+              <div>
+                <h2 id="membership-renewal-title">{membership.renewal?.card_no != null ? `Rinnovo ${membership.renewal.membership_year} completato` : "Rinnova la tessera"}</h2>
+                <p>{membership.renewal?.card_no != null
+                  ? `La nuova tessera sarà valida dal ${formatMemberDate(membership.renewal.starts_on)}.`
+                  : membership.renewal?.status === "payment_pending" ? "Il rinnovo è in attesa del pagamento."
+                  : "Puoi rinnovare senza ripetere l'iscrizione."}</p>
               </div>
-              {membership.can_renew ? (
-                <button
-                  type="button"
-                  className="btn-primary mt-5 w-full shrink-0 px-6 py-3 sm:mt-0 sm:w-auto"
-                  onClick={() => void handleRenewal()}
-                  disabled={renewalBusy}
-                >
-                  {renewalBusy ? "Operazione in corso…" : membership.renewal?.status === "payment_pending" ? "Completa rinnovo" : "Rinnova tessera"}
-                </button>
-              ) : null}
+              {membership.can_renew ? <button type="button" className="btn-primary" onClick={() => void handleRenewal()} disabled={renewalBusy}>
+                {renewalBusy ? "Operazione in corso…" : membership.renewal?.status === "payment_pending" ? "Completa rinnovo" : "Rinnova tessera"}
+              </button> : null}
             </section>
           ) : null}
-
-          <TemporaryMembershipPanel onIssued={reloadProfile} />
+          {renewalMessage ? <p className="member-home__feedback" role="status">{renewalMessage}</p> : null}
+          {renewalError ? <p className="member-home__error" role="alert">{renewalError}</p> : null}
+          {!validCard ? <TemporaryMembershipPanel onIssued={reloadProfile} /> : null}
 
           {notifications.length ? (
-            <section className="surface p-6" aria-labelledby="member-notifications-title">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-[10px] font-bold tracking-normal text-brand">Area riservata</p>
-                  <h2 id="member-notifications-title" className="mt-2 text-xl font-bold text-neutral-900">Comunicazioni</h2>
-                </div>
-                <span className="text-xs font-semibold text-neutral-500">
-                  {notifications.filter((item) => !item.is_read).length} da leggere
-                </span>
-              </div>
-              <div className="mt-5 divide-y divide-neutral-200">
-                {notifications.map((notification) => (
-                  <article key={notification.id} className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        {!notification.is_read ? <span className="h-2 w-2 shrink-0 rounded-full bg-brand" aria-label="Non letta" /> : null}
-                        <h3 className="font-bold text-neutral-900">{notification.title}</h3>
-                      </div>
-                      <p className="mt-1 text-sm font-medium leading-relaxed text-neutral-600">{notification.body}</p>
-                      {notification.created_at ? (
-                        <time className="mt-2 block text-xs font-semibold text-neutral-400" dateTime={notification.created_at}>
-                          {new Date(notification.created_at).toLocaleString("it-IT", { dateStyle: "medium", timeStyle: "short" })}
-                        </time>
-                      ) : null}
-                    </div>
-                    {!notification.is_read ? (
-                      <button type="button" className="btn-ghost shrink-0 !px-3 !py-2 !text-xs" onClick={() => void handleNotificationRead(notification.id)}>
-                        Segna come letta
-                      </button>
-                    ) : null}
-                  </article>
-                ))}
-              </div>
+            <section className="surface member-home__notifications" aria-labelledby="member-notifications-title">
+              <h2 id="member-notifications-title">Comunicazioni</h2>
+              {notifications.map(notification => (
+                <article key={notification.id}>
+                  <div className="member-home__notification-heading">
+                    <h3>{notification.title}</h3>
+                    {!notification.is_read ? <span className="member-home__unread">Da leggere</span> : null}
+                  </div>
+                  <p>{notification.body}</p>
+                  {notification.created_at ? <time dateTime={notification.created_at}>{formatMemberDate(notification.created_at)}</time> : null}
+                  <div className="member-home__notification-actions">
+                    {notification.type === "document_rejected" ? <Link to={memberNotificationHref(notification.href)}>Correggi e reinvia documento</Link> : null}
+                    {!notification.is_read ? <button type="button" onClick={() => void handleNotificationRead(notification.id)}>Segna come letta</button> : null}
+                  </div>
+                </article>
+              ))}
             </section>
           ) : null}
-
-          <div className="grid gap-6 md:grid-cols-3">
-            {SUMMARY_CARDS.map((card) => (
-              <div
-                key={card.key}
-                className="surface p-7 flex flex-col justify-between group"
-                data-tour={card.key === "status" ? "member-status" : undefined}
-              >
-                <div>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand/5 text-brand group-hover:bg-brand group-hover:text-[var(--theme-on-brand)] transition-all duration-300">
-                    <svg
-                      className="h-5 w-5"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d={card.icon} />
-                    </svg>
-                  </div>
-
-                  <p className="mt-5 text-[10px] font-bold tracking-normal text-neutral-400 group-hover:text-neutral-500 transition-colors">
-                    {card.label}
-                  </p>
-
-                  {card.key === "status" && statusInfo && (
-                    <>
-                      <div className="mt-3 flex items-center gap-2.5">
-                        <p className="text-lg font-bold text-neutral-900">
-                          {statusInfo.label}
-                        </p>
-                        <span
-                          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold tracking-normalr ${statusInfo.color}`}
-                        >
-                          {user.status === "active" ? "OK" : user.status === "expired" ? "SCADUTA" : "IN CORSO"}
-                        </span>
-                      </div>
-                      <p className="mt-3 text-sm font-medium leading-relaxed text-neutral-500 opacity-80">
-                        {user.status === "active"
-                          ? "Iscrizione confermata e tessera abilitata."
-                          : user.status === "expired"
-                            ? "La tessera è scaduta. Scegli una delle opzioni disponibili per rinnovare."
-                          : user.status === "pending_cards"
-                            ? "Iscrizione approvata, tessera in assegnazione."
-                            : "Richiesta in fase di lavorazione."}
-                      </p>
-                    </>
-                  )}
-
-                  {card.key === "org" && (
-                    <>
-                      <p className="mt-3 text-lg font-bold text-neutral-900 truncate" title={user.organization?.name}>
-                        {toSummaryValue(user.organization?.name)}
-                      </p>
-                      <p className="mt-3 text-sm font-medium leading-relaxed text-neutral-500 opacity-80">
-                        La sede locale associata al tuo profilo socio.
-                      </p>
-                    </>
-                  )}
-
-                  {card.key === "membership" && (
-                    <>
-                      <p className="mt-3 text-lg font-bold text-neutral-900">
-                        Dal {toDateText(user.joined_at)}
-                      </p>
-                      <p className="mt-3 text-sm font-medium leading-relaxed text-neutral-500 opacity-80 truncate">
-                        Email: {toSummaryValue(user.email)}
-                      </p>
-                    </>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <section className="surface-strong relative overflow-hidden p-6 sm:p-8 md:p-10">
-            <div className="relative z-10 grid gap-10 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] 2xl:grid-cols-[minmax(0,1fr)_minmax(0,38rem)] xl:items-center xl:gap-12">
-              <div className="min-w-0 max-w-2xl xl:max-w-[42rem] xl:pr-4">
-                <p className="text-[10px] font-bold tracking-normal text-accent">
-                  Documento digitale
-                </p>
-                <h2 className="mt-3 text-3xl font-bold tracking-tight text-neutral-900">
-                  La tua tessera socio
-                </h2>
-                <p className="mt-4 max-w-[36rem] text-base font-medium leading-relaxed text-neutral-600 opacity-90">
-                  Questa è la tua tessera digitale ASSO.N.A.M. Clicca sulla card per ruotarla e accedere ai dettagli sul retro o verificare il QR code.
-                </p>
-                {user.membership_type === "temporary" && user.valid_until && (
-                  <p className="mt-3 text-sm font-semibold text-neutral-700">
-                    Scadenza temporanea: {formatTemporaryDate(user.valid_until)} (ora italiana).
-                  </p>
-                )}
-
-                <div className="mt-8 flex flex-wrap items-center gap-4 sm:flex-nowrap">
-                  <button
-                    type="button"
-                    className="btn-primary inline-flex items-center justify-center whitespace-nowrap px-6 py-3"
-                    onClick={() => {
-                      void handleAddToGoogleWallet();
-                    }}
-                    disabled={!canShowGoogleWalletButton || walletLoading}
-                  >
-                    <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.21.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
-                    </svg>
-                    {walletLoading ? "Generazione..." : "Aggiungi a Google Wallet"}
-                  </button>
-                  <p className="text-xs font-bold text-neutral-400 tracking-normal">
-                    Google Wallet <span className="mx-1.5 opacity-30">•</span> Android
-                  </p>
-                </div>
-                {walletError && (
-                  <p className="mt-4 text-sm font-semibold text-red-500 flex items-center gap-2">
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                    {walletError}
-                  </p>
-                )}
-              </div>
-
-              <div className="flex w-full justify-center xl:justify-self-end" data-tour="member-card-number">
-                <MemberCardPreview
-                  cardData={cardData}
-                  className="max-w-[24rem] sm:max-w-[28rem] lg:max-w-[31rem] xl:max-w-[34rem] 2xl:max-w-[38rem]"
-                />
-              </div>
-            </div>
-
-            {/* Subtle background decoration */}
-            <div className="absolute -right-24 -bottom-24 h-96 w-96 rounded-full bg-brand/5 blur-3xl pointer-events-none" />
-          </section>
         </>
       ) : (
-        <div className="surface p-10 text-center space-y-4">
-          <div className="mx-auto h-12 w-12 rounded-full bg-red-50 text-red-500 flex items-center justify-center">
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-          </div>
-          <h2 className="text-lg font-bold text-neutral-900">Dati non disponibili</h2>
-          <p className="text-sm font-medium text-neutral-500 max-w-sm mx-auto leading-relaxed">
-            Impossibile caricare il riepilogo socio in questo momento. Verifica la tua connessione e riprova.
-          </p>
-          {profileError && (
-            <p className="text-xs font-mono text-red-400 bg-red-50 p-2 rounded">{profileError}</p>
-          )}
-          <button
-            type="button"
-            className="btn-ghost mt-6"
-            onClick={() => {
-              void reloadProfile();
-            }}
-          >
-            Riprova il caricamento
-          </button>
-        </div>
+        <section className="surface member-home__empty">
+          <h2>Dati non disponibili</h2>
+          <p>{profileError || "Impossibile caricare il riepilogo socio. Riprova tra qualche istante."}</p>
+          <button type="button" className="btn-ghost" onClick={() => void reloadProfile()}>Riprova il caricamento</button>
+        </section>
       )}
     </div>
   );

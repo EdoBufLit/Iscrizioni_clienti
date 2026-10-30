@@ -1,4 +1,5 @@
 import { AuthError } from "./api";
+import type { CommunicationDocument } from "./communicationContent";
 
 export const CENTRAL_COMMUNICATIONS_PATH = "/org-admin/comunicazioni-assonam";
 export const NOTIFICATIONS_UPDATED_EVENT = "org-admin:notifications-updated";
@@ -16,6 +17,7 @@ export type CommunicationDraft = {
   body: string;
   audience: "all" | "selected";
   organization_ids: number[];
+  document?: CommunicationDocument;
 };
 
 export type CommunicationPreview = {
@@ -30,6 +32,7 @@ export type CentralCommunication = {
   id: number;
   subject: string;
   body: string;
+  document?: CommunicationDocument;
   excerpt: string;
   audience: "all" | "selected";
   created_at: string;
@@ -57,7 +60,7 @@ export type CommunicationPage = {
   unread_count?: number;
 };
 
-export type ReceivedCommunication = Pick<CentralCommunication, "id" | "subject" | "body" | "excerpt" | "created_at" | "is_read" | "read_at">;
+export type ReceivedCommunication = Pick<CentralCommunication, "id" | "subject" | "body" | "document" | "excerpt" | "created_at" | "is_read" | "read_at">;
 export type ReceivedCommunicationPage = Omit<CommunicationPage, "items"> & { items: ReceivedCommunication[] };
 
 async function request<T>(path: string, body?: object): Promise<T> {

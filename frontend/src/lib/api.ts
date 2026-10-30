@@ -453,6 +453,8 @@ export type MemberDocumentItem = {
 
 export type MemberDocumentsResponse = {
   required_types: string[];
+  allowed_types?: string[];
+  uploadable_types?: string[];
   items: MemberDocumentItem[];
 };
 
@@ -507,6 +509,7 @@ export type MemberOrganizationStatuteResponse = {
   filename?: string | null;
   mime_type?: string | null;
   download_url?: string | null;
+  size_bytes?: number | null;
 };
 
 export async function fetchMemberDocuments(): Promise<MemberDocumentsResponse> {
@@ -514,6 +517,21 @@ export async function fetchMemberDocuments(): Promise<MemberDocumentsResponse> {
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error("Failed to fetch documents");
   return res.json();
+}
+
+export async function uploadMemberDocument(docType: "identity" | "fiscal_code", document: File): Promise<{ ok: boolean; id: number; status: string; type: string; message?: string }> {
+  const body = new FormData(); body.append("doc_type", docType); body.append("document", document);
+  const response = await fetch("/api/member/documents", { method: "POST", body });
+  if (response.status === 401) throw new AuthError("Not authenticated");
+  if (!response.ok) throw new Error(await parseApiErrorDetail(response, "Invio non riuscito. Controlla il documento e riprova."));
+  return response.json();
+}
+
+export async function resendOrgAdminDocumentCorrection(documentId: number): Promise<{ ok: boolean; email_status: string }> {
+  const response = await fetch(`/api/org-admin/documents/${documentId}/resend-correction`, { method: "POST" });
+  if (response.status === 401) throw new AuthError("Not authenticated");
+  if (!response.ok) throw new Error(await parseApiErrorDetail(response, "Impossibile accodare la richiesta di correzione."));
+  return response.json();
 }
 
 export async function fetchMemberOrganizationStatute(): Promise<MemberOrganizationStatuteResponse> {
@@ -758,7 +776,8 @@ export async function authorizeMemberEmailChange(token: string): Promise<void> {
 }
 
 export async function apiLogout(): Promise<void> {
-  await fetch("/api/auth/logout", { method: "POST" });
+  const response = await fetch("/api/auth/logout", { method: "POST" });
+  if (!response.ok && response.status !== 401) throw new Error("Uscita non riuscita. Riprova.");
 }
 
 export type WhoAmIResponse = {

@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { Link, MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ManualPaymentResult, OrgAdminMemberDetail as MemberDetail } from "../../lib/api";
 
@@ -13,6 +13,7 @@ const apiMocks = vi.hoisted(() => ({
   fetchAccounting: vi.fn(),
   updateProfile: vi.fn(),
   sendOnboarding: vi.fn(),
+  resendCorrection: vi.fn(),
 }));
 
 vi.mock("../../lib/api", () => ({
@@ -23,6 +24,7 @@ vi.mock("../../lib/api", () => ({
     apiMocks.fetchMembershipSettings(...args),
   sendOrgAdminMemberCardEmail: vi.fn(),
   sendOrgAdminMemberOnboarding: (...args: unknown[]) => apiMocks.sendOnboarding(...args),
+  resendOrgAdminDocumentCorrection: (...args: unknown[]) => apiMocks.resendCorrection(...args),
   updateOrgAdminMemberProfile: (...args: unknown[]) => apiMocks.updateProfile(...args),
 }));
 
@@ -43,10 +45,11 @@ vi.mock("./OrgAdminLayout", () => ({
   }),
 }));
 
-function renderDetail() {
+function renderDetail(path = "/org-admin/soci/42", allowMemberSwitch = false) {
   return render(
     <ToastProvider>
-      <MemoryRouter initialEntries={["/org-admin/soci/42"]}>
+      <MemoryRouter initialEntries={[path]}>
+        {allowMemberSwitch && <Link to="/org-admin/soci/43?tab=documents">Apri altro socio</Link>}
         <Routes>
           <Route path="/org-admin/soci/:id" element={<OrgAdminMemberDetail />} />
           <Route path="/org-admin/soci" element={<p>Elenco soci</p>} />
@@ -100,6 +103,78 @@ describe("OrgAdminMemberDetail", () => {
     expect(screen.getByRole("button", { name: "Rigetta" })).toBeEnabled();
     expect(screen.getByText("Iscrizione approvata")).toBeInTheDocument();
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  });
+
+  it.each(["approved", "rejected"])("un documento %s mostra l'esito senza azioni di revisione", async status => {
+    const member = makeMember();
+    apiMocks.fetchMember.mockResolvedValue(makeMember({ documents: member.documents.map(doc => ({ ...doc, status, rejection_note: status === "rejected" ? "Il retro è illeggibile" : null })) }));
+    renderDetail("/org-admin/soci/42?tab=documents");
+    expect(await screen.findByRole("heading", { name: "Documenti caricati" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Approva" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Rigetta" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Scarica documento.pdf" })).toBeEnabled();
+    if (status === "rejected") {
+      expect(screen.getByText(/Il retro è illeggibile/)).toBeVisible();
+      expect(screen.getByRole("button", { name: "Reinvia richiesta al socio" })).toBeEnabled();
+    }
+  });
+
+  it("reinvio email della richiesta non cambia la decisione", async () => {
+    const member = makeMember();
+    apiMocks.fetchMember.mockResolvedValue(makeMember({ documents: member.documents.map(doc => ({ ...doc, status: "rejected", rejection_note: "Foto sfocata" })) }));
+    apiMocks.resendCorrection.mockResolvedValue({ ok: true, email_status: "queued" });
+    renderDetail("/org-admin/soci/42?tab=documents");
+    fireEvent.click(await screen.findByRole("button", { name: "Reinvia richiesta al socio" }));
+    await waitFor(() => expect(apiMocks.resendCorrection).toHaveBeenCalledExactlyOnceWith(77));
+    expect(await screen.findByText(/Richiesta di correzione accodata/)).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Rigetta" })).not.toBeInTheDocument();
+  });
+
+  it("un'approvazione conclusa dopo il cambio socio non sovrascrive il nuovo profilo", async () => {
+    const other = makeMember({ id: 43, first_name: "anna", last_name: "verdi", email: "anna@example.com",
+      documents: [{ ...makeMember().documents[0], id: 88, filename: "anna-documento.pdf" }] });
+    apiMocks.fetchMember.mockImplementation(async (id: number) => id === 43 ? other : makeMember());
+    let finishApproval!: (response: Response) => void;
+    const request = vi.fn(() => new Promise<Response>(resolve => { finishApproval = resolve; }));
+    vi.stubGlobal("fetch", request);
+    renderDetail("/org-admin/soci/42?tab=documents", true);
+    fireEvent.click(await screen.findByRole("button", { name: "Approva" }));
+    expect(request).toHaveBeenCalledExactlyOnceWith("/api/org-admin/documents/77/approve", { method: "POST" });
+
+    fireEvent.click(screen.getByRole("link", { name: "Apri altro socio" }));
+    expect(await screen.findByRole("heading", { level: 1, name: "Anna Verdi" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Scarica anna-documento.pdf" })).toBeVisible();
+    await act(async () => { finishApproval({ ok: true, json: async () => ({ ok: true }) } as Response); });
+
+    expect(screen.getByRole("heading", { level: 1, name: "Anna Verdi" })).toBeVisible();
+    expect(screen.queryByRole("heading", { level: 1, name: "Tizia Caia" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Scarica anna-documento.pdf" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Scarica documento.pdf" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Approva" })).toBeEnabled();
+  });
+
+  it("cambiando socio chiude il rigetto precedente e non riutilizza le sue note", async () => {
+    const other = makeMember({ id: 43, first_name: "anna", last_name: "verdi",
+      documents: [{ ...makeMember().documents[0], id: 88, filename: "anna-documento.pdf" }] });
+    apiMocks.fetchMember.mockImplementation(async (id: number) => id === 43 ? other : makeMember());
+    const request = vi.fn();
+    vi.stubGlobal("fetch", request);
+    renderDetail("/org-admin/soci/42?tab=documents", true);
+    fireEvent.click(await screen.findByRole("button", { name: "Rigetta" }));
+    const oldDialog = screen.getByRole("dialog", { name: "Rigetta documento" });
+    fireEvent.change(within(oldDialog).getByLabelText("Motivazione / Note *"), { target: { value: "Note riservate al documento di Tizia" } });
+
+    fireEvent.click(screen.getByRole("link", { name: "Apri altro socio" }));
+    expect(await screen.findByRole("heading", { level: 1, name: "Anna Verdi" })).toBeVisible();
+    expect(oldDialog).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Rigetta documento" })).not.toBeInTheDocument();
+    expect(request).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Rigetta" }));
+    const newDialog = screen.getByRole("dialog", { name: "Rigetta documento" });
+    expect(within(newDialog).getByLabelText("Motivazione / Note *")).toHaveValue("");
+    await waitFor(() => expect(within(newDialog).getByRole("button", { name: "Chiudi finestra" })).toHaveFocus());
+    expect(request).not.toHaveBeenCalled();
   });
 
   it("apre il Profilo senza form e formatta il nome soltanto per la visualizzazione", async () => {

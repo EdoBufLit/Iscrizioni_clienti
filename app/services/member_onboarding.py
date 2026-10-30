@@ -26,6 +26,7 @@ from app.services.email_sender import build_sender_payload
 from app.services.file_deletion import UPLOADS_ROOT, resolve_storage_target
 from app.services.member_activity import is_member_active
 from app.services.member_sessions import consume_member_auth_token, issue_member_auth_token, replace_member_password
+from app.services.org_admin_notifications import notify_org_admins_about_member_document
 from app.services.system_email_layout import build_system_email_html
 
 logger = logging.getLogger(__name__)
@@ -253,6 +254,8 @@ def complete_onboarding(request: Request, db: Session, uploads: list[StagedOnboa
                 size_bytes=upload.size_bytes, sha256=upload.sha256, status=DocStatus.PENDING.value,
                 replaces_document_id=existing.id if existing else None)
             db.add(document)
+            db.flush()
+            notify_org_admins_about_member_document(db, member=member, document=document)
             latest[upload.doc_type] = document
             retained.add(upload.rel_path)
         if member.organization.require_membership_document and not any(

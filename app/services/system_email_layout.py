@@ -5,6 +5,7 @@ from __future__ import annotations
 from html import escape
 from typing import Iterable
 from urllib.parse import urlsplit
+from app.services.communication_content import CommunicationDocument, document_email_html
 
 
 def _text(value: object) -> str:
@@ -28,12 +29,19 @@ def build_system_email_html(
     metric_label: str = "",
     details: Iterable[tuple[str, str]] = (),
     footer: str = "",
+    content_document: CommunicationDocument | None = None,
 ) -> str:
     """Render escaped plain text in a responsive, Outlook-compatible table layout.
 
-    No user-authored HTML is accepted. The primary URL may be HTTP(S) or a
+    No user-authored HTML is accepted. Optional structured content is validated
+    and rendered through the communication node allowlist. The primary URL may be HTTP(S) or a
     root-relative application route; other schemes are not rendered as links.
     """
+    rendered_body = (
+        f'<div class="email-ink" style="margin:24px 0 0;color:#172b4d;font-size:16px;line-height:26px;">{document_email_html(content_document)}</div>'
+        if content_document is not None else
+        f'<p class="email-ink" style="margin:24px 0 0;color:#172b4d;font-size:16px;line-height:26px;">{_lines(body)}</p>'
+    )
     url = (cta_url or "").strip()
     try:
         parsed_url = urlsplit(url)
@@ -127,7 +135,7 @@ def build_system_email_html(
           <h1 class="email-title email-ink" style="margin:0;color:#172b4d;font-size:30px;line-height:37px;letter-spacing:-0.6px;font-weight:700;">{_text(title)}</h1>
           {organization}
           {metric}
-          <p class="email-ink" style="margin:24px 0 0;color:#172b4d;font-size:16px;line-height:26px;">{_lines(body)}</p>
+          {rendered_body}
           {detail_table}
           {cta}
         </td></tr>

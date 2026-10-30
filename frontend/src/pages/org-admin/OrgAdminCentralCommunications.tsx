@@ -8,6 +8,7 @@ import {
 } from "../../lib/centralCommunications";
 import { PageHeader } from "./components/OrgAdminPrimitives";
 import { SuperAdminIcon } from "../super-admin/components/SuperAdminPrimitives";
+import CommunicationContent from "../../components/CommunicationContent";
 import "../central-communications.css";
 
 export default function OrgAdminCentralCommunications() {
@@ -130,7 +131,7 @@ export default function OrgAdminCentralCommunications() {
             <div className="central-comms__section">
               {detailLoading ? <div role="status" className="central-comms__empty">Apertura comunicazione…</div>
                 : detailError ? <div role="alert" className="central-comms__alert central-comms__alert--error">{detailError} <button type="button" className="underline font-semibold" onClick={() => setDetailRefresh((value) => value + 1)}>Riprova</button></div>
-                : selected && <article><div className="central-comms__sender"><SuperAdminIcon name="mail" />ASSONAM</div><p className="central-comms__muted !text-xs mt-3">{communicationDate(selected.created_at)}</p><h2 className="text-2xl font-bold tracking-tight leading-snug my-6 break-words">{selected.subject}</h2><div className="central-comms__body">{selected.body}</div><p className="central-comms__muted !text-xs mt-8 pt-5 border-t" style={{ borderColor: "var(--cc-line)" }}>{selected.is_read ? "✓ Letta" : "Comunicazione riservata alla tua associazione"}</p></article>}
+                : selected && <article><div className="central-comms__sender"><SuperAdminIcon name="mail" />ASSONAM</div><p className="central-comms__muted !text-xs mt-3">{communicationDate(selected.created_at)}</p><h2 className="text-2xl font-bold tracking-tight leading-snug my-6 break-words">{selected.subject}</h2><CommunicationContent body={selected.body} document={selected.document} /><p className="central-comms__muted !text-xs mt-8 pt-5 border-t" style={{ borderColor: "var(--cc-line)" }}>{selected.is_read ? "✓ Letta" : "Comunicazione riservata alla tua associazione"}</p></article>}
               {readError && <div role="alert" className="central-comms__alert central-comms__alert--error mt-5">Il messaggio è visibile, ma non è stato segnato come letto. <button type="button" className="underline font-semibold disabled:opacity-50" disabled={markingRead} onClick={() => void retryRead()}>{markingRead ? "Aggiornamento…" : "Riprova"}</button></div>}
             </div>
           </> : <div className="central-comms__empty !py-24"><SuperAdminIcon name="mail" /><h2 className="font-semibold">Uno spazio per restare aggiornati</h2><p className="text-sm mt-2">Seleziona una comunicazione per leggere il messaggio completo.</p></div>}

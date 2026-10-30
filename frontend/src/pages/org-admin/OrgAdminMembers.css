@@ -38,7 +38,8 @@
 .org-admin-members-profile-drawer .modal-shell-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .org-admin-members-profile-drawer .modal-close { min-width: 44px; min-height: 44px; }
 @media (min-width: 768px) {
-  .org-admin-v2:has(.org-admin-members-page) .org-admin-topbar { min-height: 64px; padding-block: 8px; }
+  .org-admin-v2:has(.org-admin-members-page) { --oa-header-height: 4rem; }
+  .org-admin-v2:has(.org-admin-members-page) .org-admin-topbar { padding-block: 8px; }
   .org-admin-v2:has(.org-admin-members-page) .org-admin-topbar h1 { font-size: 22px; line-height: 1.2; }
   .org-admin-v2 .org-admin-members-page { padding-block: 14px !important; }
   .org-admin-v2 .org-admin-members-page > :not([hidden]) ~ :not([hidden]) { margin-top: 14px; }

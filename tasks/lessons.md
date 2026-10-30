@@ -383,3 +383,12 @@ Do not interpret "date without slots" as closed when a default booking schedule 
 - Correzione utente: successo del POST e record presente non bastano. Verificare email immediata, scelta password, primo upload documenti, approvazione e login con lo stesso flusso prima di considerare risolto il caso.
 - Non differire ogni comunicazione fino all'attivazione quando password e documenti sono prerequisiti dell'attivazione: crea un deadlock. Usare un invito di completamento con sessione limitata, distinto dai servizi per soci attivi.
 - Rendere visibili le azioni di completamento/attivazione nel Profilo, distinguere invito accodato da email consegnata e mostrare i motivi reali che ritardano l'emissione della tessera. Non correggere solo la visibilita nella lista.
+
+## Oct 29, 2026 - Il socio deve trovare tessera e invio documenti
+
+- Correzione utente: la presenza di un endpoint upload non rende utilizzabile il percorso se nella Documentazione manca il comando di caricamento/invio. Verificare il tragitto completo socio -> documento in verifica -> campanello e profilo Org Admin.
+- Nel primo schermo mobile mettere tessera/QR prima di annualita e riepiloghi; nascondere pannelli non pertinenti e riunire stati ripetuti. Preservare sempre artwork e Wallet.
+- La navigazione inferiore contiene destinazioni; spostare Esci nel Profilo per evitare logout involontari. Misurare anche l'allineamento fra intestazione sidebar e banner in entrambi i ruoli amministrativi.
+- Correzione aggiuntiva utente: le azioni Approva/Rigetta sono riservate ai documenti da verificare. Dopo la decisione mostrare esito e note; il rigetto deve raggiungere il socio sia via email sia nel campanello, con un percorso di reinvio evidente e senza duplicati.
+- Applicare la densita dell'elenco Soci anche a Quote e rinnovi: KPI compatti a entrambi i breakpoint, filtri su richiesta e righe utili nel primo schermo. Nessuna modifica alle regole economiche per ottenere un risultato visivo.
+- Verificare le pagine contabili sia come densita sia come tema: gradienti bianchi hardcoded possono rendere il testo illeggibile in dark; testare azioni e nomi file completi a320px, non solo overflow della pagina.

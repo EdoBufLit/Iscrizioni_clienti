@@ -8,6 +8,9 @@ import {
   type CommunicationPreview, type CommunicationRecipient,
 } from "../../lib/centralCommunications";
 import { useUnsavedChangesGuard } from "../../components/ui/UnsavedChangesProvider";
+import PlatformMessageEditor from "../../components/PlatformMessageEditor";
+import CommunicationContent from "../../components/CommunicationContent";
+import { validateCommunicationDocument } from "../../lib/communicationContent";
 import {
   SuperAdminActionButton, SuperAdminIcon, SuperAdminPageHeader, SuperAdminStatusChip, SuperAdminTabs,
 } from "./components/SuperAdminPrimitives";
@@ -79,6 +82,7 @@ export default function SuperAdminCommunications() {
       : [...draft.organization_ids, id],
   });
   const canReview = Boolean(draft.subject.trim() && draft.body.trim()
+    && draft.body.length <= 20000 && (!draft.document || validateCommunicationDocument(draft.document))
     && (draft.audience === "all" ? recipients.length : draft.organization_ids.length)
     && !recipientsLoading && !recipientsError);
 
@@ -203,10 +207,9 @@ export default function SuperAdminCommunications() {
                 <h2 className="central-comms__heading mb-5"><span className="central-comms__step">2</span>Scrivi il messaggio</h2>
                 <label className="central-comms__label" htmlFor="communication-subject">Oggetto</label>
                 <input id="communication-subject" className="sa-input" required maxLength={200} placeholder="Es. Aggiornamenti per la nuova stagione associativa" value={draft.subject} onChange={(event) => updateDraft({ subject: event.target.value })} />
-                <div className="mt-5"><label className="central-comms__label" htmlFor="communication-body">Messaggio</label>
-                  <textarea id="communication-body" className="sa-textarea !font-normal !leading-7" required maxLength={20000} rows={9} placeholder="Gentili associazioni,\n\ncondividiamo con voi…" value={draft.body} onChange={(event) => updateDraft({ body: event.target.value })} />
+                <div className="mt-5"><label id="communication-body-label" className="central-comms__label">Messaggio</label>
+                  <PlatformMessageEditor body={draft.body} document={draft.document} disabled={previewing} onChange={(body, document) => updateDraft({ body, document })} />
                 </div>
-                <p className="central-comms__muted mt-2">Testo semplice, con paragrafi e spazi mantenuti. {draft.body.length.toLocaleString("it-IT")}/20.000 caratteri.</p>
               </div>
               <div className="central-comms__section flex flex-wrap justify-between items-center gap-3"><p className="central-comms__muted">Controlla messaggio e destinatari prima dell'invio.</p><SuperAdminActionButton type="submit" tone="primary" icon="eye" disabled={!canReview || previewing}>{previewing ? "Preparazione anteprima…" : "Rivedi e invia"}</SuperAdminActionButton></div>
             </fieldset>
@@ -242,6 +245,6 @@ export default function SuperAdminCommunications() {
   );
 }
 
-function CommunicationMessage({ item }: { item: Pick<CommunicationDraft, "subject" | "body"> }) {
-  return <article className="central-comms__message"><div className="central-comms__sender"><SuperAdminIcon name="mail" />ASSONAM</div><h2>{item.subject}</h2><div className="central-comms__body">{item.body}</div></article>;
+function CommunicationMessage({ item }: { item: Pick<CommunicationDraft, "subject" | "body" | "document"> }) {
+  return <article className="central-comms__message"><div className="central-comms__sender"><SuperAdminIcon name="mail" />ASSONAM</div><h2>{item.subject}</h2><CommunicationContent body={item.body} document={item.document} /></article>;
 }

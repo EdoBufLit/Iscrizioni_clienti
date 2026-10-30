@@ -183,6 +183,7 @@ class AdminRole(str, enum.Enum):
 class OrgAdminNotificationType(str, enum.Enum):
     DOCUMENT_GENERAL = "document_general"
     DOCUMENT_ACCOUNTING = "document_accounting"
+    MEMBER_DOCUMENT = "member_document"
     LOW_CARDS = "low_cards"
     RENEWAL = "renewal"
     CENTRAL_COMMUNICATION = "central_communication"
@@ -190,6 +191,7 @@ class OrgAdminNotificationType(str, enum.Enum):
 
 class MemberNotificationType(str, enum.Enum):
     RENEWAL = "renewal"
+    DOCUMENT_REJECTED = "document_rejected"
 
 
 class SignupSource(str, enum.Enum):

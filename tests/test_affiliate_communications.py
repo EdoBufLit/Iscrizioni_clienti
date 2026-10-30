@@ -11,6 +11,7 @@ from app.models import (
     Organization,
 )
 from app.services import affiliate_communications as service
+from app.services.communication_content import CommunicationDocument, STORAGE_PREFIX, document_text
 from app.utils import get_captured_emails, hash_token
 
 
@@ -70,6 +71,57 @@ def post_message(client, *orgs, **overrides):
     response = client.post("/api/super-admin/communications", json=draft(*orgs, **overrides))
     assert response.status_code == 200, response.text
     return response.json()["item"]
+
+
+def test_rich_publication_preserves_content_in_inbox_email_and_replay(client, db):
+    org, admins = make_org(db)
+    document = {"version": 1, "style": "news", "blocks": [
+        {"type": "heading", "spans": [{"text": "Novità ✨", "bold": True}]},
+        {"type": "paragraph", "spans": [{"text": "<script>solo testo</script>", "highlight": True},
+            {"text": " Scopri i servizi", "href": "https://assonam.it/servizi"}]},
+        {"type": "image", "src": "https://assonam.it/static/example.png", "alt": "Anteprima servizi"},
+    ]}
+    plain = document_text(CommunicationDocument.model_validate(document))
+    super_login(client)
+    payload = draft(org, body=plain, document=document)
+    assert client.post("/api/super-admin/communications/preview", json=payload).status_code == 200
+    assert db.query(EmailOutbox).count() == 0
+    response = client.post("/api/super-admin/communications", json=payload)
+    assert response.status_code == 200, response.text
+    item = response.json()["item"]
+    assert item["body"] == plain and item["document"]["style"] == "news"
+    assert "spans" not in item["excerpt"] and "Novità" in item["excerpt"]
+    assert db.get(AffiliateCommunication, item["id"]).body.startswith(STORAGE_PREFIX)
+    queued = db.query(EmailOutbox).one()
+    assert "<strong>Novità ✨</strong>" in queued.payload_json["html_body"]
+    assert "&lt;script&gt;solo testo&lt;/script&gt;" in queued.payload_json["html_body"]
+    assert "<script>" not in queued.payload_json["html_body"]
+    assert '<img src="https://assonam.it/static/example.png"' in queued.payload_json["html_body"]
+    assert plain in queued.payload_json["text_body"] and STORAGE_PREFIX not in queued.payload_json["text_body"]
+    assert client.post("/api/super-admin/communications", json=payload).json()["replayed"] is True
+    assert db.query(EmailOutbox).count() == 1
+    changed = {**document, "style": "notice"}
+    assert client.post("/api/super-admin/communications", json={**payload, "document": changed}).status_code == 409
+    org_login(client, db, admins[0])
+    detail = client.get(f"/api/org-admin/communications/inbox/{item['id']}").json()["item"]
+    assert detail["body"] == plain and detail["document"]["blocks"] == item["document"]["blocks"]
+    assert "created_by_email" not in detail
+
+
+@pytest.mark.parametrize("document", [
+    {"version": 1, "style": "notice", "blocks": [{"type": "image", "src": "javascript:alert(1)", "alt": "Test"}]},
+    {"version": 1, "style": "notice", "blocks": [{"type": "paragraph", "spans": [{"text": "Test", "onclick": "alert(1)"}]}]},
+    {"version": 1, "style": "notice", "blocks": [{"type": "paragraph", "spans": [{"text": "Testo diverso"}]}]},
+])
+def test_invalid_rich_content_cannot_preview_or_publish(client, db, document):
+    org, _ = make_org(db)
+    super_login(client)
+    payload = draft(org, body="Test", document=document)
+    before = (db.query(EmailOutbox).count(), db.query(OrgAdminNotification).count())
+    for endpoint in ("/api/super-admin/communications/preview", "/api/super-admin/communications"):
+        assert client.post(endpoint, json=payload).status_code == 422
+    assert db.query(AffiliateCommunication).filter_by(idempotency_key=payload["idempotency_key"]).count() == 0
+    assert (db.query(EmailOutbox).count(), db.query(OrgAdminNotification).count()) == before
 
 
 def test_preview_and_selected_send_deliver_only_to_active_admins(client, db, drain_email_outbox):

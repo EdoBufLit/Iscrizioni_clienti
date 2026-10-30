@@ -23,7 +23,7 @@ function showPage() { render(<MemoryRouter><SuperAdminCommunications /></MemoryR
 async function fillDraft() {
   fireEvent.click(await screen.findByRole("checkbox", { name: "Club Aurora" }));
   fireEvent.change(screen.getByLabelText("Oggetto"), { target: { value: `  ${sentItem.subject}  ` } });
-  fireEvent.change(screen.getByLabelText("Messaggio"), { target: { value: sentItem.body } });
+  fireEvent.input(screen.getByLabelText("Messaggio"), { target: { innerHTML: "<p>Gentili associazioni,</p><p>Ecco gli aggiornamenti.</p>" } });
 }
 async function reviewDraft() {
   await fillDraft();
@@ -53,7 +53,7 @@ describe("Comunicazioni del super admin", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: "Circolo Lago" }));
     fireEvent.click(screen.getByRole("button", { name: "Rivedi e invia" }));
     await screen.findByRole("heading", { name: "Rivedi la comunicazione" });
-    expect(api.previewCommunication).toHaveBeenCalledWith({ subject: sentItem.subject, body: sentItem.body, audience: "selected", organization_ids: [2, 5] });
+    expect(api.previewCommunication).toHaveBeenCalledWith(expect.objectContaining({ subject: sentItem.subject, body: sentItem.body, audience: "selected", organization_ids: [2, 5], document: expect.objectContaining({ version: 1 }) }));
     expect(api.sendCommunication).not.toHaveBeenCalled();
     expect(screen.getByText(/associazioni senza amministratori attivi/)).toBeInTheDocument();
     expect(within(screen.getByRole("list", { name: "Destinatari confermati" })).getAllByRole("listitem")).toHaveLength(2);
@@ -132,7 +132,7 @@ describe("Comunicazioni del super admin", () => {
     await screen.findByText(/Non ci sono associazioni affiliate attive/);
     fireEvent.click(screen.getByRole("radio", { name: /Tutte le affiliate attive/ }));
     fireEvent.change(screen.getByLabelText("Oggetto"), { target: { value: sentItem.subject } });
-    fireEvent.change(screen.getByLabelText("Messaggio"), { target: { value: sentItem.body } });
+    fireEvent.input(screen.getByLabelText("Messaggio"), { target: { innerHTML: "<p>Gentili associazioni,</p><p>Ecco gli aggiornamenti.</p>" } });
     expect(screen.getByRole("button", { name: "Rivedi e invia" })).toBeDisabled();
     expect(api.previewCommunication).not.toHaveBeenCalled();
   });

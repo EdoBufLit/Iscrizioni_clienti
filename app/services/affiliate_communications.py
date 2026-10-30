@@ -20,6 +20,9 @@ from app.services.org_admin_notifications import (
     _resolve_frontend_base_url, _unique_org_admin_recipient_emails,
 )
 from app.services.system_email_layout import build_system_email_html
+from app.services.communication_content import (
+    CommunicationDocument, decode_communication_body, document_payload, encode_communication_body,
+)
 
 
 def list_eligible_organizations(db: Session) -> list[Organization]:
@@ -77,9 +80,11 @@ def communication_href(communication_id: int) -> str:
 
 
 def serialize_communication(item: AffiliateCommunication) -> dict:
+    body, document = decode_communication_body(item.body)
     return {
-        "id": item.id, "subject": item.subject, "body": item.body,
-        "excerpt": " ".join(item.body.split())[:180], "audience": item.audience,
+        "id": item.id, "subject": item.subject, "body": body,
+        **({"document": document_payload(document)} if document else {}),
+        "excerpt": " ".join(body.split())[:180], "audience": item.audience,
         "created_at": item.created_at.isoformat() + "Z",
         "recipient_count": item.recipient_count, "email_count": item.email_count,
         "notification_count": item.notification_count,
@@ -91,9 +96,12 @@ def send_communication(
     db: Session, *, admin: AdminUser, request: Request, subject: str, body: str,
     audience: str, organization_ids: list[int], idempotency_key: str,
     expected_organization_ids: list[int] | None = None,
+    document: CommunicationDocument | dict | None = None,
 ) -> tuple[AffiliateCommunication, bool]:
+    stored_body = encode_communication_body(body, document)
+    body, parsed_document = decode_communication_body(stored_body)
     fingerprint = hashlib.sha256(json.dumps({
-        "subject": subject, "body": body, "audience": audience,
+        "subject": subject, "body": stored_body, "audience": audience,
         "organization_ids": sorted(set(organization_ids)),
         "admin_id": admin.id,
         "expected_organization_ids": sorted(set(expected_organization_ids)) if expected_organization_ids is not None else None,
@@ -114,7 +122,7 @@ def send_communication(
         raise HTTPException(409, "Le associazioni destinatarie sono cambiate. Aggiorna l'anteprima prima di inviare.")
     admins_by_org = audience_admins(db, organizations)
     message = AffiliateCommunication(
-        subject=subject, body=body, audience=audience, idempotency_key=idempotency_key,
+        subject=subject, body=stored_body, audience=audience, idempotency_key=idempotency_key,
         request_fingerprint=fingerprint, created_by_admin_id=admin.id,
         created_by_email=admin.email, recipient_count=len(organizations),
         email_count=0, notification_count=0,
@@ -144,6 +152,7 @@ def send_communication(
                 eyebrow="Comunicazioni", organization_name=org.name,
                 cta_url=cta_url, cta_label="Leggi nell'area riservata",
                 footer="Questa comunicazione è disponibile anche nell'area riservata della tua associazione.",
+                content_document=parsed_document,
             )
             for recipient_admin, email in recipients:
                 enqueue_email(

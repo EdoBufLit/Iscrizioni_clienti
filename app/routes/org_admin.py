@@ -259,8 +259,9 @@ from app.services.member_card_delivery import (
     queue_member_card_email,
 )
 from app.services.member_document_correction import (
-    DOCUMENT_CORRECTION_TOKEN_TTL_SECONDS,
     enqueue_document_rejection_email,
+    notify_member_about_document_rejection,
+    resend_document_correction_email,
 )
 from app.services.membership_payments import (
     PAID_MEMBERSHIP_STATUSES,
@@ -7267,48 +7268,35 @@ def _apply_doc_review(
     status: str,
     rejection_note: Optional[str] = None,
 ):
-    now = datetime.utcnow()
-    is_recent_duplicate_rejection = bool(
-        status == DocStatus.REJECTED.value
-        and doc.status == DocStatus.REJECTED.value
-        and (doc.rejection_note or "").strip() == (rejection_note or "").strip()
-        and doc.reviewed_at is not None
-        and doc.reviewed_at
-        > now - timedelta(seconds=DOCUMENT_CORRECTION_TOKEN_TTL_SECONDS)
-    )
+    from app.services.member_bulk import acquire_sqlite_member_action_lock
 
-    # Identical retries keep the same review marker, so the outbox can refresh
-    # an unsent job without invalidating the link already delivered. After the
-    # 72-hour capability window, the same action intentionally creates a new
-    # review marker and therefore a fresh email/link.
-    if not is_recent_duplicate_rejection:
-        doc.status = status
-        doc.reviewed_at = now
-        doc.reviewed_by = admin.id
-        doc.reviewed_by_admin_id = admin.id
-        if status == DocStatus.REJECTED.value:
-            doc.rejection_note = rejection_note
-            doc.review_notes = rejection_note
-        else:
-            doc.rejection_note = None
-    db.commit()
+    acquire_sqlite_member_action_lock(db)
+    member = db.query(Member).filter(Member.id == doc.member_id, Member.org_id == admin.org_id,
+        Member.deleted_at.is_(None)).with_for_update().populate_existing().first()
+    if member is None:
+        raise HTTPException(status_code=404, detail="Member not found")
+    doc = db.query(MemberDocument).filter(MemberDocument.id == doc.id,
+        MemberDocument.member_id == member.id).with_for_update().populate_existing().one()
+    if doc.status in {DocStatus.APPROVED.value, DocStatus.REJECTED.value}:
+        same_decision = doc.status == status and (status != DocStatus.REJECTED.value
+            or (doc.rejection_note or "").strip() == (rejection_note or "").strip())
+        if not same_decision:
+            raise HTTPException(status_code=409, detail="Il documento è già stato valutato. La decisione e le note non possono essere modificate.")
+        db.rollback()
+        return {"email_status": "unchanged", "member_notification_status": "existing"}
+    if doc.status not in {DocStatus.PENDING.value, "uploaded"}:
+        raise HTTPException(status_code=409, detail="Il documento non è in attesa di verifica.")
+    if db.query(MemberDocument.id).filter(MemberDocument.replaces_document_id == doc.id).first():
+        raise HTTPException(status_code=409, detail="Questo documento è stato sostituito. Valuta la versione più recente.")
 
+    doc.status = status
+    doc.reviewed_at = datetime.utcnow()
+    doc.reviewed_by = admin.id
+    doc.reviewed_by_admin_id = admin.id
+    doc.rejection_note = rejection_note if status == DocStatus.REJECTED.value else None
     if status == DocStatus.REJECTED.value:
-        reviewed_member_id = doc.member_id
-        reviewed_document_id = doc.id
-        try:
-            enqueue_document_rejection_email(db, request, doc)
-        except Exception:
-            # A temporary email/outbox issue must not make the org admin repeat
-            # a review that was already persisted. The failure remains visible
-            # in application logs and the document stays safely rejected.
-            db.rollback()
-            logger.exception(
-                "Failed to queue document correction email for member_id=%s doc_id=%s",
-                reviewed_member_id,
-                reviewed_document_id,
-            )
-
+        doc.review_notes = rejection_note
+    notification_created = status == DocStatus.REJECTED.value and notify_member_about_document_rejection(db, doc)
     audit.log_operation(
         db,
         action="member_doc.review",
@@ -7326,6 +7314,21 @@ def _apply_doc_review(
     )
     db.commit()
 
+    email_status = "not_requested"
+    if status == DocStatus.REJECTED.value:
+        reviewed_member_id = doc.member_id
+        reviewed_document_id = doc.id
+        try:
+            queued = enqueue_document_rejection_email(db, request, doc)
+            db.commit()
+            email_status = "queued" if queued else "not_available"
+        except Exception:
+            # The immutable review and member notification already succeeded.
+            # Report a queue failure so the admin can use the explicit resend.
+            db.rollback()
+            email_status = "failed"
+            logger.exception("Failed to queue document correction email for member_id=%s doc_id=%s",
+                reviewed_member_id, reviewed_document_id)
     if status == DocStatus.APPROVED.value:
         try:
             maybe_send_member_card_ready_email(db, request, doc.member_id)
@@ -7335,6 +7338,8 @@ def _apply_doc_review(
                 doc.member_id,
                 doc.id,
             )
+    return {"email_status": email_status,
+        "member_notification_status": "created" if notification_created else "not_requested"}
 
 
 @router.post("/documents/{doc_id}/approve")
@@ -7354,12 +7359,13 @@ def approve_document(
     if doc.member.org_id != admin.org_id:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    _apply_doc_review(db, request, admin, doc, DocStatus.APPROVED.value)
+    result = _apply_doc_review(db, request, admin, doc, DocStatus.APPROVED.value)
 
     return {
         "ok": True,
         "doc_status": doc.status,
         "member_status": doc.member.status.value,
+        **result,
     }
 
 
@@ -7387,7 +7393,7 @@ def reject_document(
     if doc.member.org_id != admin.org_id:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    _apply_doc_review(
+    result = _apply_doc_review(
         db, request, admin, doc, DocStatus.REJECTED.value, rejection_note=note
     )
 
@@ -7395,6 +7401,7 @@ def reject_document(
         "ok": True,
         "doc_status": doc.status,
         "member_status": doc.member.status.value,
+        **result,
     }
 
 
@@ -7425,17 +7432,46 @@ def review_document(
             raise HTTPException(
                 status_code=400, detail="La nota di rigetto è obbligatoria."
             )
-        _apply_doc_review(
+        result = _apply_doc_review(
             db, request, admin, doc, DocStatus.REJECTED.value, rejection_note=note
         )
     else:
-        _apply_doc_review(db, request, admin, doc, DocStatus.APPROVED.value)
+        result = _apply_doc_review(db, request, admin, doc, DocStatus.APPROVED.value)
 
     return {
         "ok": True,
         "doc_status": doc.status,
         "member_status": doc.member.status.value,
+        **result,
     }
+
+
+@router.post("/documents/{doc_id}/resend-correction")
+def resend_document_correction(
+    request: Request,
+    doc_id: int,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    from app.services.member_bulk import acquire_sqlite_member_action_lock
+
+    acquire_sqlite_member_action_lock(db)
+    doc = db.query(MemberDocument).filter(MemberDocument.id == doc_id).first()
+    if doc is None or doc.member.org_id != admin.org_id:
+        raise HTTPException(status_code=404, detail="Document not found")
+    member = db.query(Member).filter(Member.id == doc.member_id, Member.org_id == admin.org_id,
+        Member.deleted_at.is_(None)).with_for_update().populate_existing().first()
+    if member is None:
+        raise HTTPException(status_code=404, detail="Member not found")
+    doc = db.query(MemberDocument).filter(MemberDocument.id == doc_id).with_for_update().populate_existing().one()
+    outbox_id = resend_document_correction_email(db, request, doc)
+    audit.log_operation(db, action="member.document.correction_requested", entity_type="member_document",
+        entity_id=doc.id, actor_admin_id=admin.id, actor_role="org_admin", org_id=admin.org_id,
+        metadata={"org_id": admin.org_id, "member_id": member.id, "outbox_id": outbox_id}, ip=get_client_ip(request))
+    db.commit()
+    return {"ok": True, "email_status": "queued"}
 
 
 @router.get("/members.csv")

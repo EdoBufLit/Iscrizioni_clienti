@@ -442,7 +442,7 @@ const OrgAdminLayout = () => {
                 <Link to="/org-admin" className="flex shrink-0 items-center lg:hidden">
                   <img src={`${import.meta.env.BASE_URL}assonam-logo.svg`} alt="ASSONAM" className="h-8 w-auto md:h-9" />
                 </Link>
-                <div className="hidden h-12 w-px bg-white/12 lg:block" />
+                <div className="hidden h-8 w-px bg-white/12 lg:block" />
                 <div className="min-w-0">
                   <div className="hidden items-center gap-2 md:flex">
                     <h1 className="truncate text-base font-bold tracking-tight text-white">Area Riservata</h1>

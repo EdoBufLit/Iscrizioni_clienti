@@ -16,6 +16,8 @@ from app.models import (
     OrgAdminNotificationType,
     Organization,
     OrganizationSharedDocument,
+    Member,
+    MemberDocument,
 )
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.system_email_layout import build_system_email_html
@@ -103,6 +105,31 @@ def _build_email_html(
         organization_name=organization_name,
         cta_url=cta_url,
         cta_label=cta_label,
+    )
+
+
+def notify_org_admins_about_member_document(
+    db: Session,
+    *,
+    member: Member,
+    document: MemberDocument,
+) -> int:
+    """Add a bell alert in the document writer's transaction, without email.
+
+    Writers call this only for a newly persisted version. Identical retries
+    return the existing document and never create another notification.
+    """
+    admins = _list_active_org_admins(db, member.org_id)
+    name = " ".join(part for part in (member.first_name, member.last_name) if part).strip() or "Un socio"
+    label = {"identity": "il documento di identità", "fiscal_code": "il codice fiscale"}.get(document.doc_type, "un documento")
+    return _create_notification_rows(
+        db,
+        admins=admins,
+        org_id=member.org_id,
+        notification_type=OrgAdminNotificationType.MEMBER_DOCUMENT,
+        title="Documento socio da verificare",
+        body=f"{name} ha inviato {label}. Apri il profilo per verificarlo.",
+        href=f"/org-admin/soci/{member.id}?tab=documents",
     )
 
 
