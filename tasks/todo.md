@@ -1,3 +1,12 @@
+## Plan (Analisi UI/UX, Responsiveness e Piano Operativo Assonam - Nov 01, 2026)
+- [ ] 1. Analisi approfondita Org Admin (Layout, Dashboard, Soci & Dettaglio, Inviti, Tessere, Contabilità/Incassi, Prenotazioni, Impostazioni)
+- [ ] 2. Analisi approfondita Area Socio (Dashboard, Profilo, Documenti, Prenotazioni, Onboarding, Card/Tessera digitale)
+- [ ] 3. Analisi approfondita Wizard di Iscrizione Soci e Affiliazione Associazioni (Flusso step-by-step, responsive mobile, form feedback, validazioni)
+- [ ] 4. Analisi Super Admin (Layout, Gestione Associazioni/Affiliazioni, Lotti/Crediti tessere, Audit, Chiusura annuale)
+- [ ] 5. Sintesi criticità trasversali (Design system, gerarchia visiva, responsiveness 320/390px, contrasti Dark/Light, interattività)
+- [ ] 6. Costruzione del Piano Operativo dettagliato e prioritizzato (Quick wins, Medium term, High impact)
+- [ ] 7. Presentazione del piano all'utente per valutazione preventiva
+
 ## Plan (Google Wallet Golden Age e popup installazione dark - Sep 21, 2026)
 - [x] Verificare configurazione Wallet effettiva e preparare i nuovi asset/fallback, preservando le personalizzazioni degli altri circoli.
 - [x] Correggere fondo, testi, pulsanti e focus del popup installazione usando i colori del tema.
@@ -6354,10 +6363,11 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - [x] Rendere coerenti e idempotenti rinnovo da area socio, rinnovo manuale Org Admin e wizard pubblico per un socio esistente, senza duplicazioni o emissioni gratuite improprie.
 - [x] Verificare fine anno, recupero dopo fermo scheduler, isolamento associazioni, retry e concorrenza con test pertinenti e review indipendente.
 - [x] Applicare la correzione UI richiesta: pagina rinnovo curata e compatta, passaggio d'anno e conferma nel primo schermo mobile, senza scorrimento interno.
-- [ ] Pubblicare su Main dopo le verifiche; controllare deploy e stato online in sola lettura; documentare esito, limiti e regole operative.
+- [x] Pubblicare su Main dopo le verifiche; controllare deploy e stato online in sola lettura; documentare esito, limiti e regole operative.
 
 ### Review cambio anno
 - Confine confermato dall'utente: 2026 valido fino al 1 gennaio 2027 incluso, scaduto dal 2 gennaio ore00:00 Europe/Rome. Chiusura automatica ogni300s con recupero annate, account e documenti conservati; nessun riuso dei numeri storici.
 - Rinnovi dai tre ingressi sullo stesso socio, prova identita nel wizard, anno corrente dopo assenze pluriennali, protezioni contro richieste obsolete e doppio incasso. Backend1125 passed/13skipped, frontend387 passed/60file; build riuscita e review indipendenti. Link email verificato direttamente dal server prima della SPA, anche con un altro ruolo aperto.
 - Collaudo completo con quattro soci/quattro documenti sintetici conservati: area socio, incasso manuale25euro e wizard email aggiornano la stessa anagrafica al2027. Ultima UI verificata320x568/390x844/1440x900, chiaro/scuro: CTA a401px e ingressoemail a346px, zerooverflow e nessunoscroll interno. Screenshot in output/annual-rollover-20261101; serverQAfermato e viewport ripristinato.
 - Readiness produzione in sola lettura:14 associazioni con soci annuali, nessun lotto2027. Occorre rifornire il nuovo anno; i rinnovi confermati/pagati restano in attesa e verranno assegnati automaticamente quando disponibili. Nessun lotto o dato reale creato per il collaudo.
+- Rilascio5579214 su Main riuscito, pipeline41354470461/build124991469964/deploy124991904270. Final canary passed verificato alle23:02 del1novembreEurope/Rome.61controlliHTTPS e hashasset superati; sette servizi sulnuovoSHAhealthy,0restart/OOM, schema20261026_06_member_bulk invariato. Worker annuale realmente avviato, primo ciclook/purged0, intervallo300s; browser pubblico rinnovo compatto verificato senza invii reali. Rapporto docs/annual_rollover_release_2026-11-01.md.

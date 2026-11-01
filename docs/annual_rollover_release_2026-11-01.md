@@ -35,7 +35,8 @@ Sessione, email e associazione sono verificate; i link scadono, sono monouso e l
 - Collaudo browser locale con data applicativa simulata 2 gennaio 2027 e soli dati sintetici. Nessun pagamento, messaggio o modifica a soci reali usato per QA.
 - Flussi browser completati: area socio 2026→2027 con aggiornamento immediato della tessera; Org Admin→profilo scaduto→Quote sul solo socio→incasso 25 euro/saldo 0/tessera 2027; wizard anonimo→email di prova→verifica server monouso→conferma 2027→tessera dello stesso socio. Quattro anagrafiche e quattro documenti originali conservati; nessun duplicato. Layout 320/390/1440 px, chiaro/scuro.
 - Il link di rinnovo completa la verifica e imposta la sessione direttamente sul server prima del redirect al wizard, evitando interferenze con sessioni amministrative già presenti nello stesso browser. Il link non consente redirect esterni e non viene consumato se l'associazione è stata alterata.
-- Nessuna migrazione né nuova dipendenza. I dettagli finali di suite e rilascio seguono la verifica del deploy.
+- Nessuna migrazione né nuova dipendenza. 
+- Nessuna migrazione né nuova dipendenza.
 - Suite finale: **1.125 test backend superati, 13 saltati; 387 frontend su 60 file**. Build TypeScript/Vite/PWA riuscita. Review indipendenti su chiusura, rinnovi, sicurezza del wizard e pagamenti.
 - Dopo la richiesta UI, card di rinnovo compatta con identità, passaggio 2026→2027 e quota affiancati. A 320 × 568 px il pulsante di conferma termina a 401 px e quello per il link email a 346 px: nessun overflow orizzontale o scroll interno. Verificati anche 390 × 844 e 1440 × 900, chiaro/scuro. Il footer pubblico segue normalmente la pagina; le operazioni principali non richiedono di raggiungerlo.
 
@@ -46,3 +47,12 @@ La lettura della produzione del 1 novembre rileva 14 associazioni con soci annua
 Se manca disponibilità, il rinnovo confermato/pagato rimane in attesa della tessera. Lo scheduler riprova dopo il rifornimento. Nessun lotto è stato creato o modificato durante il collaudo.
 
 Runbook: [annual-membership-operations.md](annual-membership-operations.md).
+
+## Rilascio verificato
+
+- Codice pubblicato su `Main`: `557921493676e3cfd55b6db28f4f88549166501f`.
+- [Pipeline 41354470461](https://github.com/EdoBufLit/Iscrizioni_clienti/actions/runs/41354470461) riuscita; job deploy 124991904270, `Final canary passed: services stable, health 200, Alembic at head` alle 23:02 del 1 novembre 2026 Europe/Rome.
+- 61 controlli HTTPS e hash degli asset riusciti, comprese la nuova pagina pubblica, le API protette e i componenti precedenti. Verifica browser della pagina pubblica compatta con nessun errore JavaScript; nessun invio o accesso a soci reali per il collaudo.
+- Sette servizi runtime sul nuovo SHA, tutti healthy e senza restart/OOM. Schema invariato `20261026_06_member_bulk`, permessi Git `deploy:deploy 775`.
+- Il worker annuale ha eseguito realmente un ciclo con `ok=true`, `purged_count=0` e `destructive_purge_disabled=true`; intervallo 300 secondi. La scadenza 2026 in produzione è `2027-01-01T23:59:59.999999+01:00`.
+- Server locale di collaudo fermato; schede temporanee chiuse e viewport ripristinato. Evidenze private in `output/annual-rollover-20261101/`.
