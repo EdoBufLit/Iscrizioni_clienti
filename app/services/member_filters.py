@@ -20,7 +20,10 @@ def member_expiring_filters(*, now: datetime | None = None):
                     if current_time <= annual_membership_expiry_datetime(year).astimezone(timezone.utc).replace(tzinfo=None) <= soon]
     return (*member_active_filters(now=current_time), or_(
         and_(Member.valid_until.isnot(None), Member.valid_until <= soon),
-        and_(Member.valid_until.is_(None), Member.card_year.in_(legacy_years)),
+        and_(
+            or_(Member.membership_type.is_(None), Member.membership_type != "temporary", Member.valid_until.is_(None)),
+            Member.card_year.in_(legacy_years),
+        ),
     ))
 
 

@@ -392,3 +392,12 @@ Do not interpret "date without slots" as closed when a default booking schedule 
 - Correzione aggiuntiva utente: le azioni Approva/Rigetta sono riservate ai documenti da verificare. Dopo la decisione mostrare esito e note; il rigetto deve raggiungere il socio sia via email sia nel campanello, con un percorso di reinvio evidente e senza duplicati.
 - Applicare la densita dell'elenco Soci anche a Quote e rinnovi: KPI compatti a entrambi i breakpoint, filtri su richiesta e righe utili nel primo schermo. Nessuna modifica alle regole economiche per ottenere un risultato visivo.
 - Verificare le pagine contabili sia come densita sia come tema: gradienti bianchi hardcoded possono rendere il testo illeggibile in dark; testare azioni e nomi file completi a320px, non solo overflow della pagina.
+
+## Nov 1, 2026 - Il cambio anno disattiva la tessera, conserva il socio
+
+- Il reset annuale non elimina né anonimizza account, credenziali, documenti o storico. La vecchia tessera mantiene il proprio anno; il nuovo anno si emette con un rinnovo, senza riattivare iscrizioni rigettate.
+- L'utente ha confermato il giorno di tolleranza: 2026 valido fino al 1 gennaio 2027 incluso, scaduto dal 2 gennaio ore00:00 Europe/Rome. Eventuali proroghe legacy non possono superare il confine annuale; le temporanee conservano la propria durata.
+- Verificare insieme scadenza runtime e manutenzione persistita, recupero dopo fermo, QR storici dopo promozione e metriche SQL. I soci scaduti devono poter accedere per rinnovare da area, admin e wizard con la stessa identita.
+- Una nuova domanda pubblica non autorizza a riscrivere un socio esistente: verificare sessione/password o link email monouso, prima di modificare qualunque dato. Ricontrollare l'epoch delle credenziali dopo l'attesa di un lock.
+- Prima del rilascio verificare lotti dell'anno nuovo e distinguere rinnovo confermato da tessera effettivamente emessa. Un checkout aperto impedisce un secondo incasso manuale della stessa quota.
+- Correzione UI dell'utente: il rinnovo deve essere compatto e curato, senza scroll interno o riepiloghi verticali che spingono la conferma fuori dal primo schermo. Mostrare passaggio d'anno, quota e comando principale insieme anche a320px.

@@ -21,7 +21,7 @@ from app.services.file_deletion import enqueue_file_deletion
 from app.services.email_sender import build_sender_payload
 from app.utils import generate_token, save_upload_file_sync, hash_token
 from app.services.card_allocation import allocate_next_card
-from app.services.annual_memberships import sync_annual_membership_term
+from app.services.annual_memberships import annual_membership_valid_through, sync_annual_membership_term
 from app.services.fiscal_code import validate_fiscal_code
 from app.services.integration_issuer import (
     IssueMemberCommand,
@@ -51,8 +51,17 @@ from app.security import verify_password
 from app.config import settings
 from app.log_redaction import hash_identifier, redact_for_log
 from app.middleware import get_client_ip, get_request_id
-from app.services.security_rate_limits import enforce_join_rate_limit
-from app.services.member_sessions import issue_member_auth_token
+from app.services.security_rate_limits import enforce_auth_rate_limit, enforce_join_rate_limit
+from app.services.member_sessions import establish_member_session, issue_member_auth_token
+from app.services.public_renewals import (
+    consume_public_renewal_proof,
+    find_annual_cardholder,
+    guard_existing_cardholder_signup_type,
+    queue_public_renewal_link,
+    require_public_renewal_member,
+    submit_existing_cardholder_renewal,
+)
+from app.services.renewals import request_renewal, serialize_annual_term, serialize_member_membership
 from app.services.sqlite_card_allocation_guard import (
     sqlite_card_allocation_request_guard,
 )
@@ -60,6 +69,7 @@ from app import audit
 import logging
 import os
 import re
+from urllib.parse import quote
 from typing import Optional
 
 logging.basicConfig(level=logging.INFO)
@@ -491,6 +501,92 @@ def check_signup_allowed(
     return None
 
 
+def _public_renewal_org(db: Session, org_slug: str) -> Organization:
+    org = db.query(Organization).filter(
+        func.lower(Organization.slug) == org_slug.strip().lower(),
+        Organization.deleted_at.is_(None),
+        Organization.is_active.is_(True),
+    ).first()
+    if org is None:
+        raise HTTPException(status_code=404, detail="Associazione non disponibile.")
+    return org
+
+
+@router.get("/api/join/{org_slug}/renewal")
+def get_public_renewal_context(request: Request, org_slug: str, db: Session = Depends(get_db)):
+    org = _public_renewal_org(db, org_slug)
+    member = require_public_renewal_member(request, db, org=org)
+    return {
+        "first_name": member.first_name,
+        "last_name": member.last_name,
+        "card_year": member.card_year,
+        "valid_through": annual_membership_valid_through(member.card_year).isoformat(),
+        "fee_amount": float(org.membership_fee_amount or 0),
+        "currency": str(org.membership_fee_currency or "EUR"),
+        "membership": serialize_member_membership(db, member=member),
+    }
+
+
+@router.post("/api/join/{org_slug}/renewal/request")
+def request_public_renewal_access(
+    request: Request,
+    org_slug: str,
+    email: str = Form(..., max_length=320),
+    db: Session = Depends(get_db),
+):
+    enforce_join_rate_limit(db, client_ip=get_client_ip(request))
+    org = _public_renewal_org(db, org_slug)
+    member = find_annual_cardholder(db, org_id=org.id, email=email)
+    if member is not None:
+        queue_public_renewal_link(db, member=member)
+        db.commit()
+    return {"ok": True, "message": "Se sei già socio di questa associazione, riceverai un link sicuro per il rinnovo."}
+
+
+@router.get("/api/join/{org_slug}/renewal/verify")
+def verify_public_renewal_access(request: Request, org_slug: str, token: str, db: Session = Depends(get_db)):
+    enforce_auth_rate_limit(db, client_ip=get_client_ip(request))
+    org = _public_renewal_org(db, org_slug)
+    destination = f"/associazioni/{quote(org.slug, safe='')}/iscrizione?rinnovo=1"
+    member = consume_public_renewal_proof(db, org=org, raw_token=token)
+    headers = {"Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer"}
+    if member is None:
+        db.rollback()
+        return RedirectResponse(destination + "&link=expired", status_code=302, headers=headers)
+    db.commit()
+    establish_member_session(request, member)
+    audit.member_verified(member_id=member.id, ip=get_client_ip(request))
+    return RedirectResponse(destination, status_code=302, headers=headers)
+
+
+@router.post(
+    "/api/join/{org_slug}/renewal/confirm",
+    dependencies=[Depends(sqlite_card_allocation_request_guard)],
+)
+def confirm_public_renewal(request: Request, org_slug: str, db: Session = Depends(get_db)):
+    org = _public_renewal_org(db, org_slug)
+    member = require_public_renewal_member(request, db, org=org)
+    result = request_renewal(db, member=member)
+    payload = {
+        "ok": True,
+        "action": result.action,
+        "checkout_required": result.checkout_required,
+        "term": serialize_annual_term(db, result.term),
+    }
+    audit.log_operation(
+        db,
+        action="membership.renewal_requested",
+        entity_type="annual_membership_term",
+        entity_id=result.term.id,
+        actor_member_id=member.id,
+        actor_role="member",
+        metadata={"org_id": org.id, "membership_year": result.term.membership_year, "source": "public_wizard"},
+        ip=get_client_ip(request),
+    )
+    db.commit()
+    return payload
+
+
 @router.post("/api/join/{org_slug}")
 def api_join_start(
     request: Request,
@@ -516,6 +612,13 @@ def api_join_start(
         raise HTTPException(
             status_code=400, detail="L'associazione non è attualmente attiva."
         )
+    guard_existing_cardholder_signup_type(db, org_id=org.id, email=email, membership_type=normalize_membership_type(membership_type))
+    if normalize_membership_type(membership_type) == "annual":
+        renewal = submit_existing_cardholder_renewal(
+            db, request=request, org=org, email=email, password=None,
+        )
+        if renewal is not None:
+            return renewal
     requested_membership_type = normalize_membership_type(membership_type)
     if (
         requested_membership_type == "temporary"
@@ -859,6 +962,13 @@ def api_join_submit_multipart(
         raise HTTPException(
             status_code=400, detail="L'associazione non è attualmente attiva."
         )
+    guard_existing_cardholder_signup_type(db, org_id=org.id, email=email, membership_type=normalize_membership_type(membership_type))
+    if normalize_membership_type(membership_type) == "annual":
+        renewal = submit_existing_cardholder_renewal(
+            db, request=request, org=org, email=email, password=password,
+        )
+        if renewal is not None:
+            return renewal
     requested_membership_type = normalize_membership_type(membership_type)
     if (
         requested_membership_type == "temporary"

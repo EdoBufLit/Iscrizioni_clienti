@@ -108,12 +108,10 @@ def member_active_filters(now: datetime | None = None) -> tuple[ColumnElement[bo
         Member.status == MemberStatus.ACTIVE,
         Member.card_no.isnot(None),
         Member.card_year.isnot(None),
+        or_(Member.valid_until.is_(None), Member.valid_until >= database_current_time),
         or_(
-            and_(
-                Member.valid_until.isnot(None),
-                Member.valid_until >= database_current_time,
-            ),
-            and_(Member.valid_until.is_(None), Member.card_year >= minimum_annual_year),
+            and_(Member.membership_type == "temporary", Member.valid_until.isnot(None)),
+            Member.card_year >= minimum_annual_year,
         ),
     )
 
@@ -141,6 +139,13 @@ def member_expired_filters(now: datetime | None = None) -> tuple[ColumnElement[b
                 Member.valid_until.isnot(None),
                 Member.valid_until < database_current_time,
             ),
-            and_(Member.valid_until.is_(None), Member.card_year < minimum_annual_year),
+            and_(
+                or_(
+                    Member.membership_type.is_(None),
+                    Member.membership_type != "temporary",
+                    Member.valid_until.is_(None),
+                ),
+                Member.card_year < minimum_annual_year,
+            ),
         ),
     )

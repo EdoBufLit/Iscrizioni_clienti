@@ -6348,3 +6348,16 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 ### Rilascio area socio, piattaforma e contabilita completato - Oct30,2026
 - Pubblicato f8eb170 su Main; pipeline41128856669 build/deploy riuscita, Final canary passed verificato nel job124315148519.56 controlliHTTPS e hashasset riusciti; sette servizi sulnuovoSHAhealthy, zero restart/OOM, schema invariato.
 - Nuovi endpoint e trasporto email normale verificati, nessun dato reale modificato per collaudo; browser pubblico Documenti richiedeaccesso e login senzaerrori. WorkerPWAaggiornatoBYPASS/noAge, serverQAfermato, schede chiuse e viewport ripristinato. Rapporto docs/member_area_platform_release_2026-10-30.md.
+# Piano — cambio anno e rinnovi annuali (1 novembre 2026)
+
+- [x] Verificare scadenza automatica, scheduler, accesso dei soci scaduti e conservazione di anagrafica, credenziali, documenti e storico. Confermare il confine temporale italiano richiesto.
+- [x] Rendere coerenti e idempotenti rinnovo da area socio, rinnovo manuale Org Admin e wizard pubblico per un socio esistente, senza duplicazioni o emissioni gratuite improprie.
+- [x] Verificare fine anno, recupero dopo fermo scheduler, isolamento associazioni, retry e concorrenza con test pertinenti e review indipendente.
+- [x] Applicare la correzione UI richiesta: pagina rinnovo curata e compatta, passaggio d'anno e conferma nel primo schermo mobile, senza scorrimento interno.
+- [ ] Pubblicare su Main dopo le verifiche; controllare deploy e stato online in sola lettura; documentare esito, limiti e regole operative.
+
+### Review cambio anno
+- Confine confermato dall'utente: 2026 valido fino al 1 gennaio 2027 incluso, scaduto dal 2 gennaio ore00:00 Europe/Rome. Chiusura automatica ogni300s con recupero annate, account e documenti conservati; nessun riuso dei numeri storici.
+- Rinnovi dai tre ingressi sullo stesso socio, prova identita nel wizard, anno corrente dopo assenze pluriennali, protezioni contro richieste obsolete e doppio incasso. Backend1125 passed/13skipped, frontend387 passed/60file; build riuscita e review indipendenti. Link email verificato direttamente dal server prima della SPA, anche con un altro ruolo aperto.
+- Collaudo completo con quattro soci/quattro documenti sintetici conservati: area socio, incasso manuale25euro e wizard email aggiornano la stessa anagrafica al2027. Ultima UI verificata320x568/390x844/1440x900, chiaro/scuro: CTA a401px e ingressoemail a346px, zerooverflow e nessunoscroll interno. Screenshot in output/annual-rollover-20261101; serverQAfermato e viewport ripristinato.
+- Readiness produzione in sola lettura:14 associazioni con soci annuali, nessun lotto2027. Occorre rifornire il nuovo anno; i rinnovi confermati/pagati restano in attesa e verranno assegnati automaticamente quando disponibili. Nessun lotto o dato reale creato per il collaudo.

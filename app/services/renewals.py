@@ -35,6 +35,7 @@ from app.services.annual_memberships import (
     ROME_TIMEZONE,
     annual_membership_valid_through,
     as_rome_datetime,
+    sync_annual_membership_term,
 )
 from app.services.card_allocation import allocate_next_card, lock_card_allocation
 from app.services.card_reservations import reserve_payment_card, reserved_payment_allocation
@@ -170,6 +171,27 @@ def _decimal_amount(value: object | None) -> Decimal:
     return Decimal(str(value)).quantize(Decimal("0.01"))
 
 
+def renewal_membership_year(member: Member, *, now: datetime | None = None) -> int | None:
+    """Renew the next/current year, never an already elapsed missing year."""
+    if member.card_year is None:
+        return None
+    return max(int(member.card_year) + 1, as_rome_datetime(now).year)
+
+
+def _renewal_source(db: Session, member: Member, *, now: datetime | None = None):
+    if not can_access_member_account(member):
+        raise HTTPException(status_code=409, detail="Questo socio non può rinnovare la tessera.")
+    current = get_current_annual_term(db, member)
+    if current is None or (member.membership_type != MembershipType.TEMPORARY.value and (
+        current.card_no != member.card_no or current.card_year != member.card_year
+    )):
+        current = sync_annual_membership_term(db, member, source="renewal_legacy", now=now)
+        db.flush()
+    if current is None or current.card_no is None:
+        raise HTTPException(status_code=409, detail="Annualità corrente non disponibile.")
+    return current
+
+
 def ensure_renewal_term(
     db: Session,
     *,
@@ -177,29 +199,27 @@ def ensure_renewal_term(
     membership_year: int | None = None,
     now: datetime | None = None,
 ) -> tuple[AnnualMembershipTerm, bool]:
-    current = get_current_annual_term(db, member)
-    if current is None:
-        raise HTTPException(status_code=409, detail="Annualità corrente non disponibile.")
-
-    target_year = int(membership_year or (current.membership_year + 1))
+    current = _renewal_source(db, member, now=now)
+    target_year = int(membership_year or max(current.membership_year + 1, as_rome_datetime(now).year))
+    if as_rome_datetime(now).date() > annual_membership_valid_through(target_year):
+        raise HTTPException(status_code=409, detail="Non è possibile emettere una tessera per un'annualità già scaduta.")
     existing = get_annual_term(
         db,
         member_id=member.id,
         membership_year=target_year,
     )
     if existing is not None:
+        if existing.status in {AnnualMembershipTermStatus.CANCELLED.value, AnnualMembershipTermStatus.EXPIRED.value}:
+            raise HTTPException(status_code=409, detail="Questo rinnovo è concluso e non può essere riaperto.")
         return existing, False
 
-    source = get_annual_term(
-        db,
-        member_id=member.id,
-        membership_year=target_year - 1,
-    )
-    if source is None:
+    if target_year <= current.membership_year:
         raise HTTPException(
             status_code=409,
-            detail="L'annualità precedente non è disponibile per questo rinnovo.",
+            detail="Il rinnovo deve essere successivo all'ultima tessera emessa.",
         )
+    if target_year > max(current.membership_year + 1, as_rome_datetime(now).year):
+        raise HTTPException(status_code=409, detail="Questa annualità non è ancora disponibile per il rinnovo.")
 
     org = member.organization or db.query(Organization).filter(Organization.id == member.org_id).first()
     if org is None:
@@ -227,9 +247,7 @@ def assert_member_renewal_window_open(
     *,
     now: datetime | None = None,
 ) -> AnnualMembershipTerm:
-    current = get_current_annual_term(db, member)
-    if current is None:
-        raise HTTPException(status_code=409, detail="Annualità corrente non disponibile.")
+    current = _renewal_source(db, member, now=now)
     local_today = as_rome_datetime(now).date()
     if local_today < _renewal_window_opens_on(current):
         raise HTTPException(
@@ -275,19 +293,29 @@ def promote_renewal_term(
     term: AnnualMembershipTerm,
     now: datetime | None = None,
 ) -> bool:
+    lock_card_allocation(db, org_id=term.org_id, year=int(term.membership_year))
+    member = db.query(Member).filter(Member.id == term.member_id).with_for_update().populate_existing().first()
+    db.query(AnnualMembershipTerm).filter(AnnualMembershipTerm.id == term.id).with_for_update().populate_existing().one()
     if term.card_no is None or term.card_year is None:
         return False
     local_today = as_rome_datetime(now).date()
+    if term.status in {AnnualMembershipTermStatus.EXPIRED.value, AnnualMembershipTermStatus.CANCELLED.value}:
+        return False
+    if term.valid_through < local_today:
+        term.status = AnnualMembershipTermStatus.EXPIRED.value
+        term.deactivated_at = term.deactivated_at or _utc_now(now)
+        return False
     if term.starts_on > local_today:
         term.status = AnnualMembershipTermStatus.SCHEDULED.value
         return False
 
-    member = term.member or db.query(Member).filter(Member.id == term.member_id).first()
     if member is None or member.deleted_at is not None:
         return False
-    if _status_value(member.status) == MemberStatus.REJECTED.value:
+    if not can_access_member_account(member):
         # A future paid/scheduled term must never silently undo an explicit
         # organization-admin rejection.
+        return False
+    if member.card_year is not None and int(member.card_year) > term.membership_year:
         return False
     from app.services.member_activity import is_member_active
     if member.membership_type == MembershipType.TEMPORARY.value and is_member_active(member, now=now):
@@ -337,8 +365,16 @@ def allocate_renewal_card(
     payment = payment or _paid_payment_for_term(db, term.id)
     if payment is not None:
         db.query(MembershipPayment).filter(MembershipPayment.id == payment.id).with_for_update().first()
-    db.query(Member).filter(Member.id == term.member_id).with_for_update().first()
+    db.query(Member).filter(Member.id == term.member_id).with_for_update().populate_existing().first()
     db.query(AnnualMembershipTerm).filter(AnnualMembershipTerm.id == term.id).with_for_update().populate_existing().one()
+    if term.status in {AnnualMembershipTermStatus.EXPIRED.value, AnnualMembershipTermStatus.CANCELLED.value}:
+        return False
+    if term.valid_through < as_rome_datetime(now).date():
+        term.status = AnnualMembershipTermStatus.EXPIRED.value
+        term.deactivated_at = term.deactivated_at or _utc_now(now)
+        return False
+    if term.member is None or not can_access_member_account(term.member):
+        return False
     if term.card_no is not None:
         if payment is not None:
             from app.services.card_reservations import settle_paid_reservation_for_existing_card
@@ -431,7 +467,11 @@ def request_renewal(
     member: Member,
     now: datetime | None = None,
 ) -> RenewalAction:
+    expected_auth_version = member.auth_version
     lock_card_allocation(db, member.org_id, as_rome_datetime(now).year)
+    locked_member = db.query(Member).filter(Member.id == member.id).with_for_update().populate_existing().one_or_none()
+    if locked_member is None or member.auth_version != expected_auth_version:
+        raise HTTPException(status_code=401, detail="Sessione scaduta. Accedi nuovamente.")
     from app.services.temporary_memberships import assert_no_temporary_purchase
     assert_no_temporary_purchase(db, member)
     assert_member_renewal_window_open(db, member, now=now)
@@ -579,14 +619,19 @@ def serialize_member_membership(
         ),
         terms[0] if terms else None,
     )
+    local_today = as_rome_datetime(now).date()
+    renewal_year = max(current.membership_year + 1, local_today.year) if current else renewal_membership_year(member, now=now)
     future = next(
-        (item for item in terms if current and item.membership_year > current.membership_year),
+        (item for item in terms if item.membership_year == renewal_year),
         None,
     )
-    renewal_opens_on = _renewal_window_opens_on(current) if current else None
-    local_today = as_rome_datetime(now).date()
+    renewal_opens_on = _renewal_window_opens_on(current) if current else (
+        annual_membership_valid_through(int(member.card_year)) - timedelta(days=RENEWAL_WINDOW_DAYS)
+        if member.card_no is not None and member.card_year is not None and member.membership_type != MembershipType.TEMPORARY.value else None
+    )
     can_renew = bool(
-        current
+        can_access_member_account(member)
+        and renewal_opens_on
         and local_today >= renewal_opens_on
         and (future is None or future.status not in _RENEWED_STATUSES)
     )
@@ -599,7 +644,15 @@ def serialize_member_membership(
         "renewal": serialize_annual_term(db, future),
         "renewal_opens_on": renewal_opens_on.isoformat() if renewal_opens_on else None,
         "can_renew": can_renew,
-        "is_account_only": _status_value(member.status) == MemberStatus.EXPIRED.value,
+        "renewal_year": renewal_year,
+        "renewal_checkout_available": bool(
+            can_renew and future and future.card_no is None
+            and future.status == AnnualMembershipTermStatus.PAYMENT_PENDING.value
+            and _decimal_amount(future.fee_amount) > 0
+            and member.organization and member.organization.payment_required_before_card
+            and organization_has_sumup_config(member.organization)
+        ),
+        "is_account_only": _status_value(member.status) == MemberStatus.EXPIRED.value or bool(current and current.valid_through < local_today),
     }
 
 
@@ -612,10 +665,18 @@ def create_renewal_checkout(
 ) -> MembershipPayment:
     if term.member_id != member.id or term.org_id != member.org_id:
         raise HTTPException(status_code=404, detail="Rinnovo non trovato.")
+    expected_auth_version = member.auth_version
     lock_card_allocation(db, org_id=term.org_id, year=int(term.membership_year))
+    locked_member = db.query(Member).filter(Member.id == member.id).with_for_update().populate_existing().one_or_none()
+    if locked_member is None or member.auth_version != expected_auth_version:
+        raise HTTPException(status_code=401, detail="Sessione scaduta. Accedi nuovamente.")
     from app.services.temporary_memberships import assert_no_temporary_purchase
     assert_no_temporary_purchase(db, member)
     db.refresh(term)
+    if not can_access_member_account(member) or term.status in {AnnualMembershipTermStatus.CANCELLED.value, AnnualMembershipTermStatus.EXPIRED.value}:
+        raise HTTPException(status_code=409, detail="Questo rinnovo non è più disponibile.")
+    if term.valid_through < as_rome_datetime().date():
+        raise HTTPException(status_code=409, detail="L'annualità di rinnovo è già scaduta.")
     from app.services.member_accounting import guard_partial_manual_payment
     guard_partial_manual_payment(db, member=member, year=int(term.membership_year))
     if term.card_no is not None:
@@ -679,8 +740,15 @@ def complete_renewal_payment(
     if term is None:
         return False
     issued = allocate_renewal_card(db, term=term, now=now, payment=payment)
-    if not issued and term.card_no is None:
+    if not issued and term.card_no is None and term.status not in {AnnualMembershipTermStatus.EXPIRED.value, AnnualMembershipTermStatus.CANCELLED.value}:
         term.status = AnnualMembershipTermStatus.PAID_WAITING_CARD.value
+    if term.status in {AnnualMembershipTermStatus.EXPIRED.value, AnnualMembershipTermStatus.CANCELLED.value}:
+        _create_member_notification(
+            db, member=term.member, title="Pagamento ricevuto per un'annualità non attiva",
+            body=f"La quota {term.membership_year} è stata registrata, ma la tessera non può essere attivata. Contatta l'associazione per verificare il pagamento.",
+            dedupe_key=f"renewal-payment-confirmed:{payment.id}",
+        )
+        return False
     _create_member_notification(
         db,
         member=term.member,
@@ -711,6 +779,7 @@ def record_manual_renewal_payment(
     now: datetime | None = None,
 ) -> tuple[AnnualMembershipTerm, MembershipPayment, bool]:
     lock_card_allocation(db, member.org_id, membership_year)
+    db.query(Member).filter(Member.id == member.id).with_for_update().populate_existing().one()
     from app.services.member_accounting import guard_partial_manual_payment
     guard_partial_manual_payment(db, member=member, year=membership_year)
     from app.services.temporary_memberships import assert_no_temporary_purchase
@@ -723,7 +792,14 @@ def record_manual_renewal_payment(
     )
     existing = _paid_payment_for_term(db, term.id)
     if existing is not None:
+        if _decimal_amount(existing.amount) != _decimal_amount(amount):
+            raise HTTPException(status_code=409, detail="La quota è già registrata con un importo diverso. Verifica Incassi e riconciliazione.")
         return term, existing, False
+    from app.services.member_accounting import guard_open_checkout
+    guard_open_checkout(db, {"org_id": member.org_id, "member_id": member.id,
+                             "kind": "renewal", "membership_year": term.membership_year})
+    if _decimal_amount(amount) != _decimal_amount(term.fee_amount):
+        raise HTTPException(status_code=409, detail="L'importo deve corrispondere alla quota di rinnovo. Per acconti o rettifiche usa Incassi e riconciliazione.")
     payment = MembershipPayment(
         org_id=member.org_id,
         socio_id=member.id,
@@ -754,6 +830,7 @@ def confirm_unpaid_renewal(
     now: datetime | None = None,
 ) -> tuple[AnnualMembershipTerm, bool]:
     lock_card_allocation(db, member.org_id, membership_year)
+    db.query(Member).filter(Member.id == member.id).with_for_update().populate_existing().one()
     from app.services.temporary_memberships import assert_no_temporary_purchase
     assert_no_temporary_purchase(db, member)
     term, _ = ensure_renewal_term(
@@ -772,6 +849,9 @@ def confirm_unpaid_renewal(
             status_code=409,
             detail="Registra prima il pagamento della quota di rinnovo.",
         )
+    from app.services.member_accounting import guard_open_checkout
+    guard_open_checkout(db, {"org_id": member.org_id, "member_id": member.id,
+                             "kind": "renewal", "membership_year": term.membership_year})
     return term, allocate_renewal_card(
         db,
         term=term,
@@ -882,6 +962,7 @@ def retry_waiting_renewal_cards(
         db.query(AnnualMembershipTerm)
         .filter(
             AnnualMembershipTerm.card_no.is_(None),
+            AnnualMembershipTerm.valid_through >= as_rome_datetime(now).date(),
             AnnualMembershipTerm.status.in_(
                 [
                     AnnualMembershipTermStatus.APPROVED_WAITING_CARD.value,
@@ -1057,7 +1138,10 @@ def _quote_row(
         "source_term_id": source.id if source else None,
         "renewal_term_id": target.id if target else None,
         "membership_year": year,
-        "previous_valid_through": source.valid_through.isoformat() if source else None,
+        "previous_valid_through": source.valid_through.isoformat() if source else (
+            annual_membership_valid_through(int(member.card_year)).isoformat()
+            if member.card_year is not None and int(member.card_year) < year else None
+        ),
         "renewal_status": renewal_status,
         "renewed": renewed,
         "fee_amount": float(fee),
@@ -1081,17 +1165,26 @@ def _quote_query(db: Session, *, org: Organization, year: int):
     from sqlalchemy import extract
     from app.models_accounting import AccountingAllocation, AccountingReceipt
     source, target = aliased(AnnualMembershipTerm), aliased(AnnualMembershipTerm)
+    prior = aliased(AnnualMembershipTerm)
+    latest_prior_year = db.query(func.max(prior.membership_year)).filter(
+        prior.member_id == Member.id, prior.org_id == org.id,
+        prior.membership_year < year, prior.card_no.isnot(None),
+    ).correlate(Member).scalar_subquery()
     ranked = db.query(
         MembershipPayment.id.label("id"), MembershipPayment.annual_term_id.label("term_id"),
         func.row_number().over(partition_by=MembershipPayment.annual_term_id,
                                order_by=(MembershipPayment.created_at.desc(), MembershipPayment.id.desc())).label("rank")
     ).filter(MembershipPayment.org_id == org.id, MembershipPayment.annual_term_id.isnot(None)).subquery()
-    query = db.query(Member, source, target, MembershipPayment).outerjoin(
-        source, and_(source.member_id == Member.id, source.org_id == org.id, source.membership_year == year - 1)
+    query = db.query(Member, source, target, MembershipPayment).select_from(Member).outerjoin(
+        source, and_(source.member_id == Member.id, source.org_id == org.id, source.membership_year == latest_prior_year)
     ).outerjoin(target, and_(target.member_id == Member.id, target.org_id == org.id, target.membership_year == year)).outerjoin(
         ranked, and_(ranked.c.term_id == target.id, ranked.c.rank == 1)
     ).outerjoin(MembershipPayment, MembershipPayment.id == ranked.c.id).filter(
-        Member.org_id == org.id, Member.deleted_at.is_(None), or_(source.id.isnot(None), target.id.isnot(None))
+        Member.org_id == org.id, Member.deleted_at.is_(None), or_(
+            source.id.isnot(None), target.id.isnot(None),
+            and_(Member.card_no.isnot(None), Member.card_year < year,
+                 or_(Member.membership_type.is_(None), Member.membership_type == MembershipType.ANNUAL.value)),
+        )
     )
     # Aggregate ledger money once in SQL, including partial receipts and reversals.
     # A provider/manual row already represented by an allocation must not be counted twice.
@@ -1141,8 +1234,10 @@ def _filter_quote_query(query, *, search, status_filter, status, payment_state, 
     return query
 
 
-def iter_quote_rows(db: Session, *, org: Organization, year: int, status_filter=None, search=None):
+def iter_quote_rows(db: Session, *, org: Organization, year: int, status_filter=None, search=None, member_id: int | None = None):
     query, source, target, fee, status, payment_state, renewed, paid_amount = _quote_query(db, org=org, year=year)
+    if member_id is not None:
+        query = query.filter(Member.id == member_id)
     query = _filter_quote_query(query, search=search, status_filter=status_filter, status=status,
                                payment_state=payment_state, renewed=renewed)
     for member, previous, current, payment, accounting_fee, accounting_paid in query.order_by(
@@ -1161,8 +1256,11 @@ def build_quote_center(
     search: str | None = None,
     limit: int = 100,
     offset: int = 0,
+    member_id: int | None = None,
 ) -> dict[str, Any]:
     query, source, target, fee, status, payment_state, renewed, paid_amount = _quote_query(db, org=org, year=year)
+    if member_id is not None:
+        query = query.filter(Member.id == member_id)
     count_if = lambda expression: func.coalesce(func.sum(case((expression, 1), else_=0)), 0)
     totals = query.with_entities(
         count_if(status == AnnualMembershipTermStatus.DUE.value), count_if(renewed),

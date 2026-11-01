@@ -18,7 +18,7 @@ from app.models import (
     MembershipType,
     TemporaryMembershipPurchase,
 )
-from app.services.annual_memberships import as_rome_datetime
+from app.services.annual_memberships import annual_membership_valid_through, as_rome_datetime
 from app.services.member_activity import (
     MEMBER_INACTIVE_REASON_DELETED,
     MEMBER_INACTIVE_REASON_EXPIRED,
@@ -193,7 +193,7 @@ def resolve_card_verification_membership(
         if member.card_no == payload["card_number"] and member.card_year == payload["card_year"]:
             return member, None, member_inactive_reason
         if term is not None:
-            if term.status == "expired" or as_rome_datetime(checked_at).date() > term.valid_through:
+            if term.status == "expired" or as_rome_datetime(checked_at).date() > min(term.valid_through, annual_membership_valid_through(term.membership_year)):
                 return member, term, MEMBER_INACTIVE_REASON_EXPIRED
             return member, term, MEMBER_INACTIVE_REASON_NOT_APPROVED
         if member_inactive_reason == "" and (
@@ -217,7 +217,7 @@ def resolve_card_verification_membership(
     local_today = as_rome_datetime(checked_at).date()
     if (
         term.status == AnnualMembershipTermStatus.EXPIRED.value
-        or local_today > term.valid_through
+        or local_today > min(term.valid_through, annual_membership_valid_through(term.membership_year))
     ):
         return member, term, MEMBER_INACTIVE_REASON_EXPIRED
     if (

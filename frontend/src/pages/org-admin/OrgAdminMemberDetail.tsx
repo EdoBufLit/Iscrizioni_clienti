@@ -29,6 +29,7 @@ import AsyncActionButton, { type AsyncActionState } from "../../components/ui/As
 import ConfirmModal from "../../components/ui/ConfirmModal";
 import { useToast } from "../../components/ui/ToastProvider";
 import { useOrgAdmin } from "./OrgAdminLayout";
+import { romeYear } from "../../lib/quoteReminders";
 import "./OrgAdminMemberDetail.css";
 
 function formatBytes(bytes: number, decimals = 2) {
@@ -759,6 +760,9 @@ function MemberDetailContent() {
   const decisionMade = Boolean(member.decision_at) || ["active", "rejected"].includes(workflowStatus.toLowerCase());
   const manualMember = member.signup_source === "admin";
   const blockedMembership = Boolean(member.deleted_at) || ["deleted", "rejected", "expired"].includes(workflowStatus) || ["DELETED", "EXPIRED"].includes(member.status);
+  const canRenewAnnual = member.membership_type !== "temporary" && cardNumber != null && member.card_year != null &&
+    !member.deleted_at && workflowStatus !== "rejected" && (member.status.toLowerCase() === "expired" || workflowStatus === "expired");
+  const renewalYear = Math.max(romeYear(), (member.card_year ?? romeYear()) + 1);
   const showCard = () => setCardSheetOpen(true);
   const openProfile = () => { setProfileError(null); setEditModalOpen(true); };
   const cardPanel = <section className="member-detail-panel member-detail-card" aria-label="Tessera socio">
@@ -785,6 +789,12 @@ function MemberDetailContent() {
   return <div className="member-detail">
     <Link to="/org-admin/soci" className="member-detail-back"><span aria-hidden="true">←</span> Soci</Link>
     <MemberDetailHeader member={member} activeTab={activeTab} onTabChange={setActiveTab} onEdit={openProfile} onShowCard={showCard} />
+    {canRenewAnnual && <section className="member-detail-panel" aria-label="Rinnovo tessera annuale">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div><h2>Tessera {member.card_year} scaduta</h2><p className="member-detail-hint">Rinnova lo stesso socio: anagrafica, accesso, documenti e storico restano conservati.</p></div>
+        <Link className="btn-primary" to={`/org-admin/quote?year=${renewalYear}&member_id=${member.id}`}>Rinnova tessera {renewalYear}</Link>
+      </div>
+    </section>}
     {!blockedMembership && (!member.is_active || (manualMember && !member.has_access)) && <section className="member-detail-panel" aria-label="Completamento e attivazione">
       <div className="flex flex-wrap items-center justify-between gap-3"><div><h2>{member.is_active ? "Completa l’accesso del socio" : "Completa iscrizione e attivazione"}</h2>
         {manualMember && <p className="member-detail-hint">Il link email permette di scegliere la password e caricare i documenti anche prima dell’attivazione.</p>}</div>
@@ -826,9 +836,9 @@ function MemberDetailContent() {
             <h2>Accesso area riservata</h2>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
               <div><p className="text-sm font-medium">{member.has_access ? "Password impostata" : "Password da impostare"}</p>{lastAccessLabel && <p className="member-detail-hint !mt-1">Ultimo invio: {lastAccessLabel}</p>}</div>
-              {!member.has_access && <button type="button" onClick={handleSendAccess} disabled={sendingAccess || !member.email || !member.is_active} className="btn-ghost">{sendingAccess ? "Invio…" : "Invia accesso"}</button>}
+              {!member.has_access && !canRenewAnnual && <button type="button" onClick={handleSendAccess} disabled={sendingAccess || !member.email || !member.is_active} className="btn-ghost">{sendingAccess ? "Invio…" : "Invia accesso"}</button>}
             </div>
-            {!member.has_access && !member.is_active && <p className="member-detail-hint">{manualMember ? "Invia il link di completamento per consentire al socio di scegliere la password e caricare i documenti." : "L’accesso completo sarà disponibile dopo l’attivazione."}</p>}
+            {canRenewAnnual ? <p className="member-detail-hint">Il socio può accedere con la password o richiedere un link via email per rinnovare, anche con la tessera scaduta.</p> : !member.has_access && !member.is_active && <p className="member-detail-hint">{manualMember ? "Invia il link di completamento per consentire al socio di scegliere la password e caricare i documenti." : "L’accesso completo sarà disponibile dopo l’attivazione."}</p>}
             {!member.has_access && !member.email && <p className="member-detail-hint">Aggiungi un'email per inviare l'accesso.</p>}
             {sendAccessError && <p role="alert" className="mt-3 text-sm text-red-600">{sendAccessError}</p>}
             {sendAccessMessage && <p role="status" className="mt-3 text-sm text-emerald-600">{sendAccessMessage}</p>}

@@ -363,6 +363,8 @@ export async function joinOrganization(
   card_verification_token?: string;
   card_verification_url?: string;
   card_download_url?: string;
+  checkout_required?: boolean;
+  term?: AnnualMembershipTerm;
 }> {
   const clientVersion = resolveClientVersion();
   const body = new FormData();
@@ -2404,7 +2406,7 @@ export async function createMembershipPaymentCheckout(
     membership_type?: "annual" | "temporary";
     id_document?: File | null;
   },
-): Promise<{ payment_id: number; hosted_checkout_url: string }> {
+): Promise<{ payment_id: number; hosted_checkout_url: string } | { status: "renewal_verification_required"; email_status: string } | ({ status: "renewal_requested" } & MemberRenewalResponse)> {
   const body = new FormData();
   body.append("first_name", data.first_name);
   body.append("last_name", data.last_name);
@@ -7099,6 +7101,8 @@ export type MemberMembershipResponse = {
   renewal: AnnualMembershipTerm | null;
   renewal_opens_on: string | null;
   can_renew: boolean;
+  renewal_year?: number | null;
+  renewal_checkout_available?: boolean;
   is_account_only: boolean;
 };
 
@@ -7204,12 +7208,14 @@ export type QuoteCenterResponse = {
 
 export async function fetchOrgAdminQuotes(input: {
   year: number;
+  memberId?: number;
   status?: string;
   q?: string;
   limit?: number;
   offset?: number;
 }): Promise<QuoteCenterResponse> {
   const params = new URLSearchParams({ year: String(input.year) });
+  if (input.memberId != null) params.set("member_id", String(input.memberId));
   if (input.status) params.set("status", input.status);
   if (input.q) params.set("q", input.q);
   if (input.limit != null) params.set("limit", String(input.limit));

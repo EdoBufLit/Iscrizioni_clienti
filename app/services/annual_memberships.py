@@ -366,6 +366,16 @@ def build_annual_deactivation_preview(
     }
 
 
+def lock_annual_card_deactivation(db: Session, *, membership_year: int) -> None:
+    """Serialize automatic and interactive closings for the same annual year."""
+
+    if db.get_bind().dialect.name == "postgresql":
+        db.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:resource_name))"),
+            {"resource_name": f"annual-card-deactivation:{int(membership_year)}"},
+        )
+
+
 def execute_annual_deactivation(
     db: Session,
     *,
@@ -375,11 +385,7 @@ def execute_annual_deactivation(
     now: datetime | None = None,
 ) -> dict[str, Any]:
     parsed_year = int(membership_year)
-    if db.get_bind().dialect.name == "postgresql":
-        db.execute(
-            text("SELECT pg_advisory_xact_lock(hashtext(:resource_name))"),
-            {"resource_name": f"annual-card-deactivation:{parsed_year}"},
-        )
+    lock_annual_card_deactivation(db, membership_year=parsed_year)
     existing_run = (
         db.query(AnnualCardDeactivationRun)
         .filter(AnnualCardDeactivationRun.preview_hash == preview_hash)
@@ -423,8 +429,19 @@ def execute_annual_deactivation(
             .filter(AnnualMembershipTerm.id.in_(term_ids))
             .order_by(AnnualMembershipTerm.id.asc())
             .with_for_update()
+            .populate_existing()
             .all()
         )
+
+        # A decision/cancellation may have committed while the row lock was
+        # being acquired. Never overwrite it using the earlier ORM snapshot.
+        locked_preview = build_annual_deactivation_preview(
+            db, membership_year=parsed_year, now=now,
+        )
+        if not hmac.compare_digest(locked_preview["preview_hash"], preview_hash):
+            raise AnnualDeactivationPreviewChangedError(
+                "Annual card data changed during closing; generate a new preview"
+            )
 
     executed_at = _as_utc_datetime(now)
     for term in terms:

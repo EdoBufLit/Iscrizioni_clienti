@@ -1,5 +1,5 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import ModalShell from "../../components/ui/ModalShell";
 import Skeleton from "../../components/ui/Skeleton";
 import {
@@ -52,11 +52,15 @@ const renewalTone = (row: QuoteCenterRow): "success" | "warning" | "info" | "mut
 
 const OrgAdminQuote = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedMemberId = Number(searchParams.get("member_id"));
+  const memberId = Number.isSafeInteger(requestedMemberId) && requestedMemberId > 0 ? requestedMemberId : undefined;
+  const requestedYear = Number(searchParams.get("year"));
   const { admin } = useOrgAdmin();
   const currentYear = romeYear();
   const defaultYear = Math.max(FIRST_QUOTE_REMINDER_YEAR, currentYear);
   const mobileView = useMediaQuery("(max-width: 767px)");
-  const [year, setYear] = useState(() => Math.max(FIRST_QUOTE_REMINDER_YEAR, romeYear()));
+  const [year, setYear] = useState(() => Number.isInteger(requestedYear) && requestedYear >= 2000 && requestedYear <= 9998 ? requestedYear : Math.max(FIRST_QUOTE_REMINDER_YEAR, romeYear()));
   const canRemind = isQuoteReminderYearAvailable(year);
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
@@ -73,6 +77,7 @@ const OrgAdminQuote = () => {
   const [draftYear, setDraftYear] = useState(year);
   const [draftStatus, setDraftStatus] = useState(status);
   const requestId = useRef(0);
+  const financialActionLock = useRef(false);
   const closeFilters = useCallback(() => setFiltersOpen(false), []);
   const openFilters = () => { setDraftYear(year); setDraftStatus(status); setFiltersOpen(true); };
   const applyFilters = (event: FormEvent) => {
@@ -87,7 +92,7 @@ const OrgAdminQuote = () => {
     setLoading(true);
     setError("");
     try {
-      const next = await fetchOrgAdminQuotes({ year, status, q: search, limit: 25, offset: page * 25 });
+      const next = await fetchOrgAdminQuotes({ year, status, q: search, ...(memberId ? { memberId } : {}), limit: 25, offset: page * 25 });
       if (generation === requestId.current) setData(next);
     } catch (reason) {
       if (generation !== requestId.current) return;
@@ -99,7 +104,7 @@ const OrgAdminQuote = () => {
     } finally {
       if (generation === requestId.current) setLoading(false);
     }
-  }, [navigate, search, status, year, page]);
+  }, [navigate, search, status, year, page, memberId]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => void load(), 250);
@@ -108,8 +113,8 @@ const OrgAdminQuote = () => {
 
   useEffect(() => {
     setSelected(new Set());
-  }, [year, status, search]);
-  useEffect(() => setPage(0), [year, status, search]);
+  }, [year, status, search, memberId]);
+  useEffect(() => setPage(0), [year, status, search, memberId]);
 
   const allVisibleSelected = useMemo(
     () => Boolean(data?.items.length) && data!.items.every((item) => selected.has(item.member_id)),
@@ -118,7 +123,8 @@ const OrgAdminQuote = () => {
 
   const handlePayment = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!paymentRow || saving) return;
+    if (!paymentRow || financialActionLock.current) return;
+    financialActionLock.current = true;
     const form = new FormData(event.currentTarget);
     setSaving(true);
     setError("");
@@ -136,12 +142,15 @@ const OrgAdminQuote = () => {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Impossibile registrare il pagamento");
     } finally {
+      financialActionLock.current = false;
       setSaving(false);
     }
   };
 
   const handleConfirm = async (row: QuoteCenterRow) => {
+    if (financialActionLock.current) return;
     if (!window.confirm(`Confermare il rinnovo ${year} di ${row.first_name ?? ""} ${row.last_name ?? ""} senza registrare un incasso?`)) return;
+    financialActionLock.current = true;
     setSaving(true);
     setError("");
     try {
@@ -151,6 +160,7 @@ const OrgAdminQuote = () => {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Impossibile confermare il rinnovo");
     } finally {
+      financialActionLock.current = false;
       setSaving(false);
     }
   };
@@ -158,10 +168,10 @@ const OrgAdminQuote = () => {
   const toggleMember = (id: number, checked: boolean) => setSelected(previous => {
     const next = new Set(previous); if (checked) next.add(id); else next.delete(id); return next;
   });
-  const rowActionsDisabled = saving || loading || data?.year !== year;
+  const rowActionsDisabled = saving || loading || data?.year !== year || Boolean(memberId && data?.items.some(item => item.member_id !== memberId));
   const rowActions = (row: QuoteCenterRow) => <div className="quotes-row-actions">
-    {row.payment_state === "partial" ? <Link className="btn-secondary" to={`/org-admin/incassi?member_id=${row.member_id}&year=${data?.year ?? year}`}>Completa saldo</Link> : row.payment_state !== "paid" && row.fee_amount > 0 ? <button type="button" className="btn-secondary" disabled={rowActionsDisabled} onClick={() => { setPaymentYear(data?.year ?? year); setPaymentRow(row); }}>Registra pagamento</button> : null}
-    {!row.renewed && row.can_confirm_without_payment && row.payment_state !== "paid" && row.renewal_status !== "approved_waiting_card" ? <button type="button" className="btn-ghost" disabled={rowActionsDisabled} onClick={() => void handleConfirm(row)}>Conferma rinnovo</button> : null}
+    {row.payment_state === "pending" ? <Link className="btn-secondary" to={`/org-admin/incassi?member_id=${row.member_id}&year=${data?.year ?? year}`}>Verifica pagamento</Link> : row.payment_state === "partial" ? <Link className="btn-secondary" to={`/org-admin/incassi?member_id=${row.member_id}&year=${data?.year ?? year}`}>Completa saldo</Link> : row.payment_state !== "paid" && row.fee_amount > 0 ? <button type="button" className="btn-secondary" disabled={rowActionsDisabled} onClick={() => { setPaymentYear(data?.year ?? year); setPaymentRow(row); }}>Registra pagamento</button> : null}
+    {!row.renewed && row.can_confirm_without_payment && !["paid", "pending"].includes(row.payment_state) && row.renewal_status !== "approved_waiting_card" ? <button type="button" className="btn-ghost" disabled={rowActionsDisabled} onClick={() => void handleConfirm(row)}>Conferma rinnovo</button> : null}
     {canRemind && row.payment_state !== "paid" && row.fee_amount > 0 ? <button type="button" className="btn-ghost" disabled={rowActionsDisabled} onClick={() => toggleMember(row.member_id, true)}>Seleziona per sollecito</button> : null}
   </div>;
   const paymentStatus = (row: QuoteCenterRow) => <>
@@ -180,7 +190,7 @@ const OrgAdminQuote = () => {
           <Link className="btn-secondary" to="/org-admin/incassi" aria-label="Incassi e riconciliazione">Incassi</Link>
           <a
             className="btn-secondary"
-            href={`/api/org-admin/quotes.csv?year=${year}&status=${encodeURIComponent(status)}&q=${encodeURIComponent(search)}`}
+            href={`/api/org-admin/quotes.csv?year=${year}&status=${encodeURIComponent(status)}&q=${encodeURIComponent(search)}${memberId ? `&member_id=${memberId}` : ""}`}
           >
             Esporta CSV
           </a>
@@ -219,6 +229,7 @@ const OrgAdminQuote = () => {
               <button type="button" className="quotes-year-trigger" aria-label={`Annualità ${year}, cambia filtri`} onClick={openFilters}>{year}<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m6 8 4 4 4-4" /></svg></button>
               {year !== defaultYear && <button type="button" className="quotes-filter-pill" onClick={() => { setLoading(true); setSelected(new Set()); setPage(0); setYear(defaultYear); }} aria-label={`Ripristina annualità ${defaultYear}`}>Torna al {defaultYear}<span aria-hidden="true">×</span></button>}
               {status && <button type="button" className="quotes-filter-pill" onClick={() => changeStatus("")} aria-label={`Rimuovi filtro Stato: ${STATUS_OPTIONS.find(item => item.value === status)?.label}`}>{STATUS_OPTIONS.find(item => item.value === status)?.label}<span aria-hidden="true">×</span></button>}
+              {memberId && <><Link className="quotes-filter-pill" to={`/org-admin/soci/${memberId}`}>Profilo socio #{memberId}</Link><button type="button" className="quotes-filter-pill" aria-label="Mostra tutti i soci" onClick={() => { setLoading(true); setPage(0); setSearchParams(current => { const next = new URLSearchParams(current); next.delete("member_id"); return next; }, { replace: true }); }}>Solo questo socio<span aria-hidden="true">×</span></button></>}
               <span className="quotes-results-count" role="status">{data.total ? `${page * 25 + 1}-${Math.min(page * 25 + data.items.length, data.total)} di ${data.total} soci` : "Nessun risultato"}</span>
             </div>
 
@@ -340,6 +351,9 @@ const OrgAdminQuote = () => {
         title="Registra pagamento rinnovo"
         description={paymentRow ? `${paymentRow.first_name ?? ""} ${paymentRow.last_name ?? ""} · annualità ${paymentYear}` : undefined}
         onClose={() => !saving && setPaymentRow(null)}
+        closeDisabled={saving}
+        closeOnEscape={!saving}
+        closeOnOverlay={!saving}
       >
         <form className="space-y-4" onSubmit={handlePayment}>
           <label className="block text-sm font-semibold text-slate-700">Importo

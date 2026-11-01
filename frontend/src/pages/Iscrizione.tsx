@@ -10,9 +10,10 @@ import {
   useState,
 } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   createMembershipPaymentCheckout,
+  createMemberRenewalCheckout,
   fetchOrganizationDetail,
   joinOrganization,
   registerMember,
@@ -30,6 +31,7 @@ import { applySeo } from "../lib/seo";
 import { publicUploadHint, validatePublicDocumentUpload } from "../lib/uploadValidation";
 import Skeleton from "../components/ui/Skeleton";
 import { useUnsavedChangesGuard } from "../components/ui/UnsavedChangesProvider";
+import PublicRenewal from "./PublicRenewal";
 
 const MEMBER_PASSWORD_MIN_LENGTH = 8;
 
@@ -502,6 +504,9 @@ const SummaryItem = ({ label, value, muted = false }: SummaryItemProps) => (
 const Iscrizione = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [renewalMode, setRenewalMode] = useState(searchParams.get("rinnovo") === "1");
+  const [renewalLinkRequested, setRenewalLinkRequested] = useState(false);
   const shouldReduceMotion = useReducedMotion() ?? false;
 
   const [org, setOrg] = useState<OrganizationDetail | null>(null);
@@ -526,8 +531,8 @@ const Iscrizione = () => {
   const previousStepRef = useRef(step);
 
   const hasUnsavedMembershipChanges = useMemo(
-    () => !submitted && !submitting && serializeMembershipForm(form) !== serializeMembershipForm(initial),
-    [form, submitted, submitting],
+    () => !renewalMode && !submitted && !submitting && serializeMembershipForm(form) !== serializeMembershipForm(initial),
+    [form, submitted, submitting, renewalMode],
   );
 
   useUnsavedChangesGuard({
@@ -931,6 +936,21 @@ const Iscrizione = () => {
           membership_type: form.membershipType,
           id_document: form.documentoIdentita,
         });
+        if ("status" in checkout) {
+          if (checkout.status === "renewal_verification_required") {
+            setRenewalLinkRequested(true);
+            setRenewalMode(true);
+            return;
+          }
+          if (checkout.checkout_required) {
+            const renewalCheckout = await createMemberRenewalCheckout(checkout.term.id);
+            window.location.assign(renewalCheckout.hosted_checkout_url);
+          } else {
+            setSubmitted(true);
+            navigate("/dashboard");
+          }
+          return;
+        }
         window.location.assign(checkout.hosted_checkout_url);
         return;
       }
@@ -957,6 +977,22 @@ const Iscrizione = () => {
         membership_type: form.membershipType,
         id_document: form.documentoIdentita,
       });
+
+      if (joinResult.status === "renewal_verification_required") {
+        setRenewalLinkRequested(true);
+        setRenewalMode(true);
+        return;
+      }
+      if (joinResult.status === "renewal_requested") {
+        if (joinResult.checkout_required && joinResult.term) {
+          const checkout = await createMemberRenewalCheckout(joinResult.term.id);
+          window.location.assign(checkout.hosted_checkout_url);
+        } else {
+          setSubmitted(true);
+          navigate("/dashboard");
+        }
+        return;
+      }
 
       if (!joinResult.active_card_page_url) {
         setSubmitted(true);
@@ -1080,6 +1116,13 @@ const Iscrizione = () => {
     );
   }
 
+  if (renewalMode) {
+    return <PublicRenewal key={slug} slug={slug!} associationName={associationName} email={form.email} linkRequested={renewalLinkRequested} onNewSignup={() => {
+      setRenewalMode(false);
+      setRenewalLinkRequested(false);
+    }} />;
+  }
+
   if (submitted) {
     return (
       <section className="signup-wizard-shell py-10 sm:py-16 md:py-20" data-reveal="fade-up">
@@ -1132,6 +1175,7 @@ const Iscrizione = () => {
             <p className="mx-auto mt-4 max-w-3xl text-base leading-7 text-[var(--theme-text-muted)] sm:mt-5 sm:text-lg">
               Compila i dati, aggiungi i documenti e controlla il riepilogo prima di inviare.
             </p>
+            <button type="button" className="btn-secondary mt-4" onClick={() => setRenewalMode(true)}>Già socio? Rinnova la tessera</button>
           </header>
 
           {adultsOnlyBannerEnabled ? (

@@ -491,7 +491,7 @@ def _reproject_target(db, *, target, member, org, purchase, admin_id, allow_fulf
     db.flush()
 
 
-def _block_open_checkout(db, target):
+def guard_open_checkout(db, target):
     query = db.query(MembershipPayment).filter(MembershipPayment.org_id == target["org_id"], MembershipPayment.socio_id == target["member_id"], MembershipPayment.source != "manual", or_(MembershipPayment.status == "pending", MembershipPayment.reservation_state == "held"))
     if target["kind"] == "temporary":
         query = query.filter(MembershipPayment.temporary_purchase_id == target["target_id"])
@@ -517,7 +517,7 @@ def allocate(db, *, org_id, receipt_id, admin_id, version, items):
     resolved = []
     for item in sorted(items, key=lambda i: i["target_key"]):
         target, member, org, purchase = _resolve_target(db, org_id=org_id, key=item["target_key"], lock=True)
-        _block_open_checkout(db, {**target, "org_id": org_id})
+        guard_open_checkout(db, {**target, "org_id": org_id})
         if target["currency"] != receipt.currency or item["amount_cents"] > target["outstanding_cents"]:
             raise HTTPException(409, "Importo superiore alla quota residua o valuta non compatibile. Ricarica i saldi.")
         if purchase is not None and purchase.method == "sumup" and purchase.status != "active":

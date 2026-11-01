@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 import {
   MemberCardPreview,
@@ -108,6 +108,18 @@ const buildMemberCardDataFromProfile = (
   };
 };
 
+function renewalDescription(membership: MemberMembershipResponse) {
+  const term = membership.renewal;
+  if (term?.card_no != null) return `Validità dal ${formatMemberDate(term.starts_on)}.`;
+  if (term?.status === "payment_pending") return membership.renewal_checkout_available === false
+    ? "Richiesta ricevuta. Concorda il pagamento della quota con l'associazione."
+    : "Completa il pagamento online per confermare il rinnovo.";
+  if (term?.status === "due") return "Richiesta ricevuta, in attesa di conferma dell'associazione.";
+  if (["paid_waiting_card", "approved_waiting_card"].includes(term?.status ?? "")) return "Rinnovo confermato. La tessera sarà assegnata appena disponibile.";
+  const year = membership.renewal_year ?? term?.membership_year;
+  return `Puoi rinnovare${year ? ` per il ${year}` : ""} senza ripetere l'iscrizione.`;
+}
+
 const DashboardHome = () => {
   const { user, loading, profileError, reloadProfile } = useOutletContext<DashboardContext>();
   const [cardFlipped, setCardFlipped] = useState(false);
@@ -115,14 +127,19 @@ const DashboardHome = () => {
   const [walletError, setWalletError] = useState<string | null>(null);
   const [membership, setMembership] = useState<MemberMembershipResponse | null>(null);
   const [renewalBusy, setRenewalBusy] = useState(false);
+  const renewalLock = useRef(false);
+  const membershipRequest = useRef(0);
   const [renewalMessage, setRenewalMessage] = useState<string | null>(null);
   const [renewalError, setRenewalError] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<MemberAreaNotification[]>([]);
 
   const loadMembership = async () => {
+    const generation = ++membershipRequest.current;
     try {
-      setMembership(await fetchMemberMembership());
+      const result = await fetchMemberMembership();
+      if (generation === membershipRequest.current) setMembership(result);
     } catch (error) {
+      if (generation !== membershipRequest.current) return;
       if (!(error instanceof AuthError)) {
         setRenewalError(error instanceof Error ? error.message : "Rinnovo non disponibile");
       }
@@ -142,6 +159,7 @@ const DashboardHome = () => {
   useEffect(() => {
     if (!user) return;
     void Promise.all([loadMembership(), loadNotifications()]);
+    return () => { membershipRequest.current += 1; };
   }, [user?.id, user?.card_no, user?.membership_type, user?.status]);
 
   const statusInfo = user
@@ -182,7 +200,8 @@ const DashboardHome = () => {
   };
 
   const handleRenewal = async () => {
-    if (renewalBusy) return;
+    if (renewalLock.current) return;
+    renewalLock.current = true;
     setRenewalBusy(true);
     setRenewalError(null);
     setRenewalMessage(null);
@@ -196,10 +215,14 @@ const DashboardHome = () => {
       setRenewalMessage(
         result.term.card_no != null
           ? "Rinnovo registrato: la nuova tessera è stata predisposta."
-          : "Richiesta inviata. L'associazione può seguirla dal Centro Quote.",
+          : result.action === "manual_payment"
+            ? "Richiesta inviata. Concorda il pagamento della quota con l'associazione."
+            : "Richiesta inviata. L'associazione può seguirla da Quote e rinnovi.",
       );
-      await loadMembership();
-      await loadNotifications();
+      const refreshed = await Promise.allSettled([loadMembership(), loadNotifications(), reloadProfile()]);
+      if (refreshed.some(result => result.status === "rejected")) {
+        setRenewalError("Rinnovo registrato. Non è stato possibile aggiornare tutti i dati: ricarica la pagina per vedere la tessera aggiornata.");
+      }
     } catch (error) {
       if (error instanceof AuthError) {
         window.location.href = "/login";
@@ -207,6 +230,7 @@ const DashboardHome = () => {
       }
       setRenewalError(error instanceof Error ? error.message : "Impossibile richiedere il rinnovo");
     } finally {
+      renewalLock.current = false;
       setRenewalBusy(false);
     }
   };
@@ -226,6 +250,10 @@ const DashboardHome = () => {
   const validCard = Boolean(user && memberAccountStatus(user) === "active" && cardData.cardNumber != null && ["attiva", "active"].includes(String(cardData.cardStatus ?? "").toLowerCase()));
   const expiry = user?.membership_type === "temporary" ? user.valid_until : membership?.current?.valid_through ?? user?.valid_until;
   const renewalNeeded = Boolean(membership?.can_renew || membership?.renewal);
+  const renewalYear = membership?.renewal_year ?? membership?.renewal?.membership_year;
+  const canSubmitRenewal = Boolean(membership?.can_renew && (
+    !membership.renewal || membership.renewal_checkout_available !== false
+  ));
 
   return (
     <div data-tour="member-dashboard-home" className="member-home">
@@ -266,13 +294,10 @@ const DashboardHome = () => {
             <section className="surface member-home__renewal" aria-labelledby="membership-renewal-title">
               <div>
                 <h2 id="membership-renewal-title">{membership.renewal?.card_no != null ? `Rinnovo ${membership.renewal.membership_year} completato` : "Rinnova la tessera"}</h2>
-                <p>{membership.renewal?.card_no != null
-                  ? `La nuova tessera sarà valida dal ${formatMemberDate(membership.renewal.starts_on)}.`
-                  : membership.renewal?.status === "payment_pending" ? "Il rinnovo è in attesa del pagamento."
-                  : "Puoi rinnovare senza ripetere l'iscrizione."}</p>
+                <p>{renewalDescription(membership)}</p>
               </div>
-              {membership.can_renew ? <button type="button" className="btn-primary" onClick={() => void handleRenewal()} disabled={renewalBusy}>
-                {renewalBusy ? "Operazione in corso…" : membership.renewal?.status === "payment_pending" ? "Completa rinnovo" : "Rinnova tessera"}
+              {canSubmitRenewal ? <button type="button" className="btn-primary" onClick={() => void handleRenewal()} disabled={renewalBusy}>
+                {renewalBusy ? "Operazione in corso…" : membership.renewal?.status === "payment_pending" ? `Completa rinnovo${renewalYear ? ` ${renewalYear}` : ""}` : `Rinnova tessera${renewalYear ? ` ${renewalYear}` : ""}`}
               </button> : null}
             </section>
           ) : null}

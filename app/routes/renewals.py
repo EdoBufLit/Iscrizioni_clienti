@@ -236,6 +236,7 @@ def get_org_admin_quotes(
     q: str | None = Query(default=None, max_length=160),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
+    member_id: int | None = Query(default=None, ge=1),
     db: Session = Depends(get_db),
 ):
     admin = _require_org_admin(request, db)
@@ -248,6 +249,7 @@ def get_org_admin_quotes(
         search=q,
         limit=limit,
         offset=offset,
+        member_id=member_id,
     )
 
 
@@ -257,6 +259,7 @@ def export_org_admin_quotes(
     year: int = Query(..., ge=2000, le=9998),
     status_filter: str | None = Query(default=None, alias="status"),
     q: str | None = Query(default=None, max_length=160),
+    member_id: int | None = Query(default=None, ge=1),
     db: Session = Depends(get_db),
 ):
     admin = _require_org_admin(request, db)
@@ -267,7 +270,7 @@ def export_org_admin_quotes(
         writer.writerow(["Nome", "Cognome", "Email", "Scadenza precedente", "Stato rinnovo",
                          "Stato pagamento", "Quota", "Valuta", "Nuova tessera"])
         yield "\ufeff" + buffer.getvalue()
-        for item in iter_quote_rows(db, org=org, year=year, status_filter=status_filter, search=q):
+        for item in iter_quote_rows(db, org=org, year=year, status_filter=status_filter, search=q, member_id=member_id):
             buffer.seek(0)
             buffer.truncate(0)
             values = [item["first_name"] or "", item["last_name"] or "", item["email"] or "",

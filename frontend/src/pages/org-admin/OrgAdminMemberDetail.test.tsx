@@ -96,6 +96,27 @@ describe("OrgAdminMemberDetail", () => {
   });
   afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
+  it("offre il rinnovo annuale dello stesso socio scaduto senza riaprire l'attivazione", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2027-01-02T00:30:00+01:00"));
+    apiMocks.fetchMember.mockResolvedValue(makeMember({ status: "EXPIRED", workflow_status: "active", is_active: false, membership_type: "annual" }));
+    renderDetail();
+    const panel = await screen.findByRole("region", { name: "Rinnovo tessera annuale" });
+    expect(within(panel).getByRole("link", { name: "Rinnova tessera 2027" })).toHaveAttribute("href", "/org-admin/quote?year=2027&member_id=42");
+    expect(screen.queryByRole("button", { name: "Attiva socio" })).not.toBeInTheDocument();
+    expect(apiMocks.createManualPayment).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { membership_type: "temporary" as const, workflow_status: "active" },
+    { membership_type: "annual" as const, workflow_status: "rejected" },
+  ])("non propone rinnovi annuali per $membership_type con workflow $workflow_status", async fields => {
+    apiMocks.fetchMember.mockResolvedValue(makeMember({ status: "EXPIRED", is_active: false, ...fields }));
+    renderDetail();
+    await screen.findByRole("heading", { level: 1, name: "Tizia Caia" });
+    expect(screen.queryByRole("region", { name: "Rinnovo tessera annuale" })).not.toBeInTheDocument();
+  });
+
   it("lascia approvazione e rigetto disponibili anche per un socio già attivo", async () => {
     renderDetail();
     fireEvent.click(await screen.findByRole("tab", { name: "Documenti e note" }));

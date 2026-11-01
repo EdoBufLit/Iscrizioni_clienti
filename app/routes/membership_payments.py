@@ -68,6 +68,7 @@ from app.services.member_membership import (
 from app.services.marketing_consent import grant_email_marketing_consent
 from app.services.privacy_notice import record_privacy_notice_acknowledgement
 from app.services.file_deletion import enqueue_file_deletion
+from app.services.public_renewals import guard_existing_cardholder_signup_type, submit_existing_cardholder_renewal
 from app.services.sqlite_card_allocation_guard import (
     sqlite_card_allocation_request_guard,
 )
@@ -500,6 +501,13 @@ def create_membership_payment_checkout(
     org = _get_active_org_by_slug(db, org_slug)
     if not organization_requires_membership_payment(org) or not organization_has_sumup_config(org):
         raise HTTPException(status_code=400, detail="Pagamento online non disponibile per questa associazione.")
+    guard_existing_cardholder_signup_type(db, org_id=org.id, email=email, membership_type=normalize_membership_type(membership_type))
+    if normalize_membership_type(membership_type) == MEMBERSHIP_TYPE_ANNUAL:
+        renewal = submit_existing_cardholder_renewal(
+            db, request=request, org=org, email=email, password=password,
+        )
+        if renewal is not None:
+            return renewal
 
     # This synchronous endpoint runs in FastAPI's worker pool. PostgreSQL lock
     # waits and uploaded-file reads must never block the ASGI event loop.

@@ -133,6 +133,26 @@ it("keeps partial payments on the accounting workflow on mobile", async () => {
   expect(screen.queryByRole("button", { name: "Registra pagamento" })).not.toBeInTheDocument();
 });
 
+it.each([false, true])("routes an online pending payment to verification without another manual collection (mobile=%s)", async mobile => {
+  mocks.mobile = mobile;
+  const response = await mocks.quotes();
+  mocks.quotes.mockResolvedValue({ ...response, items: [{ ...response.items[0], renewed: false, renewal_status: "payment_pending", payment_state: "pending" }] });
+  render(<MemoryRouter><OrgAdminQuote /></MemoryRouter>);
+  await screen.findByText("Anna Rossi");
+  expect(screen.getByRole("link", { name: "Verifica pagamento" })).toHaveAttribute("href", "/org-admin/incassi?member_id=1&year=2027");
+  expect(screen.queryByRole("button", { name: "Registra pagamento" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Conferma rinnovo" })).not.toBeInTheDocument();
+});
+
+it("keeps an offline payment request manually collectable when no checkout exists", async () => {
+  const response = await mocks.quotes();
+  mocks.quotes.mockResolvedValue({ ...response, items: [{ ...response.items[0], renewed: false, renewal_status: "payment_pending", payment_state: "unpaid", payment: null }] });
+  render(<MemoryRouter><OrgAdminQuote /></MemoryRouter>);
+  await screen.findByText("Anna Rossi");
+  expect(screen.getByRole("button", { name: "Registra pagamento" })).toBeEnabled();
+  expect(screen.queryByRole("link", { name: "Verifica pagamento" })).not.toBeInTheDocument();
+});
+
 it("prevents financial actions on stale rows while another membership year loads", async () => {
   render(<MemoryRouter><OrgAdminQuote /></MemoryRouter>);
   await screen.findByText("Anna Rossi");
@@ -160,4 +180,22 @@ it("keeps the payment membership year captured when its form was opened", async 
   fireEvent.click(within(filters).getByRole("button", { name: "Applica filtri" }));
   fireEvent.submit(within(payment).getByRole("button", { name: "Registra e rinnova" }).closest("form")!);
   await waitFor(() => expect(mocks.payment).toHaveBeenCalledWith(1, expect.objectContaining({ membership_year: 2027, amount: 25 })));
+});
+
+it("opens an exact member renewal from the profile and scopes the export too", async () => {
+  render(<MemoryRouter initialEntries={["/org-admin/quote?year=2027&member_id=1"]}><OrgAdminQuote /></MemoryRouter>);
+  await screen.findByText("Anna Rossi");
+  expect(mocks.quotes).toHaveBeenCalledWith(expect.objectContaining({ year: 2027, memberId: 1 }));
+  expect(screen.getByRole("link", { name: "Profilo socio #1" })).toHaveAttribute("href", "/org-admin/soci/1");
+  expect(screen.getByRole("link", { name: "Esporta CSV" })).toHaveAttribute("href", "/api/org-admin/quotes.csv?year=2027&status=&q=&member_id=1");
+  fireEvent.click(screen.getByRole("button", { name: "Mostra tutti i soci" }));
+  await waitFor(() => expect(mocks.quotes).toHaveBeenLastCalledWith({ year: 2027, status: "", q: "", limit: 25, offset: 0 }));
+  expect(screen.getByRole("link", { name: "Esporta CSV" })).not.toHaveAttribute("href", expect.stringContaining("member_id"));
+});
+
+it("ignores malformed renewal URLs instead of sending invalid year or member IDs", async () => {
+  render(<MemoryRouter initialEntries={["/org-admin/quote?year=NaN&member_id=-3"]}><OrgAdminQuote /></MemoryRouter>);
+  await screen.findByText("Anna Rossi");
+  expect(mocks.quotes).toHaveBeenCalledWith({ year: 2027, status: "", q: "", limit: 25, offset: 0 });
+  expect(screen.queryByRole("link", { name: /Profilo socio/ })).not.toBeInTheDocument();
 });

@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
 from app.models import Member, Organization
 from app.services.annual_memberships import (
     annual_membership_expiry_datetime,
-    annual_membership_valid_through,
     as_rome_datetime,
 )
 
@@ -120,16 +119,21 @@ def resolve_member_valid_until(member: Member | None) -> datetime | None:
     if member is None:
         return None
     explicit_valid_until = getattr(member, "valid_until", None)
-    if explicit_valid_until is not None:
+    if explicit_valid_until is not None and resolve_member_membership_type(member) == MEMBERSHIP_TYPE_TEMPORARY:
         return explicit_valid_until
     card_year = getattr(member, "card_year", None)
     if card_year is None:
-        return None
+        return explicit_valid_until
     try:
         parsed_year = int(card_year)
+        annual_expiry = annual_membership_expiry_datetime(parsed_year)
     except (TypeError, ValueError):
-        return None
-    return annual_membership_expiry_datetime(parsed_year)
+        return explicit_valid_until
+    # Legacy explicit timestamps may shorten an annual membership, but must
+    # never extend it past the same year boundary used by QR and renewal terms.
+    if explicit_valid_until is not None and as_rome_datetime(explicit_valid_until) < annual_expiry:
+        return explicit_valid_until
+    return annual_expiry
 
 
 def membership_datetime_iso(value: datetime | None) -> str | None:
@@ -145,29 +149,17 @@ def is_member_membership_expired(
     if member is None:
         return True
     current_time = now or datetime.utcnow()
-    explicit_valid_until = getattr(member, "valid_until", None)
-    if explicit_valid_until is not None:
-        if explicit_valid_until.tzinfo is None:
-            comparable_now = (
-                current_time
-                if current_time.tzinfo is None
-                else current_time.astimezone(timezone.utc).replace(tzinfo=None)
-            )
-        else:
-            comparable_now = (
-                current_time.replace(tzinfo=timezone.utc)
-                if current_time.tzinfo is None
-                else current_time.astimezone(explicit_valid_until.tzinfo)
-            )
-        return explicit_valid_until < comparable_now
+    valid_until = resolve_member_valid_until(member)
+    if valid_until is not None:
+        return as_rome_datetime(valid_until) < as_rome_datetime(current_time)
     card_year = getattr(member, "card_year", None)
     if card_year is None:
         return False
     try:
-        parsed_year = int(card_year)
+        annual_membership_expiry_datetime(int(card_year))
     except (TypeError, ValueError):
         return True
-    return as_rome_datetime(current_time).date() > annual_membership_valid_through(parsed_year)
+    return False
 
 
 def member_has_issued_card(member: Member | None) -> bool:

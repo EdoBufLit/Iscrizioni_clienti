@@ -9,7 +9,8 @@ vi.mock("../../lib/api", async original => ({ ...await original<typeof import(".
 vi.mock("./TemporaryMembershipPanel", () => ({ default: () => <section aria-label="Richiesta temporanea">Temporanea disponibile</section> }));
 vi.mock("../../components/cards/MemberCardPreview", () => ({ isMemberCardPreviewData: () => true, MemberCardPreview: ({ flipped }: { flipped: boolean }) => <div data-testid="digital-card">{flipped ? "QR tessera" : "Fronte tessera"}</div> }));
 const member: api.MemberProfile = { id: 1, first_name: "Anna", last_name: "Collaudo", email: "anna@example.test", phone: null, fiscal_code: null, status: "active", card_no: 123, card_status: "attiva", card_year: 2026, membership_type: "annual", joined_at: "2026-07-01", valid_until: "2027-01-01T00:00:00Z", card_verification_url: "https://assonam.it/v/fixture", organization: { id: 2, name: "Club Collaudo", slug: "club" } };
-function mount(user = member) { const context: DashboardContext = { user, loading: false, profileError: null, reloadProfile: vi.fn() }; return render(<MemoryRouter><Routes><Route element={<Outlet context={context} />}><Route path="*" element={<DashboardHome />} /></Route></Routes></MemoryRouter>); }
+function mount(user = member, reloadProfile = vi.fn()) { const context: DashboardContext = { user, loading: false, profileError: null, reloadProfile }; return render(<MemoryRouter><Routes><Route element={<Outlet context={context} />}><Route path="*" element={<DashboardHome />} /></Route></Routes></MemoryRouter>); }
+const term2027: api.AnnualMembershipTerm = { id: 9, membership_year: 2027, starts_on: "2027-01-01", valid_through: "2028-01-01", status: "due", fee_amount: 30, currency: "EUR", card_no: null, card_year: null, issued_at: null, payment: null };
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(api.fetchMemberMembership).mockResolvedValue({ current: null, renewal: null, can_renew: false } as api.MemberMembershipResponse);
@@ -50,5 +51,43 @@ describe("Riepilogo socio", () => {
     expect(screen.getByLabelText("Richiesta temporanea")).toBeVisible();
     expect(screen.getByText("Da rinnovare")).toBeVisible();
     expect(screen.queryByRole("button", { name: "Aggiungi a Google Wallet" })).not.toBeInTheDocument();
+  });
+  it("mostra l'annualità proposta dal server e aggiorna il profilo dopo il rinnovo immediato", async () => {
+    vi.mocked(api.fetchMemberMembership).mockResolvedValueOnce({ current: { ...term2027, membership_year: 2025 }, renewal: null, can_renew: true, renewal_year: 2027, renewal_checkout_available: false, renewal_opens_on: null, is_account_only: true });
+    vi.mocked(api.fetchMemberMembership).mockResolvedValue({ current: { ...term2027, status: "active", card_no: 456, card_year: 2027 }, renewal: null, can_renew: false, renewal_year: 2028, renewal_checkout_available: false, renewal_opens_on: null, is_account_only: false });
+    vi.mocked(api.requestMemberRenewal).mockResolvedValue({ ok: true, action: "renewed", checkout_required: false, term: { ...term2027, status: "active", card_no: 456, card_year: 2027 } });
+    const refresh = vi.fn().mockResolvedValue(undefined);
+    mount({ ...member, status: "expired", card_year: 2025 }, refresh);
+    fireEvent.click(await screen.findByRole("button", { name: "Rinnova tessera 2027" }));
+    expect(await screen.findByText("Rinnovo registrato: la nuova tessera è stata predisposta.")).toBeVisible();
+    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+    expect(api.requestMemberRenewal).toHaveBeenCalledOnce();
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Rinnova tessera 2027" })).not.toBeInTheDocument());
+  });
+  it("mantiene visibile la richiesta offline senza proporre invii ripetuti", async () => {
+    vi.mocked(api.fetchMemberMembership).mockResolvedValue({ current: null, renewal: { ...term2027, status: "payment_pending" }, can_renew: true, renewal_year: 2027, renewal_checkout_available: false, renewal_opens_on: null, is_account_only: true });
+    mount({ ...member, status: "expired" });
+    expect(await screen.findByText("Richiesta ricevuta. Concorda il pagamento della quota con l'associazione.")).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Rinnova tessera|Completa rinnovo/ })).not.toBeInTheDocument();
+    expect(api.requestMemberRenewal).not.toHaveBeenCalled();
+  });
+  it("conserva il successo se il rinnovo è salvato ma il profilo non si aggiorna", async () => {
+    vi.mocked(api.fetchMemberMembership).mockResolvedValueOnce({ current: null, renewal: null, can_renew: true, renewal_year: 2027, renewal_checkout_available: false, renewal_opens_on: null, is_account_only: true });
+    vi.mocked(api.requestMemberRenewal).mockResolvedValue({ ok: true, action: "renewed", checkout_required: false, term: { ...term2027, status: "active", card_no: 456, card_year: 2027 } });
+    mount({ ...member, status: "expired" }, vi.fn().mockRejectedValue(new Error("Profilo non disponibile")));
+    fireEvent.click(await screen.findByRole("button", { name: "Rinnova tessera 2027" }));
+    expect(await screen.findByText("Rinnovo registrato: la nuova tessera è stata predisposta.")).toBeVisible();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Rinnovo registrato. Non è stato possibile aggiornare tutti i dati: ricarica la pagina per vedere la tessera aggiornata.");
+    expect(api.requestMemberRenewal).toHaveBeenCalledOnce();
+  });
+  it("permette di riprendere il pagamento online di un rinnovo già richiesto", async () => {
+    vi.mocked(api.fetchMemberMembership).mockResolvedValue({ current: null, renewal: { ...term2027, status: "payment_pending" }, can_renew: true, renewal_year: 2027, renewal_checkout_available: true, renewal_opens_on: null, is_account_only: true });
+    vi.mocked(api.requestMemberRenewal).mockResolvedValue({ ok: true, action: "online_payment", checkout_required: true, term: { ...term2027, status: "payment_pending" } });
+    vi.mocked(api.createMemberRenewalCheckout).mockRejectedValue(new Error("Pagamento temporaneamente non disponibile"));
+    mount({ ...member, status: "expired" });
+    fireEvent.click(await screen.findByRole("button", { name: "Completa rinnovo 2027" }));
+    expect(await screen.findByText("Pagamento temporaneamente non disponibile")).toBeVisible();
+    expect(api.createMemberRenewalCheckout).toHaveBeenCalledExactlyOnceWith(9);
+    expect(screen.getByRole("button", { name: "Completa rinnovo 2027" })).toBeEnabled();
   });
 });

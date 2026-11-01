@@ -7,6 +7,7 @@ from app.db import SessionLocal
 from app.models import (
     AdminRole,
     AdminUser,
+    AnnualMembershipTerm,
     Member,
     MemberStatus,
     OrgAdminToken,
@@ -61,11 +62,13 @@ def _login_org_admin(client, db, org_id: int, suffix: str) -> AdminUser:
     return admin
 
 
-def test_join_submit_allows_proven_resubmission_for_legacy_active_but_inactive_member(
+def test_join_submit_renews_legacy_inactive_cardholder_without_overwriting_profile(
     client,
     db,
 ):
     suffix = uuid.uuid4().hex[:8]
+    client.post("/api/auth/logout")
+    client.post("/api/org-admin/auth/logout")
     org = _create_org(db, f"legacy-join-{suffix}")
     email = f"legacy-active-{suffix}@example.com"
 
@@ -98,7 +101,8 @@ def test_join_submit_allows_proven_resubmission_for_legacy_active_but_inactive_m
         f"/api/join/{org.slug}/submit",
         data=payload,
     )
-    assert unproven.status_code == 409, unproven.text
+    assert unproven.status_code == 200, unproven.text
+    assert unproven.json()["status"] == "renewal_verification_required"
     db.refresh(stale_member)
     assert stale_member.first_name == "Old"
     assert stale_member.phone == "3330000000"
@@ -111,6 +115,17 @@ def test_join_submit_allows_proven_resubmission_for_legacy_active_but_inactive_m
     assert res.status_code == 200, res.text
     payload = res.json()
     assert payload["id"] == stale_member.id
+    assert payload["status"] == "renewal_requested"
+    assert payload["term"]["membership_year"] == datetime.utcnow().year
+    assert payload["action"] == "org_confirmation"
+    db.refresh(stale_member)
+    assert stale_member.first_name == "Old"
+    assert stale_member.last_name == "Member"
+    assert stale_member.phone == "3330000000"
+    assert stale_member.card_year == datetime.utcnow().year - 1
+    assert db.query(Member).filter_by(org_id=org.id).count() == 1
+    # The old issued card is backfilled separately from the new requested year.
+    assert db.query(AnnualMembershipTerm).filter_by(member_id=stale_member.id).count() == 2
 
 
 def test_org_metrics_and_csv_exclude_legacy_expired_and_rejected_members(client, db):

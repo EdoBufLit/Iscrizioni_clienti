@@ -1278,11 +1278,22 @@ def _render_card_download_html(
 
 def _term_valid_until(term: AnnualMembershipTerm | None, member: Member | None):
     from app.models import TemporaryMembershipPurchase
+    from app.services.annual_memberships import ROME_TIMEZONE, annual_membership_valid_through, as_rome_datetime
+
     if isinstance(term, TemporaryMembershipPurchase):
-        from app.services.annual_memberships import as_rome_datetime
         return as_rome_datetime(term.valid_until) if term.valid_until else None
     if term is not None:
-        return datetime.combine(term.valid_through, time.max)
+        term_expiry = datetime.combine(min(term.valid_through, annual_membership_valid_through(term.membership_year)), time.max, tzinfo=ROME_TIMEZONE)
+        if (
+            member is not None
+            and term.card_no is not None
+            and term.card_no == member.card_no
+            and term.card_year == member.card_year
+        ):
+            current_expiry = resolve_member_valid_until(member)
+            if current_expiry is not None:
+                return min(term_expiry, as_rome_datetime(current_expiry))
+        return term_expiry
     return resolve_member_valid_until(member)
 
 
