@@ -189,6 +189,7 @@ from app.services.booking_rooms import (
 from app.services.card_allocation import release_card_number
 from app.services.card_availability import CardBatchAvailability, card_batch_availability, card_lot_status
 from app.services.annual_memberships import as_rome_datetime
+from app.services.card_lot_lifecycle import is_closed_by_year
 from app.services.sqlite_card_allocation_guard import (
     sqlite_card_allocation_request_guard,
 )
@@ -1524,6 +1525,8 @@ def _serialize_org_admin_card_lot(batch: CardBatch, availability: CardBatchAvail
         "range_end_label": format_card_number(batch.end_no),
         "quantity": int(batch.end_no - batch.start_no + 1),
         "status_label": card_lot_status(batch, availability),
+        "closed_by_year": is_closed_by_year(batch),
+        "remaining": availability.remaining,
     }
 
 
@@ -7606,6 +7609,8 @@ def card_movements(
         "attivo": "Attivo", "active": "Attivo",
         "disattivo": "Disattivo", "inactive": "Disattivo",
         "esaurito": "Esaurito", "exhausted": "Esaurito",
+        "closed": "Chiuso per annualità", "chiuso": "Chiuso per annualità",
+        "chiuso per annualità": "Chiuso per annualità",
     }
     normalized_status = (status or "").strip().lower()
     if normalized_status and normalized_status not in status_labels:
@@ -7624,7 +7629,9 @@ def card_movements(
     if batch_id is not None:
         query = query.filter(CardBatch.id == batch_id)
     if selected_status == "Disattivo":
-        query = query.filter(CardBatch.is_enabled.is_(False))
+        query = query.filter(CardBatch.is_enabled.is_(False), CardBatch.year >= current_year)
+    elif selected_status == "Chiuso per annualità":
+        query = query.filter(CardBatch.year < current_year)
     elif selected_status:
         query = query.filter(or_(CardBatch.is_enabled.is_(True), CardBatch.is_enabled.is_(None)))
     query = query.order_by(CardBatch.created_at.desc(), CardBatch.id.desc())

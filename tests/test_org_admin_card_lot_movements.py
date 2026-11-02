@@ -117,7 +117,8 @@ def test_org_admin_card_movements_show_live_current_year_lots_and_follow_super_a
     assert initial_payload["items"][0]["quantity"] == current_end - current_start + 1
     assert initial_payload["items"][0]["status_label"] == "Attivo"
     assert "assigned" not in initial_payload["items"][0]
-    assert "remaining" not in initial_payload["items"][0]
+    assert initial_payload["items"][0]["remaining"] == current_end - current_start + 1
+    assert initial_payload["items"][0]["closed_by_year"] is False
 
     _login_super_admin(client)
     updated_start = current_start + 2

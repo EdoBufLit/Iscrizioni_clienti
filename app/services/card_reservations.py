@@ -16,6 +16,8 @@ from app.db import SessionLocal
 from app.models import CardBatch, MembershipPayment, Organization
 from app.services.card_allocation import CardAllocationResult, allocate_next_card, lock_card_allocation
 from app.services.card_availability import occupied_card_numbers
+from app.services.card_lot_lifecycle import require_card_lot_year_open
+from app.services.annual_memberships import as_rome_datetime
 
 
 logger = logging.getLogger(__name__)
@@ -54,11 +56,15 @@ def reserve_payment_card(db: Session, payment: MembershipPayment, *, now: dateti
     """Reserve under the allocation lock; caller commits BEFORE contacting SumUp."""
     payment = _lock_payment(db, payment)
     if payment.reservation_state == "held":
-        return _allocation(payment)
+        allocation = _allocation(payment)
+        batch = db.get(CardBatch, allocation.batch_id)
+        if batch is not None:
+            require_card_lot_year_open(batch, now=now)
+        return allocation
     if payment.reservation_state in {"consumed", "released"}:
         raise HTTPException(status_code=409, detail="Questo tentativo di pagamento è già concluso.")
     try:
-        allocation = allocate_next_card(db, payment.org_id, int(payment.membership_year or _utc(now).year))
+        allocation = allocate_next_card(db, payment.org_id, int(payment.membership_year or as_rome_datetime(now).year))
     except HTTPException as exc:
         if exc.status_code == 409:
             raise HTTPException(status_code=409, detail=STOCK_EXHAUSTED_MESSAGE) from exc
@@ -85,7 +91,7 @@ def find_member_paid_reservation(db: Session, member_id: int, year: int | None =
     return db.execute(query.order_by(MembershipPayment.id.desc())).scalars().first()
 
 
-def reserved_payment_allocation(db: Session, payment: MembershipPayment) -> CardAllocationResult | None:
+def reserved_payment_allocation(db: Session, payment: MembershipPayment, *, now: datetime | None = None) -> CardAllocationResult | None:
     """Consume the exact paid hold within the member/term assignment transaction."""
     payment = _lock_payment(db, payment)
     if payment.reservation_state != "held":
@@ -94,6 +100,8 @@ def reserved_payment_allocation(db: Session, payment: MembershipPayment) -> Card
         raise HTTPException(status_code=409, detail="Pagamento non ancora confermato.")
     allocation = _allocation(payment)
     batch = db.get(CardBatch, allocation.batch_id)
+    if batch is not None:
+        require_card_lot_year_open(batch, now=now)
     if (
         batch is None or batch.org_id != payment.org_id or batch.released_at is not None
         or not batch.is_enabled or batch.year != allocation.year

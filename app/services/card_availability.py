@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from sqlalchemy import literal, or_, select, union_all
 from sqlalchemy.orm import Session
+
+from app.services.annual_memberships import as_rome_datetime
+from app.services.card_lot_lifecycle import is_closed_by_year
 
 from app.models import (
     AnnualMembershipTerm,
@@ -104,9 +108,9 @@ def occupied_card_numbers(
     return {int(row[3]) for row in rows}
 
 
-def eligible_card_batches(db: Session, *, org_ids: list[int], year: int) -> list[CardBatch]:
+def eligible_card_batches(db: Session, *, org_ids: list[int], year: int, now: datetime | None = None) -> list[CardBatch]:
     """Select the same per-organization scope/legacy fallback as allocation."""
-    if not org_ids:
+    if not org_ids or year < as_rome_datetime(now).year:
         return []
     db.flush()
     rows = db.execute(
@@ -200,6 +204,8 @@ def batch_has_linked_terms_or_reservations(db: Session, batch: CardBatch) -> boo
 def card_lot_status(batch: CardBatch, availability: CardBatchAvailability) -> str:
     if batch.released_at is not None:
         return "Rilasciato"
+    if is_closed_by_year(batch):
+        return "Chiuso per annualità"
     if batch.is_enabled is not None and not bool(batch.is_enabled):
         return "Disattivo"
     return "Attivo" if availability.remaining else "Esaurito"

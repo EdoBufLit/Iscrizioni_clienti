@@ -99,7 +99,6 @@ def test_super_admin_can_update_empty_card_lot_and_audit_it(client, db):
         f"/api/admin/organizations/{org.id}/card-lots/{batch_id}",
         json={
             "status": "inactive",
-            "year": original_year + 1,
             "notes": "Lotto test super admin",
             "range_start": next_start,
             "range_end": next_end,
@@ -112,14 +111,14 @@ def test_super_admin_can_update_empty_card_lot_and_audit_it(client, db):
     assert payload["item"]["notes"] == "Lotto test super admin"
     assert payload["item"]["start_no"] == next_start
     assert payload["item"]["end_no"] == next_end
-    assert payload["item"]["year"] == original_year + 1
+    assert payload["item"]["year"] == original_year
 
     db.expire_all()
     refreshed = db.query(CardBatch).filter(CardBatch.id == batch_id).first()
     assert refreshed is not None
     assert refreshed.is_enabled is False
     assert refreshed.notes == "Lotto test super admin"
-    assert refreshed.year == original_year + 1
+    assert refreshed.year == original_year
     assert refreshed.start_no == next_start
     assert refreshed.end_no == next_end
     assert refreshed.next_no == next_start

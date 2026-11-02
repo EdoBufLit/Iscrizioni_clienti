@@ -44,6 +44,19 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("CardOrdersPanel", () => {
+  it("keeps a closed year's unused cards visible only as historical residue", async () => {
+    mocks.movements.mockResolvedValue({ items: [{ id: 9, year: 2026, range_start: 1, range_end: 52, quantity: 52, remaining: 40, closed_by_year: true, status_label: "Chiuso per annualità", created_at: null }], total: 1, current_year: 2027, available_years: [2026, 2027], lot_options: result().lot_options });
+    renderPanel({ currentYear: 2027 });
+    await screen.findByRole("list", { name: "Richieste di rifornimento" });
+    fireEvent.click(screen.getByRole("tab", { name: "Lotti" }));
+    const list = await screen.findByRole("list", { name: "Lotti tessere" });
+    expect(within(list).getByText("Chiuso per annualità")).toBeVisible();
+    expect(within(list).getByText("Residuo storico: 40 tessere non utilizzabili. Il lotto resta dell'annualità 2026.")).toBeVisible();
+    fireEvent.change(screen.getByLabelText("Anno tessere"), { target: { value: "2026" } });
+    fireEvent.change(screen.getByLabelText("Stato lotti"), { target: { value: "Chiuso per annualità" } });
+    await waitFor(() => expect(mocks.movements).toHaveBeenLastCalledWith({ year: 2026, status: "Chiuso per annualità", limit: 20, offset: 0 }, expect.any(AbortSignal)));
+  });
+
   it("keeps mobile filter drafts isolated and restores focus when canceled", async () => {
     renderPanel();
     await screen.findByRole("list", { name: "Richieste di rifornimento" });

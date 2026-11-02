@@ -60,6 +60,21 @@ describe("Registro lotti automatici", () => {
     expect(screen.getByText("5 prenotate")).toBeInTheDocument();
   });
 
+  it("preserva anno e residuo dei lotti chiusi senza considerarli disponibili", async () => {
+    vi.mocked(api.fetchCardLotRegistry).mockResolvedValue({ items: [{ ...row, closed_by_year: true, status_label: "Chiuso per annualità", reserved: 0 }], total: 1 });
+    showPage();
+    expect(await screen.findByText("35 tessere di residuo storico")).toBeVisible();
+    expect(screen.getByText("Non utilizzabili; annualità 2026 conservata.")).toBeVisible();
+    expect(screen.queryByText("35 disponibili")).not.toBeInTheDocument();
+    const year = screen.getByText("Anno 2026").closest("tr")!;
+    expect(within(year).getByText("Chiuso per annualità")).toBeVisible();
+    const status = screen.getByRole("option", { name: "Chiusi per annualità" }).closest("select")!;
+    fireEvent.change(status, { target: { value: "Chiuso per annualità" } });
+    expect(screen.getByText("Club esistente")).toBeVisible();
+    fireEvent.change(status, { target: { value: "Attivo" } });
+    expect(screen.queryByText("Club esistente")).not.toBeInTheDocument();
+  });
+
   it("crea anche per un'associazione senza lotti e mostra l'intervallo definitivo del server", async () => {
     showPage();
     await openAndSelect();

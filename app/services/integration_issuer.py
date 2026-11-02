@@ -25,6 +25,7 @@ from app.models import (
 )
 from app.services.card_allocation import allocate_next_card, release_card_number
 from app.services.annual_memberships import (
+    as_rome_datetime,
     cancel_current_annual_membership_term,
     sync_annual_membership_term,
 )
@@ -295,6 +296,7 @@ def issue_member_from_integration(
     email = normalized_email.lower()
 
     now = datetime.utcnow()
+    card_year = as_rome_datetime(now).year
     first_name = _normalize_text(command.first_name)
     last_name = _normalize_text(command.last_name)
     phone = _normalize_text(command.phone)
@@ -430,13 +432,13 @@ def issue_member_from_integration(
     needs_new_card = (
         member.card_no is None
         or member_card_year is None
-        or member_card_year < now.year
+        or member_card_year < card_year
     )
     if needs_new_card:
         allocation = allocate_next_card(
             db,
             org_id=org.id,
-            year=now.year,
+            year=card_year,
         )
         member.card_no = allocation.card_no
         member.batch_id = allocation.batch_id

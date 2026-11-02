@@ -16,6 +16,8 @@ from app.models import (
 )
 from app.services.card_allocation import lock_card_allocation
 from app.services.card_availability import CardBatchAvailability, card_batch_availability, card_lot_status
+from app.services.card_lot_lifecycle import is_closed_by_year
+from app.services.annual_memberships import as_rome_datetime
 from app.services.numbering_scopes import (
     ASSONAM_CENTRAL_SCOPE_NAME,
     NUMBERING_MODE_SHARED_ASSONAM,
@@ -163,6 +165,8 @@ def _automatic_lot_bounds(db: Session, org: Organization, quantity: int) -> tupl
 def preview_automatic_card_lot(
     db: Session, *, org: Organization, quantity: int, year: int
 ) -> dict[str, object]:
+    if year < as_rome_datetime().year:
+        raise HTTPException(status_code=409, detail="Non è possibile aprire un lotto di un'annualità conclusa.")
     start_no, end_no = _automatic_lot_bounds(db, org, quantity)
     return {
         "organization_id": org.id,
@@ -205,10 +209,12 @@ def create_automatic_card_lot(
             raise HTTPException(status_code=409, detail="Il lotto di questa richiesta è stato eliminato")
         return batch, True
 
+    if year < as_rome_datetime().year:
+        raise HTTPException(status_code=409, detail="Non è possibile aprire un lotto di un'annualità conclusa.")
     start_no, end_no = _automatic_lot_bounds(db, org, quantity)
     batch = CardBatch(
         org_id=org.id, numbering_scope_id=org.numbering_scope_id, year=year,
-        start_no=start_no, end_no=end_no, next_no=start_no, is_enabled=True,
+        start_no=start_no, end_no=end_no, next_no=start_no, is_enabled=year >= as_rome_datetime().year,
         notes="Creato dal Registro lotti",
     )
     db.add(batch)
@@ -282,6 +288,7 @@ def serialize_card_lot_registry_row(row: CardLotRegistryRow) -> dict[str, object
         "reserved": row.availability.reserved,
         "remaining": row.availability.remaining,
         "status_label": card_lot_status(batch, row.availability),
+        "closed_by_year": is_closed_by_year(batch),
         "next_no": row.availability.next_no,
         "recharge_request_id": row.recharge_request_id,
         "created_at": batch.created_at.isoformat() if batch.created_at else None,
@@ -545,7 +552,7 @@ def ensure_recharge_request_batch(db: Session, recharge_request_id: int) -> Card
         start_no=start_no,
         end_no=end_no,
         next_no=start_no,
-        is_enabled=True,
+        is_enabled=int(recharge_request.requested_year) >= as_rome_datetime().year,
         notes=f"Auto-creato da recharge_request #{recharge_request.id}",
     )
     db.add(batch)

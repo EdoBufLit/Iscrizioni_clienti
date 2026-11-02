@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.models import Member
 from app.services.card_availability import card_batch_availability, eligible_card_batches
 from app.services.member_activity import member_active_filters
+from app.services.annual_memberships import as_rome_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +20,8 @@ def compute_org_card_stock(
     *,
     now: datetime | None = None,
 ) -> dict[str, int]:
-    target_year = int((now or datetime.utcnow()).year)
-    batches = eligible_card_batches(db, org_ids=[org_id], year=target_year)
+    target_year = as_rome_datetime(now).year
+    batches = eligible_card_batches(db, org_ids=[org_id], year=target_year, now=now)
     if not batches:
         return {"total": 0, "used": 0, "remaining": 0}
     availability = card_batch_availability(db, batches)
@@ -65,12 +66,12 @@ def get_remaining_cards_by_org(
     *,
     now: datetime | None = None,
 ) -> dict[int, int]:
-    target_year = int((now or datetime.utcnow()).year)
+    target_year = as_rome_datetime(now).year
     org_ids = sorted({int(org_id) for org_id in association_ids if org_id is not None})
     if not org_ids:
         return {}
 
-    batches = eligible_card_batches(db, org_ids=org_ids, year=target_year)
+    batches = eligible_card_batches(db, org_ids=org_ids, year=target_year, now=now)
     availability = card_batch_availability(db, batches)
     remaining = {org_id: 0 for org_id in org_ids}
     for batch in batches:
@@ -84,12 +85,12 @@ def get_total_cards_by_org(
     *,
     now: datetime | None = None,
 ) -> dict[int, int]:
-    target_year = int((now or datetime.utcnow()).year)
+    target_year = as_rome_datetime(now).year
     org_ids = sorted({int(org_id) for org_id in association_ids if org_id is not None})
     if not org_ids:
         return {}
 
-    batches = eligible_card_batches(db, org_ids=org_ids, year=target_year)
+    batches = eligible_card_batches(db, org_ids=org_ids, year=target_year, now=now)
     totals = {org_id: 0 for org_id in org_ids}
     for batch in batches:
         totals[batch.org_id] += batch.end_no - batch.start_no + 1

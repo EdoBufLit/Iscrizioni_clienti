@@ -32,7 +32,7 @@ function FilterFields({ view, values, onChange, years, lots, sheet = false, lots
     <label className="cards-orders__filter"><span className={sheet ? undefined : "sr-only"}>{view === "requests" ? "Stato richieste" : "Stato lotti"}</span>
       <select value={values.status} onChange={event => onChange({ ...values, status: event.target.value })}>
         <option value="">Tutti gli stati</option>
-        {view === "requests" ? <><option value="unpaid">Da pagare</option><option value="paid">Pagate</option><option value="not_applicable">Storico</option></> : <><option value="Attivo">Attivi</option><option value="Disattivo">Disattivi</option><option value="Esaurito">Esauriti</option></>}
+        {view === "requests" ? <><option value="unpaid">Da pagare</option><option value="paid">Pagate</option><option value="not_applicable">Storico</option></> : <><option value="Attivo">Attivi</option><option value="Disattivo">Disattivi</option><option value="Esaurito">Esauriti</option><option value="Chiuso per annualità">Chiusi per annualità</option></>}
       </select>
     </label>
     <label className="cards-orders__filter"><span className={sheet ? undefined : "sr-only"}>Lotto</span>
@@ -288,6 +288,7 @@ export default function CardOrdersPanel({ currentYear, revision, focusRequest }:
             {movements.items.map(item => <li key={item.id} className="cards-orders__row">
               <div className="cards-orders__row-main"><h3>Lotto #{item.id}{!year && <span> · {item.year}</span>}</h3><time dateTime={item.created_at ?? undefined}>{date(item.created_at)}</time></div>
               <div className="cards-orders__row-detail"><p>{item.range_start_label ?? item.range_start}–{item.range_end_label ?? item.range_end} · {item.quantity.toLocaleString("it-IT")} {item.quantity === 1 ? "tessera" : "tessere"}</p><span className={`cards-orders__badge cards-orders__badge--${lotTone(item.status_label)}`}>{item.status_label}</span></div>
+              {(item.closed_by_year || item.status_label === "Chiuso per annualità") && <p className="cards-hint">Residuo storico: {Math.max(0, item.remaining ?? 0).toLocaleString("it-IT")} tessere non utilizzabili. Il lotto resta dell'annualità {item.year}.</p>}
             </li>)}
           </ul> : <p className="cards-orders__message">{filtered ? "Nessun lotto corrisponde ai filtri." : "Nessun lotto disponibile per quest'anno."}</p>}
         </>}

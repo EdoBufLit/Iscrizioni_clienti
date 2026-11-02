@@ -383,7 +383,7 @@ def allocate_renewal_card(
         return False
 
     try:
-        allocation = reserved_payment_allocation(db, payment) if payment is not None else None
+        allocation = reserved_payment_allocation(db, payment, now=now) if payment is not None else None
         if allocation is None:
             allocation = allocate_next_card(db, org_id=term.org_id, year=term.membership_year)
     except HTTPException as exc:

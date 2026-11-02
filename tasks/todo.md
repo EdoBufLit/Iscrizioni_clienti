@@ -6371,3 +6371,14 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Collaudo completo con quattro soci/quattro documenti sintetici conservati: area socio, incasso manuale25euro e wizard email aggiornano la stessa anagrafica al2027. Ultima UI verificata320x568/390x844/1440x900, chiaro/scuro: CTA a401px e ingressoemail a346px, zerooverflow e nessunoscroll interno. Screenshot in output/annual-rollover-20261101; serverQAfermato e viewport ripristinato.
 - Readiness produzione in sola lettura:14 associazioni con soci annuali, nessun lotto2027. Occorre rifornire il nuovo anno; i rinnovi confermati/pagati restano in attesa e verranno assegnati automaticamente quando disponibili. Nessun lotto o dato reale creato per il collaudo.
 - Rilascio5579214 su Main riuscito, pipeline41354470461/build124991469964/deploy124991904270. Final canary passed verificato alle23:02 del1novembreEurope/Rome.61controlliHTTPS e hashasset superati; sette servizi sulnuovoSHAhealthy,0restart/OOM, schema20261026_06_member_bulk invariato. Worker annuale realmente avviato, primo ciclook/purged0, intervallo300s; browser pubblico rinnovo compatto verificato senza invii reali. Rapporto docs/annual_rollover_release_2026-11-01.md.
+# Piano — chiusura obbligatoria dei lotti a fine anno (1 novembre 2026)
+
+- [x] Verificare lotti, prenotazioni e acquisti: nessun trasferimento di stock o residui tra annualità; chiusura dei lotti precedenti al passaggio d'anno italiano.
+- [x] Collegare la chiusura automatica allo scheduler e impedire riapertura/assegnazione di lotti passati, conservando quantità, numeri, ordini e storico.
+- [x] Allineare stati e azioni delle viste magazzino; testare confini temporali, recupero e retry, tessere già emesse e nuovi acquisti2027.
+- [ ] Pubblicare su Main e verificare deploy e runtime; aggiornare runbook e rapporto con la regola chiarita dall'utente.
+
+### Review chiusura lotti — 2 novembre 2026
+- Lotti precedenti chiusi dal1gennaio italiano, residui nello storico dell'annooriginario e disponibilitàcorrente separata; nessun trasferimento o riciclo. Annoimmutabile e guardie antiuso/riapertura anche prima dello scheduler. Nuovo lotto2027 solo dai nuovi acquisti; nessuna necessità di popolare anticipatamente il magazzino.
+- Backend1141passed/13skipped, frontend392passed/61file e build riusciti; reviewindipendente completata. Prove su confineUTC/Roma, pagamentoheldconfermato, ritardoordine2026, blocchiAPI,tenant,scope e invarianti su tutti i dati storici. Nessuna migrazione o dipendenza nuova.
+- Browser locale con dati sintetici: lotto2026chiuso con52tessere residue nonutilizzabili, desktop/mobile390px leggibili senzaoverflow. ServerQAfermato, schedechiuse e viewport ripristinato; nessuna modifica a dati reali perQA.

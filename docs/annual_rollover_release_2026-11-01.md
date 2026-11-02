@@ -41,7 +41,7 @@ Sessione, email e associazione sono verificate; i link scadono, sono monouso e l
 
 ## Condizione operativa prima del nuovo anno
 
-La lettura della produzione del 1 novembre rileva 14 associazioni con soci annuali e **zero lotti abilitati 2027**. Occorre predisporre i lotti per l'anno nuovo tramite il normale magazzino: la scadenza non trasferisce stock 2026 né rimette in circolo numeri storici.
+La lettura della produzione del 1 novembre rileva 14 associazioni con soci annuali e **zero lotti abilitati 2027**. Precisazione dell'utente del 2 novembre: questa assenza è prevista, perché lo stock 2027 deriverà dai nuovi acquisti. I lotti 2026 si chiudono al cambio anno e i residui restano nello storico 2026; non vengono trasferiti né rimessi in circolo. Vedi [chiusura dei lotti per annualità](card_lot_year_closure_release_2026-11-02.md).
 
 Se manca disponibilità, il rinnovo confermato/pagato rimane in attesa della tessera. Lo scheduler riprova dopo il rifornimento. Nessun lotto è stato creato o modificato durante il collaudo.
 

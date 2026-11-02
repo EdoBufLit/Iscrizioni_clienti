@@ -1,6 +1,6 @@
 # Runbook annualità, rinnovi e tessere
 
-> Stato tecnico: 1 novembre 2026. Questo documento descrive il comportamento applicativo e non autorizza da solo operazioni in produzione.
+> Stato tecnico: 2 novembre 2026. Questo documento descrive il comportamento applicativo e non autorizza da solo operazioni in produzione.
 
 ## Regola temporale
 
@@ -45,6 +45,13 @@ La chiusura non elimina soci, documenti, pagamenti, numeri tessera, lotti o disp
 - Occorre predisporre lotti abilitati per l'anno di rinnovo: la disponibilità residua del 2026 non è automaticamente trasferita al 2027 e i vecchi numeri non vengono rimessi in circolo.
 
 ## Rifornimento tessere e crediti
+
+- I lotti si chiudono al cambio anno italiano: dal **1 gennaio 2027 alle 00:00 Europe/Rome** i lotti 2026 non possono più assegnare tessere, anche con residui. Le tessere già emesse conservano invece la validità fino al 1 gennaio incluso.
+- La chiusura cambia soltanto l'abilitazione del lotto: anno, numeri, quantità residue, ordini, pagamenti, crediti e prenotazioni restano nello storico. Nessun trasferimento dei residui al 2027, nessun rilascio automatico di numeri o cancellazione di soci.
+- L'anno di un lotto esistente è immutabile. Un lotto di annualità conclusa non può essere riaperto, modificato nei suoi numeri o eliminato; lo storico mostra `Chiuso per annualità` e il residuo non utilizzabile.
+- Lo stock 2027 deriva dai nuovi lotti acquistati per quell'anno. L'assenza di lotti2027 prima dei nuovi acquisti è prevista; non occorre trasferire o creare disponibilità2027 durante il reset.
+- Il worker chiude i lotti prima della manutenzione delle tessere, con transazioni separate per associazione e recupero dopo un fermo. Le guardie del calendario impediscono l'uso del vecchio stock anche prima del passaggio del worker.
+- Una conferma tardiva di un pagamento su una prenotazione 2026 conserva incasso e riferimenti; non emette una nuova tessera dal lotto chiuso e non converte automaticamente la richiesta al 2027. La verifica amministrativa del pagamento resta necessaria.
 
 - L'Org Admin richiede il numero di tessere dalla pagina Tessere.
 - La richiesta deve indicare l'anno del lotto: sono ammessi soltanto l'anno corrente e quello successivo; l'anno resta immutabile nello storico della richiesta.

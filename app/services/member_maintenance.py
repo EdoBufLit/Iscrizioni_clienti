@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app import audit
 from app.db import SessionLocal
-from app.models import AnnualMembershipTerm, AnnualMembershipTermStatus
+from app.models import AnnualMembershipTerm, AnnualMembershipTermStatus, CardBatch
 from app.services.annual_memberships import (
     AnnualDeactivationNotAllowedError,
     annual_membership_valid_through,
@@ -17,9 +17,79 @@ from app.services.annual_memberships import (
     execute_annual_deactivation,
     lock_annual_card_deactivation,
 )
+from app.services.card_lot_lifecycle import close_due_card_lots
 
 
 logger = logging.getLogger(__name__)
+
+
+def run_card_lot_closure_job_once(*, now: datetime | None = None) -> dict[str, Any]:
+    """Close old-year stock in a separate transaction for each organization.
+
+    This deliberately runs separately from annual-term maintenance: issued
+    cards keep their grace day, while old stock closes at January 1 midnight.
+    """
+
+    current_time = now or datetime.utcnow()
+    current_year = as_rome_datetime(current_time).year
+    closed_ids: list[int] = []
+    errors = 0
+    try:
+        with SessionLocal() as discovery:
+            org_ids = [
+                value for (value,) in discovery.query(CardBatch.org_id).filter(
+                    CardBatch.year < current_year,
+                    CardBatch.is_enabled.is_(True),
+                ).distinct().order_by(CardBatch.org_id.asc()).all()
+            ]
+    except Exception:
+        logger.exception("card_lot_closure_discovery_failed")
+        return {"ok": False, "closed_count": 0, "batch_ids": [], "errors": 1}
+
+    for org_id in org_ids:
+        try:
+            with SessionLocal() as db:
+                # Null-organization rows cannot be allocated by normal tenant
+                # issuance. Limit their query separately rather than closing
+                # every organization in one transaction.
+                if org_id is None:
+                    batches = db.query(CardBatch).filter(
+                        CardBatch.org_id.is_(None), CardBatch.year < current_year,
+                        CardBatch.is_enabled.is_(True),
+                    ).order_by(CardBatch.id).with_for_update().populate_existing().all()
+                    result = {"batch_ids": [batch.id for batch in batches]}
+                    for batch in batches:
+                        batch.is_enabled = False
+                else:
+                    result = close_due_card_lots(db, now=current_time, org_id=org_id)
+                if result["batch_ids"]:
+                    audit.log_operation(
+                        db,
+                        action="card_lots_closed_for_new_year",
+                        entity_type="card_batch",
+                        actor_role="system",
+                        metadata={
+                            "org_id": org_id,
+                            "current_year": current_year,
+                            "batch_ids": result["batch_ids"],
+                            "closed_count": len(result["batch_ids"]),
+                            "stock_released": False,
+                        },
+                    )
+                db.commit()
+                closed_ids.extend(result["batch_ids"])
+        except Exception:
+            # Context-manager rollback preserves the tenant's complete state;
+            # other tenants still close and the failed one retries next cycle.
+            errors += 1
+            logger.exception("card_lot_closure_failed org_id=%s", org_id)
+    return {
+        "ok": errors == 0,
+        "closed_count": len(closed_ids),
+        "batch_ids": closed_ids,
+        "current_year": current_year,
+        "errors": errors,
+    }
 
 
 def deactivate_expired_annual_memberships(

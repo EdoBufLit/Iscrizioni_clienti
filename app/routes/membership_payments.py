@@ -40,6 +40,7 @@ from app.services.security_rate_limits import (
 )
 from app.services.card_allocation import lock_card_allocation
 from app.services.card_reservations import reserve_payment_card
+from app.services.annual_memberships import as_rome_datetime
 from app.services.membership_payments import (
     MembershipPaymentSource,
     build_membership_payment_status_payload,
@@ -584,7 +585,7 @@ def create_membership_payment_checkout(
     )
 
     from app.services.member_accounting import guard_partial_manual_payment
-    guard_partial_manual_payment(db, member=member, year=datetime.utcnow().year)
+    guard_partial_manual_payment(db, member=member, year=as_rome_datetime().year)
 
     latest_payment = (
         db.query(MembershipPayment)
@@ -618,7 +619,7 @@ def create_membership_payment_checkout(
     payment = MembershipPayment(
         org_id=org.id,
         socio_id=member.id,
-        membership_year=datetime.utcnow().year,
+        membership_year=as_rome_datetime().year,
         payment_kind="initial",
         provider="sumup",
         payment_reason=normalize_membership_payment_reason(org),

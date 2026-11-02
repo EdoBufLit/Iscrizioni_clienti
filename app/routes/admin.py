@@ -5,7 +5,7 @@ from sqlalchemy import func
 from app.db import get_db
 from app.models import AdminUser, AdminRole, Member, CardBatch, MemberDocument, DocStatus, MemberStatus, Organization, PaymentMethod
 from app.services.card_allocation import allocate_next_card
-from app.services.annual_memberships import sync_annual_membership_term
+from app.services.annual_memberships import as_rome_datetime, sync_annual_membership_term
 from app.services.sqlite_card_allocation_guard import (
     sqlite_card_allocation_request_guard,
 )
@@ -119,7 +119,7 @@ def add_batch(request: Request, quantity: int = Form(...), db: Session = Depends
 
     batch = CardBatch(
         org_id=admin.org_id,
-        year=datetime.utcnow().year,
+        year=as_rome_datetime().year,
         start_no=start_no,
         end_no=end_no,
         next_no=start_no
@@ -173,7 +173,7 @@ def assign_card_manual(request: Request, member_id: int, db: Session = Depends(g
             allocation = allocate_next_card(
                 db,
                 org_id=member.org_id,
-                year=datetime.utcnow().year,
+                year=as_rome_datetime().year,
             )
             member.card_no = allocation.card_no
             member.batch_id = allocation.batch_id

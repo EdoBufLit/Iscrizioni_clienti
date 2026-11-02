@@ -294,7 +294,7 @@ def fulfill_purchase(db: Session, *, purchase: TemporaryMembershipPurchase, paym
         return False
     preserve_current_card(db, member)
     try:
-        allocation = reserved_payment_allocation(db, payment)
+        allocation = reserved_payment_allocation(db, payment, now=now)
         if allocation is None:
             allocation = allocate_next_card(db, member.org_id, as_rome_datetime(now).year)
     except HTTPException as exc:

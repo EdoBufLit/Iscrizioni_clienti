@@ -1,14 +1,14 @@
-from datetime import datetime
 from typing import Tuple
 
 from sqlalchemy.orm import Session
 
 from app.services.card_allocation import allocate_next_card
+from app.services.annual_memberships import as_rome_datetime
 
 
 def assign_next_card_with_batch(db: Session, org_id: int) -> Tuple[int, int]:
     """Backward-compatible wrapper around allocate_next_card()."""
-    allocation = allocate_next_card(db, org_id=org_id, year=datetime.utcnow().year)
+    allocation = allocate_next_card(db, org_id=org_id, year=as_rome_datetime().year)
     return allocation.card_no, allocation.batch_id
 
 

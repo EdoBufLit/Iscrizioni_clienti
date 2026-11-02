@@ -117,6 +117,8 @@ from app.services.whatsapp_sync import apply_connection_snapshot, serialize_conn
 from app.services.org_branding import sanitize_card_email_subject_template
 from app.services.card_allocation import lock_card_allocation
 from app.services.card_availability import CardBatchAvailability, batch_has_linked_terms_or_reservations, batches_with_linked_terms_or_reservations, card_batch_availability, card_lot_status, eligible_card_batches
+from app.services.card_lot_lifecycle import is_closed_by_year, require_card_lot_year_open
+from app.services.annual_memberships import ROME_TIMEZONE, as_rome_datetime
 from app.services.card_lot_registry import (
     MAX_AUTOMATIC_LOT_QUANTITY,
     build_card_lots_workbook,
@@ -4206,7 +4208,7 @@ def check_card_overlap(
 
 
 def _resolve_batch_year(raw_year: Optional[int]) -> int:
-    default_year = datetime.utcnow().year
+    default_year = as_rome_datetime().year
     if raw_year is None:
         return default_year
     if raw_year < 2000 or raw_year > default_year + 20:
@@ -4283,7 +4285,8 @@ def _serialize_batch_usage(db: Session, batch: CardBatch, availability: CardBatc
         "end_label": format_card_number(batch.end_no),
         "next_no": usage.next_no,
         "year": batch.year,
-        "is_enabled": _batch_manual_enabled(batch),
+        "is_enabled": _batch_manual_enabled(batch) and not is_closed_by_year(batch),
+        "closed_by_year": is_closed_by_year(batch),
         "is_active": card_lot_status(batch, usage) == "Attivo",
         "status_label": card_lot_status(batch, usage),
         "notes": batch.notes,
@@ -4292,8 +4295,8 @@ def _serialize_batch_usage(db: Session, batch: CardBatch, availability: CardBatc
         "remaining": remaining,
         "reserved": usage.reserved,
         "linked_members": linked_members,
-        "range_editable": linked_members == 0 and not protected_references and not usage.assigned and not usage.reserved,
-        "deletable": assigned == 0 and linked_members == 0 and not protected_references and not usage.reserved,
+        "range_editable": not is_closed_by_year(batch) and linked_members == 0 and not protected_references and not usage.assigned and not usage.reserved,
+        "deletable": not is_closed_by_year(batch) and assigned == 0 and linked_members == 0 and not protected_references and not usage.reserved,
         "numbering_scope_id": batch.numbering_scope_id,
         "numbering_scope_name": getattr(numbering_scope, "name", None),
         "numbering_scope_type": getattr(numbering_scope, "scope_type", None),
@@ -4381,6 +4384,8 @@ def set_initial_card_range(
             status_code=400, detail="FROM must be less than or equal to TO"
         )
     batch_year = _resolve_batch_year(body.year)
+    if batch_year < as_rome_datetime().year:
+        raise HTTPException(status_code=409, detail="Non è possibile aprire un lotto di un'annualità conclusa.")
 
     org = db.query(Organization).filter(Organization.id == org_id).first()
     if not org:
@@ -4477,6 +4482,8 @@ def add_card_batch(
             detail="Il numero iniziale deve essere minore o uguale al finale",
         )
     batch_year = _resolve_batch_year(body.year)
+    if batch_year < as_rome_datetime().year:
+        raise HTTPException(status_code=409, detail="Non è possibile aprire un lotto di un'annualità conclusa.")
 
     org = db.query(Organization).filter(Organization.id == org_id).first()
     if not org:
@@ -4569,9 +4576,9 @@ def get_org_batches(
     """Get all card batches for an organization."""
     _require_super_admin(request, db)
 
-    now = datetime.utcnow()
+    now = as_rome_datetime()
     target_year = _resolve_batch_year(year if year is not None else now.year)
-    next_reset = datetime(target_year + 1, 1, 1)
+    next_reset = datetime(target_year + 1, 1, 1, tzinfo=ROME_TIMEZONE)
 
     org = (
         db.query(Organization)
@@ -4605,7 +4612,7 @@ def get_org_batches(
     return {
         "batches": serialized_batches,
         "current_year": target_year,
-        "next_reset_at": next_reset.isoformat() + "Z",
+        "next_reset_at": next_reset.isoformat(),
         "numbering": serialize_numbering_config(db, org),
         "summary": {
             "total": summary_total,
@@ -4872,6 +4879,8 @@ def patch_org_card_lot(
     payload = body.model_dump(exclude_unset=True)
     if not payload:
         return {"ok": True, "item": _serialize_batch_usage(db, batch)}
+    if is_closed_by_year(batch) and any(key != "notes" for key in payload):
+        require_card_lot_year_open(batch)
 
     current_enabled = _batch_manual_enabled(batch)
     current_notes = _normalize_batch_notes(batch.notes)
@@ -4888,6 +4897,8 @@ def patch_org_card_lot(
 
     range_changed = requested_start != batch.start_no or requested_end != batch.end_no
     year_changed = requested_year != batch.year
+    if year_changed:
+        raise HTTPException(status_code=409, detail="L'annualità di un lotto non è modificabile. Crea un nuovo lotto per il nuovo anno.")
     if range_changed:
         if requested_start <= 0 or requested_end <= 0:
             raise HTTPException(
@@ -4902,7 +4913,7 @@ def patch_org_card_lot(
     linked_members = _count_linked_members_for_batch(db, batch)
     usage = card_batch_availability(db, [batch])[batch.id]
     protected_references = batch_has_linked_terms_or_reservations(db, batch)
-    if (linked_members > 0 or protected_references or usage.assigned or usage.reserved) and (range_changed or year_changed):
+    if (linked_members > 0 or protected_references or usage.assigned or usage.reserved) and range_changed:
         raise HTTPException(
             status_code=409,
             detail="Impossibile modificare il range o l'anno: esistono tessere già assegnate",
@@ -4954,10 +4965,6 @@ def patch_org_card_lot(
             batch.notes = next_notes
             changes["notes"] = next_notes
 
-    if year_changed:
-        batch.year = requested_year
-        changes["year"] = requested_year
-
     if range_changed:
         batch.start_no = requested_start
         batch.end_no = requested_end
@@ -5004,6 +5011,7 @@ def delete_org_card_lot(
     admin = _require_super_admin(request, db)
     lock_card_allocation(db, org_id, datetime.utcnow().year)
     org, batch = _get_organization_and_batch_or_404(db, org_id, lot_id)
+    require_card_lot_year_open(batch)
 
     assigned = _count_assigned_cards_for_batch(db, batch)
     linked_members = _count_linked_members_for_batch(db, batch)

@@ -26,7 +26,7 @@ from app.models import (
     OperationLog,
 )
 from app.services.card_allocation import allocate_next_card, lock_card_allocation
-from app.services.annual_memberships import sync_annual_membership_term
+from app.services.annual_memberships import as_rome_datetime, sync_annual_membership_term
 from app.services.member_membership import (
     MEMBERSHIP_TYPE_ANNUAL,
     apply_membership_defaults,
@@ -419,6 +419,7 @@ def reuse_existing_sumup_checkout(
             and payment.hosted_checkout_url
             and not reservation_expired
         ):
+            reserve_payment_card(db, payment)
             return True
         db.commit()
         raise HTTPException(
@@ -538,7 +539,7 @@ def maybe_fulfill_member_card(
     allocation_year = (
         getattr(payment, "reserved_card_year", None)
         or getattr(payment, "membership_year", None)
-        or datetime.utcnow().year
+        or as_rome_datetime().year
     )
     lock_card_allocation(db, org_id=org.id, year=int(allocation_year))
     if payment is not None and payment.id is not None:
@@ -578,7 +579,7 @@ def maybe_fulfill_member_card(
         settle_paid_reservation_for_existing_card(db, payment, member)
 
     if member.card_year is None:
-        member.card_year = datetime.utcnow().year
+        member.card_year = as_rome_datetime().year
     if not member.joined_at:
         member.joined_at = datetime.utcnow()
     if not getattr(member, "membership_type", None):

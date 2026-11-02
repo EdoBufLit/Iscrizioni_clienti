@@ -4368,6 +4368,8 @@ export type CardMovement = {
   range_end_label?: string;
   quantity: number;
   status_label: string;
+  closed_by_year?: boolean;
+  remaining?: number;
 };
 
 export type CardMovementsResponse = {
@@ -6573,6 +6575,7 @@ export type OrgBatch = {
   is_enabled: boolean;
   is_active: boolean;
   status_label: string;
+  closed_by_year?: boolean;
   notes: string | null;
   total: number;
   assigned: number;
@@ -6641,6 +6644,7 @@ export type CardLotRegistryItem = {
   range_end_label: string;
   quantity: number;
   status_label: string;
+  closed_by_year?: boolean;
   next_no: number | null;
   assigned: number;
   reserved: number;

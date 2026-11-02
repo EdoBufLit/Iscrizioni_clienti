@@ -193,6 +193,7 @@ const mapWhatsAppProviderSettingsToForm = (
 });
 
 const BATCH_DELETE_CONFIRMATION_TEXT = "ELIMINA";
+const isClosedBatch = (batch: OrgBatch): boolean => Boolean(batch.closed_by_year || batch.status_label === "Chiuso per annualità");
 
 const batchStatusClassName = (batch: OrgBatch): string => {
   if (batch.status_label === "Attivo") {
@@ -331,6 +332,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
   };
 
   const openEditBatchDialog = (batch: OrgBatch) => {
+    if (isClosedBatch(batch)) return;
     setBatchActionError("");
     setDeleteBatchTarget(null);
     setDeleteBatchConfirmation("");
@@ -346,6 +348,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
   };
 
   const openDeleteBatchDialog = (batch: OrgBatch) => {
+    if (isClosedBatch(batch)) return;
     setBatchActionError("");
     setEditingBatch(null);
     setEditBatchFormData(null);
@@ -769,6 +772,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
       batchActionSubmitting ||
       !selectedOrg ||
       !editingBatch ||
+      isClosedBatch(editingBatch) ||
       !editBatchFormData
     ) {
       return;
@@ -780,7 +784,6 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
     try {
       const payload: {
         status?: "active" | "inactive";
-        year?: number;
         notes?: string | null;
         range_start?: number;
         range_end?: number;
@@ -795,14 +798,6 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
       const currentNotes = editingBatch.notes ?? null;
       if (nextNotes !== currentNotes) {
         payload.notes = nextNotes;
-      }
-
-      const parsedYear = Number.parseInt(editBatchFormData.year, 10);
-      if (Number.isNaN(parsedYear) || parsedYear < 2000) {
-        throw new Error("Anno lotto non valido");
-      }
-      if (parsedYear !== editingBatch.year) {
-        payload.year = parsedYear;
       }
 
       if (editingBatch.range_editable) {
@@ -843,6 +838,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
       batchActionSubmitting ||
       !selectedOrg ||
       !deleteBatchTarget ||
+      isClosedBatch(deleteBatchTarget) ||
       deleteBatchConfirmation.trim().toUpperCase() !== BATCH_DELETE_CONFIRMATION_TEXT
     ) {
       return;
@@ -1245,10 +1241,10 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                   </div>
                   <div className="sa-lots-summary__item">
                     <SuperAdminIcon name="refresh" className="h-5 w-5" />
-                    <p className="text-neutral-500">Reset annuale</p>
+                    <p className="text-neutral-500">Chiusura magazzino annuale</p>
                     <p className="font-medium text-neutral-800">
                       {nextResetAt
-                        ? `Previsto il ${new Date(nextResetAt).toLocaleDateString("it-IT")}`
+                        ? `Prevista il ${new Date(nextResetAt).toLocaleDateString("it-IT", { timeZone: "Europe/Rome" })}`
                         : "A inizio anno (01/01)"}
                     </p>
                   </div>
@@ -1268,7 +1264,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                   </div>
                   <div className="sa-lots-summary__item">
                     <SuperAdminIcon name="cards" className="h-5 w-5" />
-                    <p className="text-neutral-500">Rimanenti</p>
+                    <p className="text-neutral-500">Disponibili nell'anno</p>
                     <p className="font-semibold text-orange-600 tabular-nums">
                       {batchesSummary?.remaining ?? 0}
                     </p>
@@ -1283,7 +1279,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
               ) : (
                 <>
                   <section className="sa-lots-table">
-                    <h4>Lotti disponibili</h4>
+                    <h4>Lotti e storico</h4>
                   <div className="overflow-x-auto rounded-xl border border-neutral-200/80">
                     <table className="min-w-full text-sm">
                       <thead className="bg-neutral-50/80">
@@ -1294,7 +1290,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                           <th className="px-4 py-3 font-medium text-right">Stato</th>
                           <th className="px-4 py-3 font-medium text-right">Totale</th>
                           <th className="px-4 py-3 font-medium text-right">Assegnate</th>
-                          <th className="px-4 py-3 font-medium text-right">Rimanenti</th>
+                          <th className="px-4 py-3 font-medium text-right">Residuo</th>
                           <th className="px-4 py-3 font-medium text-right">Azioni</th>
                         </tr>
                       </thead>
@@ -1317,9 +1313,9 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                               <span
                                 className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${batchStatusClassName(batch)}`}
                                 title={
-                                  batch.range_editable
+                                  isClosedBatch(batch) ? "Lotto chiuso: anno e residuo restano nello storico" : batch.range_editable
                                     ? undefined
-                                    : "Non modificabile per range o anno: esistono assegnazioni"
+                                    : "Intervallo non modificabile: esistono assegnazioni"
                                 }
                               >
                                 {batch.status_label}
@@ -1334,11 +1330,12 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                                 </div>
                               )}
                             </td>
-                            <td className="px-4 py-3 text-right tabular-nums font-medium text-brand">
+                            <td className={`px-4 py-3 text-right tabular-nums font-medium ${isClosedBatch(batch) ? "text-neutral-500" : "text-brand"}`}>
                               {batch.remaining}
+                              {isClosedBatch(batch) && <div className="text-[11px] font-normal">Storico, non utilizzabile</div>}
                             </td>
                             <td className="px-4 py-3">
-                              <div className="flex justify-end gap-2">
+                              {isClosedBatch(batch) ? <p className="text-right text-xs text-neutral-500">Sola lettura</p> : <div className="flex justify-end gap-2">
                                 <button
                                   type="button"
                                   className="rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-semibold text-neutral-700 transition hover:border-neutral-300 hover:text-neutral-900"
@@ -1359,7 +1356,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                                 >
                                   Elimina
                                 </button>
-                              </div>
+                              </div>}
                             </td>
                           </tr>
                         ))}
@@ -1370,10 +1367,10 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                   <div className="sa-lots-info">
                     <SuperAdminIcon name="clock" className="h-5 w-5" />
                     <div>
-                      <p>Informazioni sul reset annuale</p>
+                      <p>Chiusura annuale del magazzino</p>
                       <span>
-                        Il conteggio delle tessere viene azzerato automaticamente il {nextResetAt ? new Date(nextResetAt).toLocaleDateString("it-IT") : "01/01"}.
-                        Al reset, lotti futuri verranno attivati in sequenza in base alla data.
+                        Dal 1° gennaio i lotti dell'anno precedente sono chiusi, anche con tessere residue. Anno, acquisti e residui restano nello storico.
+                        Per il nuovo anno occorre un nuovo acquisto: le tessere residue non vengono trasferite.
                       </span>
                     </div>
                   </div>
@@ -2238,7 +2235,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
               <div>
                 <h4 className="text-lg font-semibold text-neutral-900">Modifica lotto</h4>
                 <p className="mt-1 text-sm text-neutral-500">
-                  Aggiorna stato, anno, note e, se consentito, il range del lotto.
+                  Aggiorna stato, note e, se consentito, il range del lotto. L'annualità resta quella dell'acquisto.
                 </p>
               </div>
               <button
@@ -2278,19 +2275,11 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                   <input
                     type="number"
                     min="2000"
-                    title={
-                      editingBatch.range_editable
-                        ? undefined
-                        : "Non modificabile perché esistono assegnazioni"
-                    }
-                    disabled={!editingBatch.range_editable}
+                    title="L'annualità di un lotto già creato non è modificabile"
+                    disabled
+                    readOnly
                     className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-100"
                     value={editBatchFormData.year}
-                    onChange={(event) =>
-                      setEditBatchFormData((prev) =>
-                        prev ? { ...prev, year: event.target.value } : prev
-                      )
-                    }
                   />
                 </div>
               </div>

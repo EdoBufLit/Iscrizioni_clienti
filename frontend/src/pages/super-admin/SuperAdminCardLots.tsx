@@ -40,12 +40,13 @@ const statusTone = (statusLabel: string): SuperAdminTone => {
   if (statusLabel === "Attivo") return "success";
   if (statusLabel === "Esaurito") return "warning";
   if (statusLabel === "Rilasciato") return "muted";
+  if (statusLabel === "Chiuso per annualità") return "muted";
   if (statusLabel === "Disattivo") return "danger";
   return "default";
 };
 
 const lotUsage = (item: CardLotRegistryItem) => {
-  const remaining = item.status_label === "Attivo" ? Math.max(0, item.remaining) : 0;
+  const remaining = !item.closed_by_year && item.status_label === "Attivo" ? Math.max(0, item.remaining) : 0;
   const percent = item.quantity > 0 ? Math.min(100, Math.round(((item.assigned + item.reserved) / item.quantity) * 100)) : 0;
   return { assigned: item.assigned, reserved: item.reserved, remaining, percent };
 };
@@ -110,9 +111,9 @@ const SuperAdminCardLots = () => {
         acc.totalLots += 1;
         acc.totalCards += item.quantity;
         acc.remaining += usage.remaining;
-        if (item.status_label === "Attivo") acc.activeLots += 1;
+        if (!item.closed_by_year && item.status_label === "Attivo") acc.activeLots += 1;
         if (item.status_label === "Esaurito") acc.exhaustedLots += 1;
-        if (item.released_at) acc.releasedLots += 1;
+        if (item.released_at || item.closed_by_year || item.status_label === "Chiuso per annualità") acc.releasedLots += 1;
         if ((item.numbering_scope_name || "").toLowerCase().includes("central")) acc.shared += 1;
         else acc.dedicated += 1;
         return acc;
@@ -220,6 +221,7 @@ const SuperAdminCardLots = () => {
               <option value="Esaurito">Esauriti</option>
               <option value="Rilasciato">Storici</option>
               <option value="Disattivo">Disattivi</option>
+              <option value="Chiuso per annualità">Chiusi per annualità</option>
             </select>
           </div>
           <div className="sa-toolbar__field">
@@ -310,11 +312,11 @@ const SuperAdminCardLots = () => {
                         </SuperAdminStatusChip>
                       </td>
                       <td className="px-5 py-4">
-                        <SuperAdminProgressMeter
+                        {item.closed_by_year || item.status_label === "Chiuso per annualità" ? <div className="text-sm text-neutral-500"><p>{Math.max(0, item.remaining).toLocaleString("it-IT")} tessere di residuo storico</p><p className="mt-1 text-xs">Non utilizzabili; annualità {item.year} conservata.</p></div> : <SuperAdminProgressMeter
                           value={usage.percent}
                           tone={usage.remaining === 0 ? "warning" : "success"}
                           label={`${usage.remaining.toLocaleString("it-IT")} disponibili`}
-                        />
+                        />}
                         {usage.reserved > 0 ? <p className="mt-1 text-xs text-neutral-500">{usage.reserved.toLocaleString("it-IT")} prenotate</p> : null}
                       </td>
                       <td className="px-5 py-4 text-sm text-neutral-700">{item.numbering_scope_name || "Legacy"}</td>
