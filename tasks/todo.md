@@ -6376,9 +6376,10 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - [x] Verificare lotti, prenotazioni e acquisti: nessun trasferimento di stock o residui tra annualità; chiusura dei lotti precedenti al passaggio d'anno italiano.
 - [x] Collegare la chiusura automatica allo scheduler e impedire riapertura/assegnazione di lotti passati, conservando quantità, numeri, ordini e storico.
 - [x] Allineare stati e azioni delle viste magazzino; testare confini temporali, recupero e retry, tessere già emesse e nuovi acquisti2027.
-- [ ] Pubblicare su Main e verificare deploy e runtime; aggiornare runbook e rapporto con la regola chiarita dall'utente.
+- [x] Pubblicare su Main e verificare deploy e runtime; aggiornare runbook e rapporto con la regola chiarita dall'utente.
 
 ### Review chiusura lotti — 2 novembre 2026
 - Lotti precedenti chiusi dal1gennaio italiano, residui nello storico dell'annooriginario e disponibilitàcorrente separata; nessun trasferimento o riciclo. Annoimmutabile e guardie antiuso/riapertura anche prima dello scheduler. Nuovo lotto2027 solo dai nuovi acquisti; nessuna necessità di popolare anticipatamente il magazzino.
 - Backend1141passed/13skipped, frontend392passed/61file e build riusciti; reviewindipendente completata. Prove su confineUTC/Roma, pagamentoheldconfermato, ritardoordine2026, blocchiAPI,tenant,scope e invarianti su tutti i dati storici. Nessuna migrazione o dipendenza nuova.
 - Browser locale con dati sintetici: lotto2026chiuso con52tessere residue nonutilizzabili, desktop/mobile390px leggibili senzaoverflow. ServerQAfermato, schedechiuse e viewport ripristinato; nessuna modifica a dati reali perQA.
+- Pubblicato0a91388 su Main; pipeline41533150681 e deploy125579084885 riusciti, Final canary passed alle23:05 del2novembre2026 Europe/Rome.62controlliHTTPS/hashasset superati; sette servizi healthy sulnuovoSHA,0restart/OOM, schema invariato. Jobchiusuralotti realmente eseguito conoktrue/errori0; zero lotti di annualità precedenti ancora abilitati in produzione. Rapporto docs/card_lot_year_closure_release_2026-11-02.md.

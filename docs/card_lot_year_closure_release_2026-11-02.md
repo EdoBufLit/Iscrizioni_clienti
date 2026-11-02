@@ -24,4 +24,12 @@ Le tessere già emesse sono indipendenti dall'apertura del lotto: quelle annuali
 - Browser reale con dati sintetici: lotto 2026 chiuso e 52 tessere residue, leggibile su desktop e 390 px senza overflow. Nessun dato o messaggio reale usato nel collaudo.
 - Nessuna migrazione né dipendenza nuova. Runbook aggiornato in [annual-membership-operations.md](annual-membership-operations.md).
 
-Suite finale: **1.141 test backend superati, 13 saltati; 392 test frontend su 61 file**, build TypeScript/Vite/PWA riuscita. Review indipendente completata. Il risultato del deploy viene aggiunto dopo la verifica online.
+Suite finale: **1.141 test backend superati, 13 saltati; 392 test frontend su 61 file**, build TypeScript/Vite/PWA riuscita. Review indipendente completata.
+
+## Rilascio verificato
+
+- Codice pubblicato su `Main`: `0a91388e32ac29124e65c490ca34a7d24d731f6c`.
+- [Pipeline 41533150681](https://github.com/EdoBufLit/Iscrizioni_clienti/actions/runs/41533150681) e job deploy 125579084885 riusciti. `Final canary passed` verificato alle 23:05 del 2 novembre 2026 Europe/Rome.
+- 62 controlli HTTPS e hash degli asset superati. Sette servizi sul nuovo SHA, tutti healthy, con zero restart/OOM. Schema invariato `20261026_06_member_bulk`.
+- Il job di chiusura lotti ha eseguito il primo ciclo con successo e zero errori; la lettura della produzione conferma zero lotti di annualità precedenti ancora abilitati. Le tessere 2026 restano valide fino al 1 gennaio 2027 incluso; nessuna cancellazione di soci o dati.
+- Server QA fermato, schede temporanee chiuse e viewport ripristinato. Evidenze private in `output/lot-closure-20261102/` e screenshot in `output/annual-rollover-20261101/closed-lot-mobile.jpg`.
