@@ -122,7 +122,15 @@ export default defineConfig(({ mode }) => ({
     }),
   ],
   base: "/",
-  build: { manifest: true },
+  build: {
+    manifest: true,
+    rollupOptions: { output: { manualChunks(id) {
+      if (!id.includes("node_modules")) return;
+      if (id.includes("/framer-motion/") || id.includes("/motion-dom/") || id.includes("/motion-utils/") ) return "vendor-motion";
+      if (id.includes("/gsap/")) return "vendor-gsap";
+      if (id.includes("/react-router/") || id.includes("/react-router-dom/") || id.includes("/@remix-run/router/")) return "vendor-router";
+    } } },
+  },
   esbuild: {
     drop: mode === "production" ? ["console", "debugger"] : [],
   },

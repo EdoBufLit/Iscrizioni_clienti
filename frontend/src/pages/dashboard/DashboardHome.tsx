@@ -5,7 +5,9 @@ import {
   isMemberCardPreviewData,
   type MemberCardPreviewData,
 } from "../../components/cards/MemberCardPreview";
+import { readCachedApi, subscribeApiCache } from "../../lib/swrCache";
 import Skeleton from "../../components/ui/Skeleton";
+import MemberOnboardingTimeline from "./MemberOnboardingTimeline";
 import TemporaryMembershipPanel from "./TemporaryMembershipPanel";
 import { formatMemberDate } from "../../lib/memberDates";
 import "./MemberDashboard.css";
@@ -121,20 +123,32 @@ function renewalDescription(membership: MemberMembershipResponse) {
 }
 
 const DashboardHome = () => {
-  const { user, loading, profileError, reloadProfile } = useOutletContext<DashboardContext>();
+  const { user, loading, profileError, reloadProfile, offline = false } = useOutletContext<DashboardContext>();
   const [cardFlipped, setCardFlipped] = useState(false);
   const [walletLoading, setWalletLoading] = useState(false);
   const [walletError, setWalletError] = useState<string | null>(null);
-  const [membership, setMembership] = useState<MemberMembershipResponse | null>(null);
+  const [membership, setMembership] = useState<MemberMembershipResponse | null>(() => readCachedApi<MemberMembershipResponse>("member:membership") ?? null);
   const [renewalBusy, setRenewalBusy] = useState(false);
   const renewalLock = useRef(false);
   const membershipRequest = useRef(0);
+  const notificationsRequest = useRef(0);
   const [renewalMessage, setRenewalMessage] = useState<string | null>(null);
   const [renewalError, setRenewalError] = useState<string | null>(null);
   const [notificationsError, setNotificationsError] = useState<string | null>(null);
-  const [notifications, setNotifications] = useState<MemberAreaNotification[]>([]);
+  const [notifications, setNotifications] = useState<MemberAreaNotification[]>(() => readCachedApi<{ items: MemberAreaNotification[] }>("member:notifications:?limit=5")?.items ?? []);
+
+  useEffect(() => subscribeApiCache(key => {
+    if (key === "member:membership") {
+      const cached = readCachedApi<MemberMembershipResponse>(key);
+      if (cached) setMembership(cached);
+    } else if (key === "member:notifications:?limit=5") {
+      const cached = readCachedApi<{ items: MemberAreaNotification[] }>(key);
+      if (cached) setNotifications(cached.items);
+    }
+  }), []);
 
   const loadMembership = async () => {
+    if (offline) return;
     const generation = ++membershipRequest.current;
     try {
       const result = await fetchMemberMembership();
@@ -148,21 +162,27 @@ const DashboardHome = () => {
   };
 
   const loadNotifications = async () => {
+    if (offline) return;
+    const generation = ++notificationsRequest.current;
     try {
       const payload = await fetchMemberNotifications({ limit: 5 });
+      if (generation !== notificationsRequest.current) return;
       setNotifications(payload.items);
       setNotificationsError(null);
     } catch (error) {
+      if (generation !== notificationsRequest.current) return;
       if (error instanceof AuthError) return;
       setNotificationsError(error instanceof Error ? error.message : "Notifiche non disponibili");
     }
   };
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || offline) return;
+    setRenewalError(null);
+    setNotificationsError(null);
     void Promise.all([loadMembership(), loadNotifications()]);
-    return () => { membershipRequest.current += 1; };
-  }, [user?.id, user?.card_no, user?.membership_type, user?.status]);
+    return () => { membershipRequest.current += 1; notificationsRequest.current += 1; };
+  }, [user?.id, user?.card_no, user?.membership_type, user?.status, offline]);
 
   const statusInfo = user
     ? STATUS_STYLE[memberAccountStatus(user)] ?? { label: "Iscrizione in verifica", color: "border-neutral-200 bg-neutral-50 text-neutral-600" }
@@ -173,14 +193,14 @@ const DashboardHome = () => {
     ? cardDataCandidate
     : {};
   const canShowGoogleWalletButton = Boolean(
-    user &&
+    !offline && user &&
       cardData.cardNumber != null &&
       cardData.verificationUrl &&
       memberAccountStatus(user) === "active" && ["attiva", "active"].includes(String(cardData.cardStatus ?? "").toLowerCase()),
   );
 
   const handleAddToGoogleWallet = async () => {
-    if (walletLoading) return;
+    if (offline || walletLoading) return;
     setWalletError(null);
     setWalletLoading(true);
     try {
@@ -202,7 +222,7 @@ const DashboardHome = () => {
   };
 
   const handleRenewal = async () => {
-    if (renewalLock.current) return;
+    if (offline || renewalLock.current) return;
     renewalLock.current = true;
     setRenewalBusy(true);
     setRenewalError(null);
@@ -238,6 +258,7 @@ const DashboardHome = () => {
   };
 
   const handleNotificationRead = async (notificationId: number) => {
+    if (offline) return;
     try {
       await markMemberNotificationRead(notificationId);
       window.dispatchEvent(new Event(MEMBER_NOTIFICATIONS_UPDATED));
@@ -289,10 +310,10 @@ const DashboardHome = () => {
                 {walletLoading ? "Generazione in corso…" : "Aggiungi a Google Wallet"}
               </button>
             ) : null}
-            {walletError ? <p className="member-home__error" role="alert">{walletError}</p> : null}
+            {!offline && walletError ? <p className="member-home__error" role="alert">{walletError}</p> : null}
           </section>
 
-          {renewalNeeded && membership ? (
+          {!offline && renewalNeeded && membership ? (
             <section className="surface member-home__renewal" aria-labelledby="membership-renewal-title">
               <div>
                 <h2 id="membership-renewal-title">{membership.renewal?.card_no != null ? `Rinnovo ${membership.renewal.membership_year} completato` : "Rinnova la tessera"}</h2>
@@ -303,11 +324,12 @@ const DashboardHome = () => {
               </button> : null}
             </section>
           ) : null}
-          {renewalMessage ? <p className="member-home__feedback" role="status">{renewalMessage}</p> : null}
-          {renewalError ? <p className="member-home__error" role="alert">{renewalError}</p> : null}
-          {!validCard ? <TemporaryMembershipPanel onIssued={reloadProfile} /> : null}
+          {!offline && renewalMessage ? <p className="member-home__feedback" role="status">{renewalMessage}</p> : null}
+          {!offline && renewalError ? <p className="member-home__error" role="alert">{renewalError}</p> : null}
+          {["pending_docs", "pending_verification", "pending_cards"].includes(user.status) ? <MemberOnboardingTimeline user={user} /> : null}
+          {!offline && !validCard ? <TemporaryMembershipPanel onIssued={reloadProfile} /> : null}
 
-          {notifications.length ? (
+          {!offline && notifications.length ? (
             <section className="surface member-home__notifications" aria-labelledby="member-notifications-title">
               <h2 id="member-notifications-title">Comunicazioni</h2>
               {notificationsError ? <p className="member-home__error" role="alert">{notificationsError}</p> : null}

@@ -9,7 +9,7 @@ vi.mock("../../lib/api", async original => ({ ...await original<typeof import(".
 vi.mock("./TemporaryMembershipPanel", () => ({ default: () => <section aria-label="Richiesta temporanea">Temporanea disponibile</section> }));
 vi.mock("../../components/cards/MemberCardPreview", () => ({ isMemberCardPreviewData: () => true, MemberCardPreview: ({ flipped }: { flipped: boolean }) => <div data-testid="digital-card">{flipped ? "QR tessera" : "Fronte tessera"}</div> }));
 const member: api.MemberProfile = { id: 1, first_name: "Anna", last_name: "Collaudo", email: "anna@example.test", phone: null, fiscal_code: null, status: "active", card_no: 123, card_status: "attiva", card_year: 2026, membership_type: "annual", joined_at: "2026-07-01", valid_until: "2027-01-01T00:00:00Z", card_verification_url: "https://assonam.it/v/fixture", organization: { id: 2, name: "Club Collaudo", slug: "club" } };
-function mount(user = member, reloadProfile = vi.fn()) { const context: DashboardContext = { user, loading: false, profileError: null, reloadProfile }; return render(<MemoryRouter><Routes><Route element={<Outlet context={context} />}><Route path="*" element={<DashboardHome />} /></Route></Routes></MemoryRouter>); }
+function mount(user = member, reloadProfile = vi.fn(), offline = false) { const context: DashboardContext = { user, loading: false, profileError: null, reloadProfile, offline }; return render(<MemoryRouter><Routes><Route element={<Outlet context={context} />}><Route path="*" element={<DashboardHome />} /></Route></Routes></MemoryRouter>); }
 const term2027: api.AnnualMembershipTerm = { id: 9, membership_year: 2027, starts_on: "2027-01-01", valid_through: "2028-01-01", status: "due", fee_amount: 30, currency: "EUR", card_no: null, card_year: null, issued_at: null, payment: null };
 beforeEach(() => {
   vi.resetAllMocks();
@@ -18,6 +18,24 @@ beforeEach(() => {
 });
 
 describe("Riepilogo socio", () => {
+  it("mantiene QR e tessera offline senza richieste ausiliarie o azioni che richiedono rete", async () => {
+    vi.mocked(api.fetchMemberMembership).mockRejectedValue(new TypeError("Failed to fetch"));
+    vi.mocked(api.fetchMemberNotifications).mockRejectedValue(new TypeError("Failed to fetch"));
+    mount(member, vi.fn(), true);
+    fireEvent.click(screen.getByRole("button", { name: "Mostra QR" }));
+    expect(screen.getByText("QR tessera")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Aggiungi a Google Wallet" })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    expect(api.fetchMemberMembership).not.toHaveBeenCalled();
+    expect(api.fetchMemberNotifications).not.toHaveBeenCalled();
+  });
+  it("conserva gli errori effettivi e il Wallet quando il profilo è online", async () => {
+    vi.mocked(api.fetchMemberMembership).mockRejectedValue(new Error("Servizio rinnovi non disponibile"));
+    mount();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Servizio rinnovi non disponibile");
+    expect(screen.getByRole("button", { name: "Aggiungi a Google Wallet" })).toBeVisible();
+    expect(api.fetchMemberMembership).toHaveBeenCalledOnce();
+  });
   it("presenta per prima la tessera e nasconde temporanea e riepiloghi ripetuti se valida", async () => {
     mount(); await waitFor(() => expect(api.fetchMemberMembership).toHaveBeenCalled());
     expect(document.querySelector('[data-tour="member-dashboard-home"] section')?.getAttribute("aria-labelledby")).toBe("member-digital-card-title");

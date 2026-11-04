@@ -4,8 +4,8 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import String, cast, func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy import String, and_, cast, func, or_
+from sqlalchemy.orm import Session, joinedload
 
 from app import audit
 from app.db import get_db
@@ -13,6 +13,7 @@ from app.middleware import get_client_ip, get_request_id
 from app.models import (
     AdminRole,
     AdminUser,
+    Booking,
     Member,
     MemberAttendance,
 )
@@ -24,6 +25,7 @@ from app.services.attendance import (
     serialize_utc,
 )
 from app.services.attendance_manual import check_in_member_manually, search_attendance_members
+from app.services.booking_event_availability import find_form_booking_series_for_time, is_form_date_closed
 from app.services.org_admin_sessions import get_current_org_admin_from_request
 
 
@@ -66,6 +68,58 @@ def check_in_member(
     return _check_in_response(db, admin=admin, result=result, request=request)
 
 
+def _find_member_active_booking_for_day(
+    db: Session,
+    *,
+    org_id: int,
+    member_id: int,
+    attendance_date: date,
+) -> dict | None:
+    member = db.query(Member).filter(Member.id == member_id, Member.org_id == org_id).first()
+    filters = [Booking.member_id == member_id]
+    if member and member.email:
+        filters.append(and_(Booking.member_id.is_(None), func.lower(func.trim(Booking.customer_email)) == member.email.strip().lower()))
+    booking = (
+        db.query(Booking)
+        .options(
+            joinedload(Booking.room),
+            joinedload(Booking.table),
+            joinedload(Booking.form),
+        )
+        .filter(
+            Booking.association_id == org_id,
+            Booking.booking_date == attendance_date,
+            Booking.status.in_(["confirmed", "seated"]),
+            or_(*filters),
+        )
+        .order_by(Booking.booking_time.asc().nulls_last(), Booking.id.desc())
+        .all()
+    )
+    for candidate in booking:
+        if not candidate.form or not candidate.booking_time:
+            continue
+        if is_form_date_closed(db, form=candidate.form, date_value=attendance_date):
+            continue
+        series = find_form_booking_series_for_time(db, form=candidate.form, booking_date=attendance_date, booking_time=candidate.booking_time[:5])
+        if series and not series.is_closed:
+            booking = candidate
+            break
+    else:
+        return None
+    return {
+        "id": booking.id,
+        "status": booking.status,
+        "booking_date": booking.booking_date.isoformat() if booking.booking_date else None,
+        "booking_time": booking.booking_time,
+        "party_size": booking.party_size,
+        "room_id": booking.room_id,
+        "room_name": booking.room.name if booking.room else None,
+        "table_id": booking.table_id,
+        "table_name": booking.table.name if booking.table else None,
+        "event_title": series.title,
+    }
+
+
 def _check_in_response(
     db: Session,
     *,
@@ -74,8 +128,18 @@ def _check_in_response(
     request: Request,
 ):
     attendance = result.item
+    active_booking = _find_member_active_booking_for_day(
+        db,
+        org_id=admin.org_id,
+        member_id=attendance.member_id,
+        attendance_date=attendance.attendance_date,
+    )
     if not result.created:
-        return {"created": False, "item": serialize_attendance(attendance)}
+        return {
+            "created": False,
+            "item": serialize_attendance(attendance),
+            "active_booking": active_booking,
+        }
 
     audit.log_operation(
         db,
@@ -100,7 +164,11 @@ def _check_in_response(
         user_agent=request.headers.get("user-agent"),
     )
     db.commit()
-    return {"created": True, "item": serialize_attendance(attendance)}
+    return {
+        "created": True,
+        "item": serialize_attendance(attendance),
+        "active_booking": active_booking,
+    }
 
 
 @router.get("/members")

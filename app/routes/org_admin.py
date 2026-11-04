@@ -6739,6 +6739,7 @@ def download_member_document(
 def download_document(
     request: Request,
     doc_id: int,
+    preview: bool = Query(default=False),
     db: Session = Depends(get_db),
 ):
     admin = _get_current_org_admin(request, db)
@@ -6757,8 +6758,12 @@ def download_document(
     if not os.path.exists(full_path):
         raise HTTPException(status_code=404, detail="File missing on disk")
 
+    safe_inline_types = {"application/pdf", "image/jpeg", "image/png", "image/webp", "image/gif"}
+    media_type = doc.mime_type or "application/octet-stream"
     return FileResponse(
-        full_path, filename=doc.original_filename, content_disposition_type="attachment"
+        full_path, filename=doc.original_filename, media_type=media_type,
+        content_disposition_type="inline" if preview and media_type in safe_inline_types else "attachment",
+        headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
     )
 
 
@@ -7530,9 +7535,15 @@ def export_members_csv(
 def export_members_xlsx(
     request: Request,
     member_id: int | None = Query(default=None, gt=0),
+    status: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    access: str | None = Query(default=None),
+    source: str | None = Query(default=None),
+    docs: str | None = Query(default=None),
+    order: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
-    """Export a styled, filterable member register for Excel."""
+    """Export the authorized member register, optionally using the list filters."""
     admin = _get_current_org_admin(request, db)
     if not admin:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -7547,6 +7558,9 @@ def export_members_xlsx(
         members = [_get_org_admin_member_or_404(
             db=db, admin=admin, member_id=member_id, include_deleted=False,
         )]
+    elif any(value is not None for value in (status, q, access, source, docs, order)):
+        query = build_org_member_query(db, org_id=admin.org_id, status=status, access=access, source=source, docs=docs, order=order, now=now)
+        members, _, _ = search_member_page(query, normalize_member_search(q), limit=max(1, query.count()), offset=0)
     else:
         members = (
             db.query(Member)
@@ -9105,13 +9119,14 @@ def patch_org_admin_booking(
         booking.party_size = body.party_size
 
     next_booking_status = str(body.status or "").strip().lower()
+    # Status-only PATCH requests preserve assignments; explicit null still clears them.
     update_booking_status(
         db,
         booking=booking,
         next_status=body.status,
         created_by_user_id=admin.id,
-        room_id=body.room_id,
-        table_id=body.table_id,
+        room_id=body.room_id if "room_id" in submitted_fields else booking.room_id,
+        table_id=body.table_id if "table_id" in submitted_fields else booking.table_id,
         notes=body.notes,
         notify_customer=body.notify_customer,
     )

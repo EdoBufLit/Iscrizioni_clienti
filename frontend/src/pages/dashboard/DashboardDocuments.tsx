@@ -1,6 +1,7 @@
+import { useApiCache } from "../../hooks/useApiCache";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { AuthError, downloadMemberOrganizationStatute, fetchMemberDocuments, fetchMemberOrganizationStatute, uploadMemberDocument, type MemberDocumentItem, type MemberOrganizationStatuteResponse } from "../../lib/api";
+import { AuthError, downloadMemberOrganizationStatute, fetchMemberDocuments, fetchMemberOrganizationStatute, uploadMemberDocument, type MemberDocumentsResponse, type MemberDocumentItem, type MemberOrganizationStatuteResponse } from "../../lib/api";
 import { useToast } from "../../components/ui/ToastProvider";
 import { formatMemberDate } from "../../lib/memberDates";
 import { publicUploadHint, validatePublicDocumentUpload } from "../../lib/uploadValidation";
@@ -15,20 +16,22 @@ export default function DashboardDocuments() {
   const location = useLocation();
   const [params] = useSearchParams();
   const targetDocument = Number(params.get("document_id"));
-  const [items, setItems] = useState<MemberDocumentItem[]>([]);
-  const [allowedTypes, setAllowedTypes] = useState<string[]>(["identity", "fiscal_code"]);
-  const [requiredTypes, setRequiredTypes] = useState<string[]>([]);
-  const [uploadableTypes, setUploadableTypes] = useState<string[] | null>(null);
-  const [loading, setLoading] = useState(true);
+  const cachedDocuments = useApiCache<MemberDocumentsResponse>("member:documents");
+  const cachedStatute = useApiCache<MemberOrganizationStatuteResponse>("member:statute");
+  const [items, setItems] = useState<MemberDocumentItem[]>(() => cachedDocuments?.items ?? []);
+  const [allowedTypes, setAllowedTypes] = useState<string[]>(() => cachedDocuments?.allowed_types ?? ["identity", "fiscal_code"]);
+  const [requiredTypes, setRequiredTypes] = useState<string[]>(() => cachedDocuments?.required_types ?? []);
+  const [uploadableTypes, setUploadableTypes] = useState<string[] | null>(() => cachedDocuments?.uploadable_types ?? null);
+  const [loading, setLoading] = useState(!cachedDocuments);
   const [error, setError] = useState("");
   const [files, setFiles] = useState<Record<string, File | null>>({});
   const [fileErrors, setFileErrors] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState<string | null>(null);
   const [sent, setSent] = useState<Record<string, string>>({});
   const [revision, setRevision] = useState(0);
-  const [statute, setStatute] = useState<MemberOrganizationStatuteResponse | null>(null);
+  const [statute, setStatute] = useState<MemberOrganizationStatuteResponse | null>(() => cachedStatute ?? null);
   const [statuteError, setStatuteError] = useState("");
-  const [statuteLoading, setStatuteLoading] = useState(true);
+  const [statuteLoading, setStatuteLoading] = useState(!cachedStatute);
   const [statuteDownloading, setStatuteDownloading] = useState(false);
   const uploadLock = useRef(false);
   const mounted = useRef(true);
@@ -37,7 +40,7 @@ export default function DashboardDocuments() {
 
   const load = useCallback(async (refresh = false) => {
     const sequence = ++requestSequence.current;
-    if (!refresh) setLoading(true);
+    if (!refresh && !cachedDocuments) setLoading(true);
     setError("");
     try {
       const result = await fetchMemberDocuments();
@@ -57,12 +60,22 @@ export default function DashboardDocuments() {
     mounted.current = true;
     let active = true;
     void load();
-    setStatuteLoading(true);
+    if (!cachedStatute) setStatuteLoading(true);
     void fetchMemberOrganizationStatute().then(result => { if (active && mounted.current) setStatute(result); })
       .catch(reason => { if (active && mounted.current) { if (reason instanceof AuthError) navigate("/login", { replace: true }); else setStatuteError(reason instanceof Error ? reason.message : "Statuto non disponibile."); } })
       .finally(() => { if (active && mounted.current) setStatuteLoading(false); });
     return () => { active = false; mounted.current = false; requestSequence.current += 1; };
   }, [load, navigate, location.key]);
+
+  useEffect(() => {
+    if (!cachedDocuments) return;
+    setItems(cachedDocuments.items ?? []);
+    setRequiredTypes(cachedDocuments.required_types ?? []);
+    setAllowedTypes(cachedDocuments.allowed_types ?? ["identity", "fiscal_code"]);
+    setUploadableTypes(cachedDocuments.uploadable_types ?? null);
+    setLoading(false);
+  }, [cachedDocuments]);
+  useEffect(() => { if (cachedStatute) { setStatute(cachedStatute); setStatuteLoading(false); } }, [cachedStatute]);
 
   const documents = useMemo(() => {
     const groups = new Map<string, MemberDocumentItem[]>();

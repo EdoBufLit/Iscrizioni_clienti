@@ -1,9 +1,12 @@
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import type { IScannerControls } from "@zxing/browser";
 import {
   checkInOrgAdminAttendance,
   fetchOrgAdminAttendances,
+  updateOrgAdminBooking,
   type OrgAdminAttendance,
+  type OrgAdminCheckInActiveBooking,
 } from "../../lib/api";
 import {
   cameraAccessErrorMessage,
@@ -67,7 +70,11 @@ const OrgAdminAttendancePage = () => {
   const [lastResult, setLastResult] = useState<{
     created: boolean;
     item: OrgAdminAttendance;
+    active_booking?: OrgAdminCheckInActiveBooking | null;
   } | null>(null);
+  const [seatingBooking, setSeatingBooking] = useState(false);
+  const seatingLock = useRef(false);
+  const [seatingError, setSeatingError] = useState<{ bookingId: number; message: string } | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const scannerControlsRef = useRef<IScannerControls | null>(null);
   const scanLockedRef = useRef(false);
@@ -231,13 +238,40 @@ const OrgAdminAttendancePage = () => {
     void registerPresence(manualValue);
   };
 
-  const handleMemberRegistered = (response: { created: boolean; item: OrgAdminAttendance }) => {
+  const handleMemberRegistered = (response: {
+    created: boolean;
+    item: OrgAdminAttendance;
+    active_booking?: OrgAdminCheckInActiveBooking | null;
+  }) => {
     setLastResult(response);
     setScanError("");
     setSearch("");
     setShowSearchModal(false);
     setSelectedDay(response.item.attendance_date);
     void loadAttendances(response.item.attendance_date, "");
+  };
+
+  const handleMarkBookingSeated = async (booking: OrgAdminCheckInActiveBooking) => {
+    if (seatingLock.current) return;
+    seatingLock.current = true;
+    setSeatingError(null);
+    setSeatingBooking(true);
+    try {
+      await updateOrgAdminBooking(booking.id, { status: "seated" });
+      setLastResult((prev) =>
+        prev && prev.active_booking?.id === booking.id
+          ? {
+              ...prev,
+              active_booking: { ...prev.active_booking, status: "seated" },
+            }
+          : prev,
+      );
+    } catch (error) {
+      setSeatingError({ bookingId: booking.id, message: error instanceof Error ? error.message : "Impossibile aggiornare la prenotazione. Riprova." });
+    } finally {
+      seatingLock.current = false;
+      setSeatingBooking(false);
+    }
   };
 
   const recentItems = items.slice(0, 3);
@@ -424,6 +458,57 @@ const OrgAdminAttendancePage = () => {
                   Scansiona
                 </button>
               </div>
+              {lastResult.active_booking ? (
+                <div className="mt-3 rounded-xl border border-[var(--oa-line-strong)] bg-[var(--oa-panel)] p-3 text-[var(--oa-text)]">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--oa-brand-strong)]">
+                        Prenotazione confermata per oggi
+                      </p>
+                      <p className="mt-0.5 text-sm font-bold">
+                        {lastResult.active_booking.event_title || "Prenotazione tavolo"}
+                        {lastResult.active_booking.booking_time
+                          ? ` · Ore ${lastResult.active_booking.booking_time.slice(0, 5)}`
+                          : ""}
+                        {lastResult.active_booking.party_size
+                          ? ` · ${lastResult.active_booking.party_size} pers.`
+                          : ""}
+                      </p>
+                      <p className="mt-0.5 text-xs text-[var(--oa-muted)]">
+                        {lastResult.active_booking.room_name || "Sala non assegnata"}
+                        {lastResult.active_booking.table_name
+                          ? ` · Tavolo ${lastResult.active_booking.table_name}`
+                          : " · Tavolo da assegnare"}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {lastResult.active_booking.status !== "seated" &&
+                      lastResult.active_booking.status !== "completed" ? lastResult.active_booking.table_id ? (
+                        <button
+                          type="button"
+                          disabled={seatingBooking}
+                          onClick={() =>
+                            lastResult.active_booking &&
+                            void handleMarkBookingSeated(lastResult.active_booking)
+                          }
+                          className="btn-primary !min-h-11 !px-3 !py-1.5 !text-xs font-bold"
+                        >
+                          {seatingBooking ? "Aggiorno..." : "Segna seduto al tavolo"}
+                        </button>
+                      ) : null : (
+                        <StatusChip tone="success">Già seduto al tavolo</StatusChip>
+                      )}
+                      {seatingError?.bookingId === lastResult.active_booking.id && <p role="alert" className="text-sm text-red-600">{seatingError.message}</p>}
+                      <Link
+                        to={`/org-admin/prenotazioni?section=agenda&date=${lastResult.item.attendance_date}&bookingId=${lastResult.active_booking.id}`}
+                        className="btn-ghost !min-h-11 !px-2.5 !py-1.5 !text-xs font-semibold"
+                      >
+                        {lastResult.active_booking.table_id ? "Apri tavolo →" : "Assegna tavolo →"}
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : null}
 

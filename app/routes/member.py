@@ -6,8 +6,9 @@ from sqlalchemy import func, update
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime, timedelta
 from typing import Literal
+from zoneinfo import ZoneInfo
 from app.db import get_db
-from app.models import Booking, Member, TokenType, MemberDocument, MemberStatus, PaymentMethod, Organization, AdminUser, AdminRole, DocStatus, SignupSource, MemberContactChange
+from app.models import Booking, Form as FormModel, Member, TokenType, MemberDocument, MemberStatus, PaymentMethod, Organization, AdminUser, AdminRole, DocStatus, SignupSource, MemberContactChange
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
 from app.utils import hash_token
@@ -999,7 +1000,36 @@ def list_member_bookings(
         .limit(50)
         .all()
     )
-    return {"items": [serialize_member_booking(booking) for booking in bookings]}
+    org = db.query(Organization).filter(Organization.id == member.org_id).first()
+    today = datetime.now(ZoneInfo("Europe/Rome")).date()
+    available_forms = (
+        db.query(FormModel)
+        .filter(
+            FormModel.association_id == member.org_id,
+            FormModel.is_active.is_(True),
+            (FormModel.create_booking.is_(True)) | (FormModel.booking_enabled.is_(True)) | (FormModel.form_type == "booking"),
+            (FormModel.booking_event_date.is_(None)) | (FormModel.booking_event_date >= today),
+        )
+        .order_by(FormModel.id.desc())
+        .limit(10)
+        .all()
+    )
+    if not org or not org.is_active or not org.communications_enabled:
+        available_forms = []
+    org_slug = org.slug if org else None
+    return {
+        "items": [serialize_member_booking(booking) for booking in bookings],
+        "available_forms": [
+            {
+                "id": form_item.id,
+                "title": form_item.title,
+                "description": form_item.description,
+                "public_slug": form_item.public_slug,
+                "org_slug": org_slug,
+            }
+            for form_item in available_forms
+        ],
+    }
 
 
 @router.post("/api/member/bookings/{booking_id}/note")

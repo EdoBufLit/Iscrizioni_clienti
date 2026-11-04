@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link, useOutletContext } from "react-router-dom";
 import {
   AuthError,
   fetchMemberBookings,
   submitMemberBookingNote,
+  type MemberAvailableBookingForm,
   type MemberBookingItem,
+  type MemberBookingsResponse,
 } from "../../lib/api";
+import { readCachedApi, subscribeApiCache } from "../../lib/swrCache";
+import type { DashboardContext } from "./DashboardLayout";
 import ModalShell from "../../components/ui/ModalShell";
 import Skeleton from "../../components/ui/Skeleton";
 
@@ -34,8 +39,11 @@ const statusMeta = (status: string) =>
   STATUS_META[status] ?? { label: status, className: "border-neutral-200 bg-neutral-50 text-neutral-700" };
 
 const DashboardBookings = () => {
-  const [items, setItems] = useState<MemberBookingItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const outletCtx = useOutletContext<DashboardContext | undefined>();
+  const user = outletCtx?.user ?? null;
+  const [items, setItems] = useState<MemberBookingItem[]>(() => readCachedApi<MemberBookingsResponse>("member:bookings")?.items ?? []);
+  const [availableForms, setAvailableForms] = useState<MemberAvailableBookingForm[]>(() => readCachedApi<MemberBookingsResponse>("member:bookings")?.available_forms ?? []);
+  const [loading, setLoading] = useState(() => !readCachedApi("member:bookings"));
   const [error, setError] = useState<string | null>(null);
   const [activeBookingId, setActiveBookingId] = useState<number | null>(null);
   const [note, setNote] = useState("");
@@ -46,12 +54,20 @@ const DashboardBookings = () => {
     [activeBookingId, items],
   );
 
+  const buildQuickBookingHref = (form: MemberAvailableBookingForm) => {
+    const basePath = form.org_slug
+      ? `/forms/${form.org_slug}/${form.public_slug}`
+      : `/forms/${form.public_slug}`;
+    return basePath;
+  };
+
   const loadBookings = async () => {
-    setLoading(true);
+    setLoading(!readCachedApi("member:bookings"));
     setError(null);
     try {
       const payload = await fetchMemberBookings();
       setItems(payload.items ?? []);
+      setAvailableForms(payload.available_forms ?? []);
     } catch (err) {
       if (err instanceof AuthError) {
         window.location.href = "/login";
@@ -65,6 +81,11 @@ const DashboardBookings = () => {
 
   useEffect(() => {
     void loadBookings();
+    return subscribeApiCache(key => {
+      if (key !== "member:bookings") return;
+      const cached = readCachedApi<MemberBookingsResponse>(key);
+      if (cached) { setItems(cached.items); setAvailableForms(cached.available_forms ?? []); }
+    });
   }, []);
 
   const handleOpenNote = (booking: MemberBookingItem) => {
@@ -100,9 +121,47 @@ const DashboardBookings = () => {
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-neutral-900">Prenotazioni</h1>
         <p className="mt-1 text-sm font-medium text-neutral-500">
-          Le richieste collegate alla tua email socio.
+          Le richieste collegate alla tua email socio e le serate prenotabili.
         </p>
       </div>
+
+      {!loading && availableForms.length > 0 ? (
+        <section className="surface p-5 sm:p-6" aria-labelledby="quick-booking-heading">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-brand">Prenotazione rapida</p>
+              <h2 id="quick-booking-heading" className="mt-1 text-lg font-bold text-neutral-900">
+                Prenota un tavolo o una serata
+              </h2>
+              <p className="mt-0.5 text-xs text-neutral-500">
+                I tuoi dati socio (nome, email e telefono) verranno precompilati automaticamente.
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {availableForms.map((form) => (
+              <div
+                key={form.id}
+                className="flex flex-col justify-between gap-3 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-surface-2)] p-4"
+              >
+                <div>
+                  <h3 className="font-bold text-neutral-900">{form.title}</h3>
+                  {form.description ? (
+                    <p className="mt-1 line-clamp-2 text-xs text-neutral-500">{form.description}</p>
+                  ) : null}
+                </div>
+                <Link
+                  to={buildQuickBookingHref(form)}
+                  state={user ? { bookingPrefill: { first_name: user.first_name, last_name: user.last_name, email: user.email, phone: user.phone, formId: form.id, associationId: user.organization?.id } } : undefined}
+                  className="btn-primary inline-flex w-full items-center justify-center px-4 py-2.5 text-xs font-bold sm:w-auto"
+                >
+                  Prenota ora →
+                </Link>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {error && (
         <div className="surface border border-red-100 bg-red-50/80 p-4 text-sm font-semibold text-red-700">

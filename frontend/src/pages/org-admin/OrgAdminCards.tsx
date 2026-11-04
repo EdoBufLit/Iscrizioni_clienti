@@ -1,3 +1,6 @@
+import { useApiCache } from "../../hooks/useApiCache";
+import { readCachedApi } from "../../lib/swrCache";
+import { quotesCacheKey } from "../../lib/dashboardCacheKeys";
 import { lazy, Suspense, type FormEvent, type KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -5,7 +8,7 @@ import {
   fetchOrgAdminMembershipSettings, fetchOrgAdminMetrics, fetchOrgAdminQuotes,
   patchOrgAdminMembershipSettings, uploadOrgAdminCardAssets,
   type CardReplenishmentCapability, type CardReplenishmentRequest, type CardStock,
-  type OrgAdminCardStyle, type OrgAdminMembershipSettings, type OrgAdminMetrics,
+  type QuoteCenterResponse, type OrgAdminCardStyle, type OrgAdminMembershipSettings, type OrgAdminMetrics,
 } from "../../lib/api";
 import Skeleton from "../../components/ui/Skeleton";
 import { useToast } from "../../components/ui/ToastProvider";
@@ -59,10 +62,17 @@ export default function OrgAdminCards() {
   const [activeTab, setActiveTab] = useState<CardsTab>("stock");
   const [visited, setVisited] = useState<Set<CardsTab>>(() => new Set(["stock"]));
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const [stock, setStock] = useState<CardStock | null>(null);
-  const [metrics, setMetrics] = useState<OrgAdminMetrics | null>(null);
-  const [collected, setCollected] = useState<{amount: number; currency: string} | null>(null);
-  const [overviewLoading, setOverviewLoading] = useState(true);
+  const cachedStock = useApiCache<CardStock>("org-admin:card-stock");
+  const cachedMetrics = useApiCache<OrgAdminMetrics>("org-admin:metrics");
+  const overviewQuotesKey = quotesCacheKey({ year: currentYear, limit: 1, offset: 0 });
+  const cachedQuotes = useApiCache<QuoteCenterResponse>(overviewQuotesKey);
+  const [stock, setStock] = useState<CardStock | null>(() => cachedStock ?? null);
+  const [metrics, setMetrics] = useState<OrgAdminMetrics | null>(() => cachedMetrics ?? null);
+  const [collected, setCollected] = useState<{amount: number; currency: string} | null>(() => cachedQuotes ? { amount: cachedQuotes.kpis.collected_total, currency: cachedQuotes.kpis.currency } : null);
+  const [overviewLoading, setOverviewLoading] = useState(!(cachedStock && cachedMetrics && cachedQuotes));
+  useEffect(() => { if (cachedStock) setStock(cachedStock); }, [cachedStock]);
+  useEffect(() => { if (cachedMetrics) setMetrics(cachedMetrics); }, [cachedMetrics]);
+  useEffect(() => { if (cachedQuotes) setCollected({amount: cachedQuotes.kpis.collected_total, currency: cachedQuotes.kpis.currency}); }, [cachedQuotes]);
   const [overviewError, setOverviewError] = useState("");
   const overviewSequence = useRef(0);
   const [capability, setCapability] = useState<CardReplenishmentCapability | null>(null);
@@ -94,7 +104,7 @@ export default function OrgAdminCards() {
 
   const loadOverview = useCallback(async () => {
     const sequence = ++overviewSequence.current;
-    setOverviewLoading(true); setOverviewError("");
+    setOverviewLoading(!(readCachedApi("org-admin:card-stock") && readCachedApi("org-admin:metrics") && readCachedApi(overviewQuotesKey))); setOverviewError("");
     const results = await Promise.allSettled([
       fetchCardStock(), fetchOrgAdminMetrics(), fetchOrgAdminQuotes({year: currentYear, limit: 1, offset: 0}),
     ]);
@@ -107,7 +117,7 @@ export default function OrgAdminCards() {
     if (results[2].status === "fulfilled") setCollected({amount: results[2].value.kpis.collected_total, currency: results[2].value.kpis.currency});
     if (results.some(result => result.status === "rejected")) setOverviewError("Alcuni dati non sono aggiornati. Riprova il caricamento.");
     setOverviewLoading(false);
-  }, [currentYear, navigate]);
+  }, [currentYear, navigate, overviewQuotesKey]);
 
   const loadCapability = useCallback(async () => {
     setCapabilityLoading(true); setCapabilityError("");

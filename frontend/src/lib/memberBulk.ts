@@ -1,4 +1,4 @@
-import { AuthError } from "./api";
+import { AuthError, apiFetch } from "./api";
 import type { MemberSelection } from "../hooks/useMemberSelection";
 
 export type BulkAction = "export" | "send_access" | "quote_reminder";
@@ -27,7 +27,7 @@ export function bulkRequestKey() {
 }
 
 async function checkedResponse(url: string, options: RequestInit) {
-  const response = await fetch(url, { ...options, credentials: "include" });
+  const response = await apiFetch(url, { ...options, credentials: "include" });
   if (response.status === 401) throw new AuthError("La sessione è scaduta. Accedi nuovamente.");
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));

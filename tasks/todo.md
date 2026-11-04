@@ -1,11 +1,40 @@
-## Plan (Analisi UI/UX, Responsiveness e Piano Operativo Assonam - Nov 01, 2026)
-- [ ] 1. Analisi approfondita Org Admin (Layout, Dashboard, Soci & Dettaglio, Inviti, Tessere, Contabilità/Incassi, Prenotazioni, Impostazioni)
-- [ ] 2. Analisi approfondita Area Socio (Dashboard, Profilo, Documenti, Prenotazioni, Onboarding, Card/Tessera digitale)
-- [ ] 3. Analisi approfondita Wizard di Iscrizione Soci e Affiliazione Associazioni (Flusso step-by-step, responsive mobile, form feedback, validazioni)
-- [ ] 4. Analisi Super Admin (Layout, Gestione Associazioni/Affiliazioni, Lotti/Crediti tessere, Audit, Chiusura annuale)
-- [ ] 5. Sintesi criticità trasversali (Design system, gerarchia visiva, responsiveness 320/390px, contrasti Dark/Light, interattività)
-- [ ] 6. Costruzione del Piano Operativo dettagliato e prioritizzato (Quick wins, Medium term, High impact)
-- [ ] 7. Presentazione del piano all'utente per valutazione preventiva
+## Plan (Analisi UI/UX, Responsiveness e Piano Operativo Assonam - Nov 03, 2026)
+- [x] 1. Analisi approfondita Org Admin (Layout, Dashboard, Soci & Dettaglio, Inviti, Tessere, Contabilità/Incassi, Prenotazioni, Impostazioni)
+- [x] 2. Analisi approfondita Area Socio (Dashboard, Profilo, Documenti, Prenotazioni, Onboarding, Card/Tessera digitale)
+- [x] 3. Analisi approfondita Wizard di Iscrizione Soci e Affiliazione Associazioni (Flusso step-by-step, responsive mobile, form feedback, validazioni)
+- [x] 4. Analisi Super Admin (Layout, Gestione Associazioni/Affiliazioni, Lotti/Crediti tessere, Audit, Chiusura annuale)
+- [x] 5. Sintesi criticità trasversali (Design system, gerarchia visiva, responsiveness 320/390px, contrasti Dark/Light, interattività)
+- [x] 6. Costruzione del Piano Operativo dettagliato e prioritizzato (Fase 1 Quick Wins/Bug Critici, Fase 2 Responsiveness & Mobile-First, Fase 3 Flussi UX/UI & Polish)
+- [x] 7. Presentazione del piano all'utente per valutazione preventiva
+
+### Piano Operativo Proposto (in attesa di approvazione utente)
+- [x] **Workstream 0 (Fondamenta CSS & Dark/Light Mode)**: definire `--theme-brand-soft` e `--theme-purple` in `theme.css`; completare il bridge dark mode per utility Tailwind con opacità (`bg-rose-50`, `bg-emerald-50/70`, `bg-amber-50/70`, `bg-red-50/80`, `bg-emerald-100`, `text-neutral-950`, `text-amber-950`, `text-red-900`, `border-slate-100`); rimuovere conflitti `!important` tra `index.css` e `theme.css`.
+- [x] **Workstream 1 (Org Admin - Priorità Alta)**:
+  - [x] Aggiungere `.container-shell` / padding coerente alle route prive di margini (`OrgAdminMemberDetail`, `OrgAdminCards`, `OrgAdminAudit`) e rimuovere lo shift di `--oa-header-height: 4rem` su `/org-admin/soci`.
+  - [x] Correggere il dead-end responsive `721px–1023px` (tablet) in `OrgAdminBookings.tsx` / `index.css` (dove `.booking-day-row__expanded` è `display: none` ma il `BottomSheet` si attiva solo `<= 720px`) e rendere leggibili i bottoni stato servizio (`N/A/C/S/OK/X`).
+  - [x] Trasformare `ReceiptDetailPanel` in `OrgAdminIncassi.tsx` in espansione contestuale sulla riga (anziché in fondo sotto 25 righe).
+  - [x] Correggere i bug dark mode in `WhatsAppHub.tsx` (selettore `[class*="text-[#"]` che sovrascrive il testo sui bottoni verdi), `MembersTable.tsx` (riga selezionata e skeleton a 7/8 colonne), `OrgAdminInvites.tsx` (`<td className="block">` che rompe la tabella).
+  - [x] Razionalizzare la sidebar (`OrgAdminLayout.tsx`) correggendo l'active state senza query string, unificando Sale e tavoli e riattivando i KPI Comunicazioni su mobile.
+- [x] **Workstream 2 (Area Socio - Priorità Alta)**:
+  - [x] Ripristinare lo step 4 del tour guidato aggiungendo `data-tour="member-documents"` in `DashboardDocuments.tsx` e sistemare il bottone download Statuto (bordo e contrasto mobile).
+  - [x] Ottimizzare `MemberCardPreview.tsx` su schermi `320px–390px` per evitare il clipping verticale del footer tessera quando sono presenti logo circolo + badge temporanea + scadenza.
+  - [x] Correggere layout mobile e padding in `DashboardLayout.tsx` (rimozione `<nav className="hidden md:hidden">`, contrasto link sidebar in dark mode), `DashboardProfile.tsx` (`p-8` -> `p-5 sm:p-8`, `break-words` su CF/email, `.theme-input` e feedback conferma password), `TemporaryMembershipPanel.tsx` (rimozione `ml-2` sui bottoni), e sostituire la modale custom in `DashboardBookings.tsx` con `ModalShell`.
+  - [x] Rifinire le pagine pubbliche collegate al socio (`MemberDocumentCorrection.tsx` con header pubblico e link Area riservata, `WalletGoogleAdd.tsx` e `PienissimoThankYouPage.tsx` con `.theme-input` anti-zoom iOS e top padding corretto, fix encoding `?` in `MagicLinkVerify.tsx`).
+- [x] **Workstream 3 (Wizard Iscrizione Soci & Affiliazione Associazioni - Priorità Alta)**:
+  - [x] **Critico (`Affiliazione.tsx`)**: correggere il bug di perdita dati tra Step 1 e Step 2 (`ensureServerDraft({ syncForm: true })` che sovrascrive indirizzo e referente con stringhe vuote) e validare/salvare prima del cambio step dallo stepper in alto.
+  - [x] **UX & Responsiveness (`Affiliazione.tsx`)**: riallineare `Affiliazione.tsx` ai token semantici del design system (`var(--theme-*)` come `Iscrizione.tsx`), correggere la sovrapposizione delle label `absolute -bottom-7` dello stepper su mobile 320px/390px, nascondere `InstallAppPrompt` su `/affiliazione` (che copre la barra fissa "Indietro/Avanti"), mostrare gli errori di validazione per singolo campo (`stepErrors`), associare `<label htmlFor>` a tutti gli input, allineare le checklist documenti tra Intro/Step 3 e tradurre lo stato raw `under_review` nella conferma finale.
+  - [x] **UX & Accessibilità (`Iscrizione.tsx` & `IscrizionePagamentoEsito.tsx`)**: rendere cliccabili gli step completati nello stepper + bottoni "Modifica" nel riepilogo Step 3, ridimensionare i valori `sm:text-2xl` nel riepilogo, implementare i gestori drag-and-drop (`onDrop`/`onDragOver`) sulla dropzone documento, completare la navigazione da tastiera del combobox Comune di nascita, aggiungere il toggle mostra/nascondi password, e allineare `IscrizionePagamentoEsito.tsx` ai token tema con link di retry sicuro.
+- [x] **Workstream 4 (Super Admin - Priorità Media)**:
+  - [x] **Critico (`SuperAdminOrganizations.tsx` & `OrganizationManageModal.tsx`)**: ripristinare la barra di paginazione e il selettore page-size, rimuovere i 350+ righe di JSX legacy nascosto, collegare lo stato `setupTab` nel drawer Setup Associazione, e correggere la geometria CSS di `.sa-switch.is-on::after` e `.sa-lots-summary`.
+  - [x] Rendere sticky e auto-scrollabile l'editor contabile di `SuperAdminCardCredits.tsx`, rendere sticky il pannello dettaglio di `SuperAdminMemberDetail.tsx` (traducendo gli status inglesi), abilitare il pulsante "Rigetta" anche quando `can_approve` è true e tradurre i bottoni documento in `SuperAdminAffiliations.tsx`, proteggere il QR code MFA da inversione dark mode in `SuperAdminLogin.tsx`, e uniformare `SuperAdminSecurity` e `SuperAdminAnnualClosure` alle primitive `SuperAdminPageHeader` / `.sa-page`.
+
+### Review (Analisi UI/UX, Responsiveness e Piano Operativo Assonam - Nov 04, 2026)
+- Completata l'implementazione integrale di tutti i 5 workstream (Fase 0 Design System/Dark Mode, Fase 1 Wizard Iscrizione & Affiliazione, Fase 2 Org Admin, Fase 3 Area Socio, Fase 4 Super Admin).
+- Verifiche locali: build di produzione TypeScript + Vite (`npm run build`), intera suite test frontend Vitest (`62 file / 394 test` superati), smoke test backend (`tests/test_smoke.py`) e compilazione Python (`python -m compileall -q app init_db.py`).
+- Rilascio live completato su `Main`:
+  - Fase 0 + 1: commit `232e3352bea697497ab9a898a31c5c1fe07c3613` ([workflow `41892340754`](https://github.com/EdoBufLit/Iscrizioni_clienti/actions/runs/41892340754)).
+  - Fase 2 + 3 + 4: commit `f6548855b16a8dec52b1020e6bc6ccc0c6ee322d` ([workflow `41923240700`](https://github.com/EdoBufLit/Iscrizioni_clienti/actions/runs/41923240700) concluso con successo, inclusi `build-images` e `deploy` + canary).
+  - Smoke live e infrastruttura Hetzner verificati: `https://assonam.it/health` HTTP 200 `{"status":"ok","db":true}`, nuovo entry bundle `/assets/index-CmmJjP0s.js` servito, tutti i 10 container (`app-web-1` + worker) `healthy`, disco al `49%`, inode al `12%`, build cache Docker `0B`.
 
 ## Plan (Google Wallet Golden Age e popup installazione dark - Sep 21, 2026)
 - [x] Verificare configurazione Wallet effettiva e preparare i nuovi asset/fallback, preservando le personalizzazioni degli altri circoli.
@@ -6383,3 +6412,52 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 - Backend1141passed/13skipped, frontend392passed/61file e build riusciti; reviewindipendente completata. Prove su confineUTC/Roma, pagamentoheldconfermato, ritardoordine2026, blocchiAPI,tenant,scope e invarianti su tutti i dati storici. Nessuna migrazione o dipendenza nuova.
 - Browser locale con dati sintetici: lotto2026chiuso con52tessere residue nonutilizzabili, desktop/mobile390px leggibili senzaoverflow. ServerQAfermato, schedechiuse e viewport ripristinato; nessuna modifica a dati reali perQA.
 - Pubblicato0a91388 su Main; pipeline41533150681 e deploy125579084885 riusciti, Final canary passed alle23:05 del2novembre2026 Europe/Rome.62controlliHTTPS/hashasset superati; sette servizi healthy sulnuovoSHA,0restart/OOM, schema invariato. Jobchiusuralotti realmente eseguito conoktrue/errori0; zero lotti di annualità precedenti ancora abilitati in produzione. Rapporto docs/card_lot_year_closure_release_2026-11-02.md.
+
+# Piano — verifica ricerca soci (4 novembre 2026)
+
+- [x] Ricostruire ricerca frontend/backend, filtri e concorrenza delle richieste rispetto alla segnalazione.
+- [x] Riprodurre eventuali difetti con test mirati e applicare la correzione minima: nessun difetto applicativo riprodotto, nessuna correzione necessaria.
+- [x] Eseguire verifiche pertinenti e documentare cause confermate, limiti e risultato.
+
+
+### Review ricerca soci
+- Produzione in transazione READ ONLY: tessera 26826 attiva, nome Martina e cognome vuoto; ricerche degli screenshot senza risultati, email e numero funzionanti. Ricerca solo Martina: 64 risultati, socia in pagina 2.
+- 27 test backend e 8 frontend superati; mancata corrispondenza temporanea via email non riprodotta. Nessun codice o dato reale modificato, nessun deploy. Rapporto docs/verifica_ricerca_soci_2026-11-04.md.
+
+# Piano — ricerca combinata nome/email (4 novembre 2026)
+- [x] Aggiungere regressioni per cognome assente, refuso nella parte locale email e falsi positivi.
+- [x] Implementare suggerimenti combinati conservando filtri, priorita e selezione massiva.
+- [x] Eseguire test pertinenti e review indipendente; documentare esito.
+
+### Review ricerca combinata
+- Nome registrato + frammento della parte locale email solo per cognome NULL/vuoto/soli spazi, in entrambi gli ordini. Un refuso totale, frammento di almeno quattro caratteri, dominio escluso e badge simile esistente.
+- Regressioni iniziali: tre fallimenti riprodotti. Verifica finale: 80 test ricerca/filtri/bulk passati, review indipendente senza blocker. Guardie SQL/Python allineate; nessuna modifica a dati reali o frontend e nessun deploy eseguito.
+
+### Pubblicazione ricerca combinata
+- Commit 26b4b60 pubblicato su Main; pipeline41880000071 build/deploy riusciti, Final canary passed alle18:51 del4novembre. Sette servizi healthy sul nuovo SHA, zero restart/OOM, schema invariato. Prova READ ONLY: Martina fredi trova tessera26826; salute HTTPS/login riusciti.
+- Controllo incidente3novembre15:02italiane: nessuna pipeline, vecchio web avviato2novembre senza restart, DB senza errori nel periodo; logHTTP vecchio web non disponibili. Rapporto docs/verifica_ricerca_soci_2026-11-04.md.
+
+
+# Piano — deploy UI/UX Gemini due fasi (4 novembre 2026)
+- [x] Review diff e contratti, build e test frontend; correggere eventuali blocker.
+- [x] Collaudare le pagine pubbliche modificate nei temi chiaro/scuro e mobile/desktop.
+- [x] Pubblicare su Main, verificare pipeline/canary, asset e servizi online; documentare risultato.
+
+### Review deploy UI/UX Gemini
+- Due fasi pubblicate con232e335, due correzioni accessibilita e relative regressioni. Build e394test/62file riusciti, review indipendenti e smoke mobile/desktop chiaro/scuro. Nessuna pratica o pagamento reale eseguito.
+- Pipeline41892340754/deploy126793764484 riusciti, Final canary passed alle20:05 del4novembre.63controlliHTTPS/hashasset, sette servizi healthy sulloSHA/zero restartOOM, schema invariato. Primo errore generico browser durante rollout risolto al reload e non riprodotto nella nuova scheda; causa non attribuita. Rapporto docs/gemini_uiux_release_2026-11-04.md; anteprima fermata e browser ripristinato.
+
+# Piano — completamento reattività e flussi operativi Gemini (4 novembre 2026)
+- [x] Verificare e completare cache con invalidazione/sessioni, prefetch, caricamento route/CSS, tessera offline, UI ottimistica e polling visibile.
+- [x] Completare timeline e prenotazione rapida socio senza dati personali negli URL e con stato/verifiche reali.
+- [x] Completare check-in unificato, coda revisione documenti e segmento/export con passaggio a campagne.
+- [x] Eseguire test pertinenti, build, review e collaudo responsive mobile/desktop chiaro/scuro con dati sintetici.
+- [x] Documentare risultati e limiti effettivi; preservare il lavoro preesistente su Main.
+
+Specifica: applicare il perimetro selezionato nell'ultimo screenshot; Apple Wallet, command palette, WhatsApp e preferenze comunicazioni non fanno parte della selezione. Riutilizzare componenti, permessi e regole economiche esistenti. Cache solo in memoria per letture operative, invalidazione dopo mutazioni e ai confini autenticazione, protezione da risposte obsolete; snapshot tessera limitato e timestamp visibile. Nessun invio reale di campagne per collaudo.
+
+- [ ] Deploy richiesto esplicitamente il5novembre: pubblicare suMain, seguire pipeline/canary e verificare asset, salute e servizi in sola lettura.
+
+### Review completamento Gemini
+- Backend completo1164passati/13saltati; frontend446passati/71file; build finale riuscita.70screenshot a320/390/768/1280/1440px, chiaro/scuro, zerooverflow; card eQR verificati con vero reload offline. Campagna aperta con destinatari filtrati senza invio.
+- Rilevati e corretti: cache tra sessioni/schede, PII inURL, timeline irraggiungibile per utenti pending, anteprimaPDF attachment, deep link verso prenotazione gestita, errori tecnici offline e PATCH stato che cancellava sala/tavolo. Nessun dato reale modificato perQA. Rapporto docs/gemini_performance_workflows_release_2026-11-05.md.

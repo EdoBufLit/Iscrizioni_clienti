@@ -2835,3 +2835,36 @@ def test_booking_form_can_auto_assign_first_available_table(client, db):
     assert map_res.json()["tables"][0]["occupancy_state"] == "semi_free"
     assert map_res.json()["tables"][0]["remaining_seats"] == 2
     assert map_res.json()["tables"][0]["active_booking"]["customer_name"] == "Auto Assign"
+
+
+def test_member_quick_booking_lists_only_current_tenant_available_forms(client, db):
+    from zoneinfo import ZoneInfo
+    org, _ = _create_org_admin(db)
+    other_org, _ = _create_org_admin(db)
+    member = Member(org_id=org.id, first_name="Quick", last_name="Booking", email=f"quick-{uuid.uuid4().hex}@example.test", status=MemberStatus.ACTIVE, card_no=99001, card_year=datetime.utcnow().year, joined_at=datetime.utcnow())
+    db.add(member)
+    db.flush()
+    today = datetime.now(ZoneInfo("Europe/Rome")).date()
+    def form(title, **kwargs):
+        values = dict(association_id=org.id, title=title, public_slug=f"quick-{uuid.uuid4().hex}", is_active=True, booking_enabled=True)
+        values.update(kwargs)
+        result = Form(**values)
+        db.add(result)
+        return result
+    available = form("Prenota", visibility="members_only")
+    upcoming = form("Serata", booking_event_date=today + timedelta(days=1))
+    form("Passata", booking_event_date=today - timedelta(days=1))
+    form("Bozza", is_active=False)
+    form("Generico", booking_enabled=False)
+    form("Altro circolo", association_id=other_org.id)
+    token_str = f"quick-member-{uuid.uuid4().hex}"
+    db.add(Token(member_id=member.id, purpose=TokenType.LOGIN_MAGIC_LINK, auth_version=member.auth_version, token_hash=hash_token(token_str), expires_at=datetime.utcnow() + timedelta(minutes=15)))
+    db.commit()
+    client.get(f"/member/auth?token={token_str}", follow_redirects=False)
+    response = client.get("/api/member/bookings")
+    assert response.status_code == 200, response.text
+    assert {item["id"] for item in response.json()["available_forms"]} == {available.id, upcoming.id}
+    assert all(item["org_slug"] == org.slug for item in response.json()["available_forms"])
+    org.communications_enabled = False
+    db.commit()
+    assert client.get("/api/member/bookings").json()["available_forms"] == []

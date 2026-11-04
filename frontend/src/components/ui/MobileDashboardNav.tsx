@@ -1,3 +1,4 @@
+import { prefetchDashboardRoute } from "../../lib/apiPrefetch";
 import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 
@@ -229,6 +230,9 @@ const MobileDashboardNav = ({
         <Link
           key={item.key}
           to={item.to}
+          onMouseEnter={() => prefetchDashboardRoute(item.to!)}
+          onFocus={() => prefetchDashboardRoute(item.to!)}
+          onTouchStart={() => prefetchDashboardRoute(item.to!)}
           className={baseClass}
           aria-current={isActive ? "page" : undefined}
           onClick={mode === "sheet" ? () => setSheetOpen(false) : undefined}

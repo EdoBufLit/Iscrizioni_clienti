@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useLocation } from "react-router-dom";
 import {
   fetchPublicForm,
   fetchPublicFormBookingAvailableDates,
@@ -9,6 +9,7 @@ import {
   type PublicBookingAvailableDate,
   type PublicAssociationForm,
 } from "../lib/api";
+import { bookingPrefillValues, type BookingPrefill } from "../lib/bookingPrefill";
 import { applySeo } from "../lib/seo";
 import { FormPublicCanvas } from "../components/forms/FormPublicCanvas";
 import { isBookingBlockField } from "../components/forms/builder/utils";
@@ -66,13 +67,12 @@ function isSelectableBookingDate(item: PublicBookingAvailableDate): boolean {
   return item.date_open !== false && !item.date_closed;
 }
 
-function buildInitialValues(form: PublicAssociationForm): Record<string, unknown> {
+function buildInitialValues(form: PublicAssociationForm, prefill?: BookingPrefill | null): Record<string, unknown> {
   const values: Record<string, unknown> = {};
   for (const field of form.fields) {
-    if (field.field_type === "checkbox") values[field.field_key] = [];
-    else if (field.field_type === "consent") values[field.field_key] = false;
-    else values[field.field_key] = "";
+    values[field.field_key] = field.field_type === "checkbox" ? [] : field.field_type === "consent" ? false : "";
   }
+  Object.assign(values, bookingPrefillValues(form, prefill));
   if (formUsesDynamicBookingControls(form) && (form.booking_enabled || form.create_booking || form.form_type === "booking")) {
     values.__booking_date = new Date().toISOString().slice(0, 10);
     values.__booking_event_series_id = "";
@@ -83,6 +83,7 @@ function buildInitialValues(form: PublicAssociationForm): Record<string, unknown
 
 const PublicFormPage = () => {
   const { orgSlug, slug } = useParams();
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -101,10 +102,12 @@ const PublicFormPage = () => {
     setLoading(true);
     setError("");
     setSuccessMessage("");
+    let cancelled = false;
     fetchPublicForm(orgSlug || slug, orgSlug ? slug : undefined)
       .then((response) => {
+        if (cancelled) return;
         setForm(response.form);
-        setValues(buildInitialValues(response.form));
+        setValues(buildInitialValues(response.form, location.state?.bookingPrefill));
         const associationName = response.form.association.name || response.form.title;
         applySeo({
           title: `${response.form.title} | ${associationName}`,
@@ -115,10 +118,11 @@ const PublicFormPage = () => {
         });
       })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : "Form non disponibile.");
+        if (!cancelled) setError(err instanceof Error ? err.message : "Form non disponibile.");
       })
-      .finally(() => setLoading(false));
-  }, [orgSlug, slug]);
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [orgSlug, slug, location.key]);
 
   useEffect(() => {
     if (!slug || !bookingControlsActive) {

@@ -1,3 +1,6 @@
+import { useApiCache } from "../../hooks/useApiCache";
+import { readCachedApi } from "../../lib/swrCache";
+import { quotesCacheKey } from "../../lib/dashboardCacheKeys";
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import ModalShell from "../../components/ui/ModalShell";
@@ -11,6 +14,7 @@ import {
   type QuoteCenterRow,
 } from "../../lib/api";
 import { EmptyState, KpiCard, PageHeader, SectionPanel, StatusChip } from "./components/OrgAdminPrimitives";
+import CampaignSegmentActions from "./components/CampaignSegmentActions";
 import MemberBulkActions from "./components/MemberBulkActions";
 import { useOrgAdmin } from "./OrgAdminLayout";
 import { FIRST_QUOTE_REMINDER_YEAR, isQuoteReminderYearAvailable, romeYear } from "../../lib/quoteReminders";
@@ -62,17 +66,21 @@ const OrgAdminQuote = () => {
   const mobileView = useMediaQuery("(max-width: 767px)");
   const [year, setYear] = useState(() => Number.isInteger(requestedYear) && requestedYear >= 2000 && requestedYear <= 9998 ? requestedYear : Math.max(FIRST_QUOTE_REMINDER_YEAR, romeYear()));
   const canRemind = isQuoteReminderYearAvailable(year);
-  const [status, setStatus] = useState("");
-  const [search, setSearch] = useState("");
-  const [data, setData] = useState<QuoteCenterResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState(searchParams.get("status") || "");
+  const [search, setSearch] = useState(searchParams.get("q") || "");
+  const [page, setPage] = useState(0);
+  const cacheKey = quotesCacheKey({ year, status, q: search, memberId, limit: 25, offset: page * 25 });
+  const cachedQuotes = useApiCache<QuoteCenterResponse>(cacheKey);
+  const [data, setData] = useState<QuoteCenterResponse | null>(() => cachedQuotes ?? null);
+  const [loading, setLoading] = useState(!cachedQuotes);
+  useEffect(() => { if (cachedQuotes) { setData(cachedQuotes); setLoading(false); } }, [cachedQuotes]);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [paymentRow, setPaymentRow] = useState<QuoteCenterRow | null>(null);
   const [paymentYear, setPaymentYear] = useState(year);
   const [saving, setSaving] = useState(false);
-  const [page, setPage] = useState(0);
+
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [draftYear, setDraftYear] = useState(year);
   const [draftStatus, setDraftStatus] = useState(status);
@@ -89,7 +97,9 @@ const OrgAdminQuote = () => {
 
   const load = useCallback(async () => {
     const generation = ++requestId.current;
-    setLoading(true);
+    const warm = readCachedApi<QuoteCenterResponse>(cacheKey);
+    if (warm) setData(warm);
+    setLoading(!warm);
     setError("");
     try {
       const next = await fetchOrgAdminQuotes({ year, status, q: search, ...(memberId ? { memberId } : {}), limit: 25, offset: page * 25 });
@@ -104,7 +114,7 @@ const OrgAdminQuote = () => {
     } finally {
       if (generation === requestId.current) setLoading(false);
     }
-  }, [navigate, search, status, year, page, memberId]);
+  }, [navigate, search, status, year, page, memberId, cacheKey]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => void load(), 250);
@@ -198,6 +208,7 @@ const OrgAdminQuote = () => {
         }
       />
 
+      <CampaignSegmentActions source="quote" query={new URLSearchParams({ year: String(year), status, q: search, ...(memberId ? { member_id: String(memberId) } : {}) }).toString()} loadPage={async offset => { const result = await fetchOrgAdminQuotes({ year, status, q: search, memberId, offset, limit: 100 }); return { ids: result.items.map(item => item.member_id), total: result.total }; }} />
       {notice ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-semibold text-emerald-800" role="status">{notice}</div> : null}
       {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm font-semibold text-rose-800" role="alert">{error}</div> : null}
 

@@ -207,9 +207,9 @@ describe("OrgAdminMembers search", () => {
     fireEvent.click(screen.getByRole("button", { name: "Azioni secondarie" }));
     const actionsSheet = await screen.findByRole("dialog", { name: "Azioni secondarie soci" });
     expect(within(actionsSheet).getByRole("button", { name: "Importa CSV" })).toBeInTheDocument();
-    expect(within(actionsSheet).getByRole("link", { name: "Esporta Excel" })).toHaveAttribute(
+    expect(within(actionsSheet).getByRole("link", { name: "Esporta soci filtrati" })).toHaveAttribute(
       "href",
-      "/api/org-admin/members.xlsx",
+      "/api/org-admin/members.xlsx?status=review&q=&access=&source=&docs=&order=last_name_asc",
     );
   });
 

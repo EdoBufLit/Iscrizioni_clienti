@@ -16,7 +16,8 @@ const apiMocks = vi.hoisted(() => ({
   resendCorrection: vi.fn(),
 }));
 
-vi.mock("../../lib/api", () => ({
+vi.mock("../../lib/api", async original => ({
+  apiFetch: (await original<typeof import("../../lib/api")>()).apiFetch,
   AuthError: class AuthError extends Error {},
   createManualPayment: (...args: unknown[]) => apiMocks.createManualPayment(...args),
   fetchOrgAdminMemberDetail: (...args: unknown[]) => apiMocks.fetchMember(...args),
@@ -293,7 +294,7 @@ describe("OrgAdminMemberDetail", () => {
     expect(openWindow).toHaveBeenCalledExactlyOnceWith("", "_blank");
     expect(printWindow.opener).toBeNull();
     await act(async () => {});
-    expect(request).toHaveBeenCalledExactlyOnceWith("/api/org-admin/members/42/card.pdf?disposition=inline");
+    expect(request).toHaveBeenCalledExactlyOnceWith("/api/org-admin/members/42/card.pdf?disposition=inline", undefined);
     expect(printWindow.location.href).toBe("blob:synthetic-card");
     act(() => vi.advanceTimersByTime(700));
     expect(printWindow.print).toHaveBeenCalledOnce();

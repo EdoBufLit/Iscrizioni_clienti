@@ -1,3 +1,29 @@
+import { membersCacheKey, quotesCacheKey } from "./dashboardCacheKeys";
+import { observeAuthIdentity, publishAuthChange } from "./authCacheSync";
+import { clearMemberSnapshot } from "./memberSnapshot";
+import { invalidateSwrCache, withSwrCache } from "./swrCache";
+export { invalidateSwrCache, readCachedApi, subscribeApiCache } from "./swrCache";
+
+export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const method = (init?.method ?? (typeof Request !== "undefined" && input instanceof Request ? input.method : "GET")).toUpperCase();
+  const mutation = method !== "GET" && method !== "HEAD";
+  const url = String(input);
+  const authBoundary = /\/auth\/(?:login|logout|register|verify|password-reset\/confirm)(?:[/?]|$)/.test(url);
+  if (mutation) invalidateSwrCache();
+  if (authBoundary) { invalidateSwrCache(); clearMemberSnapshot(); }
+  try {
+    const response = await globalThis.fetch(input, init);
+    if (authBoundary && response.ok) publishAuthChange();
+    if (response.status === 401 || response.status === 403) invalidateSwrCache();
+    if (response.status === 401) clearMemberSnapshot();
+    return response;
+  } finally {
+    if (mutation) invalidateSwrCache();
+  }
+}
+
+const fetch = apiFetch;
+
 export type OrganizationListItem = {
   id: number;
   name: string;
@@ -415,7 +441,9 @@ export async function fetchMe(): Promise<MemberProfile> {
   const res = await fetch("/api/auth/me");
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error("Failed to fetch profile");
-  return res.json();
+  const profile: MemberProfile = await res.json();
+  observeAuthIdentity("member", profile.id, profile.organization?.id);
+  return profile;
 }
 
 export type GoogleWalletSaveLinkResponse = {
@@ -502,8 +530,17 @@ export type MemberBookingItem = {
   } | null;
 };
 
+export type MemberAvailableBookingForm = {
+  id: number;
+  title: string;
+  description: string | null;
+  public_slug: string;
+  org_slug?: string | null;
+};
+
 export type MemberBookingsResponse = {
   items: MemberBookingItem[];
+  available_forms?: MemberAvailableBookingForm[];
 };
 
 export type MemberOrganizationStatuteResponse = {
@@ -515,10 +552,12 @@ export type MemberOrganizationStatuteResponse = {
 };
 
 export async function fetchMemberDocuments(): Promise<MemberDocumentsResponse> {
-  const res = await fetch("/api/member/documents");
-  if (res.status === 401) throw new AuthError("Not authenticated");
-  if (!res.ok) throw new Error("Failed to fetch documents");
-  return res.json();
+  return withSwrCache("member:documents", 30_000, async () => {
+    const res = await fetch("/api/member/documents");
+    if (res.status === 401) throw new AuthError("Not authenticated");
+    if (!res.ok) throw new Error("Failed to fetch documents");
+    return res.json();
+  });
 }
 
 export async function uploadMemberDocument(docType: "identity" | "fiscal_code", document: File): Promise<{ ok: boolean; id: number; status: string; type: string; message?: string }> {
@@ -537,10 +576,12 @@ export async function resendOrgAdminDocumentCorrection(documentId: number): Prom
 }
 
 export async function fetchMemberOrganizationStatute(): Promise<MemberOrganizationStatuteResponse> {
-  const res = await fetch("/api/me/organization/statute");
-  if (res.status === 401) throw new AuthError("Not authenticated");
-  if (!res.ok) throw new Error("Errore nel caricamento dello statuto");
-  return res.json();
+  return withSwrCache("member:statute", 30_000, async () => {
+    const res = await fetch("/api/me/organization/statute");
+    if (res.status === 401) throw new AuthError("Not authenticated");
+    if (!res.ok) throw new Error("Errore nel caricamento dello statuto");
+    return res.json();
+  });
 }
 
 export async function downloadMemberOrganizationStatute(
@@ -853,10 +894,12 @@ export async function verifyOrgAdminToken(
 }
 
 export async function fetchMemberBookings(): Promise<MemberBookingsResponse> {
-  const res = await fetch("/api/member/bookings");
-  if (res.status === 401) throw new AuthError("Not authenticated");
-  if (!res.ok) throw new Error("Failed to fetch bookings");
-  return res.json();
+  return withSwrCache("member:bookings", 30_000, async () => {
+    const res = await fetch("/api/member/bookings");
+    if (res.status === 401) throw new AuthError("Not authenticated");
+    if (!res.ok) throw new Error("Failed to fetch bookings");
+    return res.json();
+  });
 }
 
 export async function submitMemberBookingNote(
@@ -1025,10 +1068,13 @@ export async function fetchOrgAdminMe(): Promise<OrgAdminProfile> {
   const res = await fetch("/api/org-admin/auth/me");
   if (res.status === 401) throw new AuthError("Not authenticated");
   if (!res.ok) throw new Error("Failed to fetch profile");
-  return res.json();
+  const profile: OrgAdminProfile = await res.json();
+  observeAuthIdentity("org-admin", profile.id, profile.org_id);
+  return profile;
 }
 
 export async function orgAdminLogout(): Promise<void> {
+  invalidateSwrCache("org-admin:");
   await fetch("/api/org-admin/auth/logout", { method: "POST" });
 }
 
@@ -1902,17 +1948,21 @@ export type AssociationRoomMap = {
 };
 
 export async function fetchOrgAdminOrganization(): Promise<OrgAdminOrganizationDetail> {
-  const res = await fetch("/api/org-admin/organization");
-  if (res.status === 401) throw new AuthError("Not authenticated");
-  if (!res.ok) throw new Error("Failed to fetch organization");
-  return res.json();
+  return withSwrCache("org-admin:organization", 30_000, async () => {
+    const res = await fetch("/api/org-admin/organization");
+    if (res.status === 401) throw new AuthError("Not authenticated");
+    if (!res.ok) throw new Error("Failed to fetch organization");
+    return res.json();
+  });
 }
 
 export async function fetchOrgAdminMembershipSettings(): Promise<OrgAdminMembershipSettings> {
-  const res = await fetch("/api/org-admin/organization/membership-settings");
-  if (res.status === 401) throw new AuthError("Not authenticated");
-  if (!res.ok) throw new Error("Failed to fetch membership settings");
-  return res.json();
+  return withSwrCache("org-admin:membership-settings", 30_000, async () => {
+      const res = await fetch("/api/org-admin/organization/membership-settings");
+      if (res.status === 401) throw new AuthError("Not authenticated");
+      if (!res.ok) throw new Error("Failed to fetch membership settings");
+      return res.json();
+  });
 }
 
 export async function patchOrgAdminMembershipSettings(data: {
@@ -1924,6 +1974,7 @@ export async function patchOrgAdminMembershipSettings(data: {
   cash_only_signup_payment?: boolean;
   card_style?: OrgAdminCardStyle;
 }): Promise<{ ok: boolean; settings: OrgAdminMembershipSettings }> {
+  invalidateSwrCache("org-admin:membership-settings");
   const res = await fetch("/api/org-admin/organization/membership-settings", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -3833,10 +3884,12 @@ export type OrgAdminMetrics = {
 };
 
 export async function fetchOrgAdminMetrics(): Promise<OrgAdminMetrics> {
-  const res = await fetch("/api/org-admin/metrics");
-  if (res.status === 401) throw new AuthError("Not authenticated");
-  if (!res.ok) throw new Error("Failed to fetch metrics");
-  return res.json();
+  return withSwrCache("org-admin:metrics", 30_000, async () => {
+      const res = await fetch("/api/org-admin/metrics");
+      if (res.status === 401) throw new AuthError("Not authenticated");
+      if (!res.ok) throw new Error("Failed to fetch metrics");
+      return res.json();
+  });
 }
 
 export type OrgAdminReferralStats = {
@@ -3908,10 +3961,12 @@ export type OrgAdminReferralInviteResponse = {
 };
 
 export async function fetchOrgAdminReferralSummary(): Promise<OrgAdminReferralSummary> {
-  const res = await fetch("/api/org-admin/referrals/summary");
-  if (res.status === 401) throw new AuthError("Not authenticated");
-  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento referral."));
-  return res.json();
+  return withSwrCache("org-admin:referral-summary", 30_000, async () => {
+    const res = await fetch("/api/org-admin/referrals/summary");
+    if (res.status === 401) throw new AuthError("Not authenticated");
+    if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore caricamento referral."));
+    return res.json();
+  });
 }
 
 export async function spinOrgAdminReferralReward(
@@ -4047,9 +4102,26 @@ export async function fetchOrgAdminAttendances(params?: {
   return res.json();
 }
 
+export type OrgAdminCheckInActiveBooking = {
+  id: number;
+  status: string;
+  booking_date: string | null;
+  booking_time: string | null;
+  party_size: number | null;
+  room_id: number | null;
+  room_name: string | null;
+  table_id: number | null;
+  table_name: string | null;
+  event_title: string | null;
+};
+
 export async function checkInOrgAdminAttendance(
   qrValue: string,
-): Promise<{ created: boolean; item: OrgAdminAttendance }> {
+): Promise<{
+  created: boolean;
+  item: OrgAdminAttendance;
+  active_booking?: OrgAdminCheckInActiveBooking | null;
+}> {
   const res = await fetch("/api/org-admin/attendances/check-in", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -4353,10 +4425,12 @@ export type CardStock = {
 };
 
 export async function fetchCardStock(): Promise<CardStock> {
-  const res = await fetch("/api/org-admin/cards");
-  if (res.status === 401) throw new AuthError("Not authenticated");
-  if (!res.ok) throw new Error("Failed to fetch card stock");
-  return res.json();
+  return withSwrCache("org-admin:card-stock", 30_000, async () => {
+    const res = await fetch("/api/org-admin/cards");
+    if (res.status === 401) throw new AuthError("Not authenticated");
+    if (!res.ok) throw new Error("Failed to fetch card stock");
+    return res.json();
+  });
 }
 
 export type CardMovement = {
@@ -5896,17 +5970,21 @@ export async function fetchOrgAdminNotifications(
 ): Promise<{ items: OrgAdminNotification[]; unread_count: number }> {
   const sp = new URLSearchParams();
   sp.set("limit", String(limit));
-  const res = await fetch(`/api/org-admin/notifications?${sp.toString()}`);
-  if (res.status === 401) throw new AuthError("Not authenticated");
-  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore nel caricamento notifiche"));
-  return res.json();
+  return withSwrCache(`org-admin:notifications:${limit}`, 30_000, async () => {
+    const res = await fetch(`/api/org-admin/notifications?${sp.toString()}`);
+    if (res.status === 401) throw new AuthError("Not authenticated");
+    if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore nel caricamento notifiche"));
+    return res.json();
+  });
 }
 
 export async function fetchOrgAdminUnreadNotificationCount(): Promise<{ unread_count: number }> {
-  const res = await fetch("/api/org-admin/notifications/unread-count");
-  if (res.status === 401) throw new AuthError("Not authenticated");
-  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore nel caricamento badge notifiche"));
-  return res.json();
+  return withSwrCache("org-admin:unread-count", 30_000, async () => {
+    const res = await fetch("/api/org-admin/notifications/unread-count");
+    if (res.status === 401) throw new AuthError("Not authenticated");
+    if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore nel caricamento badge notifiche"));
+    return res.json();
+  });
 }
 
 export async function markOrgAdminNotificationRead(
@@ -6872,10 +6950,12 @@ export async function fetchOrgAdminMembers(params?: {
   if (params?.limit != null) sp.set("limit", String(params.limit));
   if (params?.offset != null) sp.set("offset", String(params.offset));
   const qs = sp.toString();
-  const res = await fetch(`/api/org-admin/members${qs ? `?${qs}` : ""}`);
-  if (res.status === 401) throw new AuthError("Not authenticated");
-  if (!res.ok) throw new Error("Failed to fetch members");
-  return res.json();
+  return withSwrCache(membersCacheKey(params ?? {}), 30_000, async () => {
+    const res = await fetch(`/api/org-admin/members${qs ? `?${qs}` : ""}`);
+    if (res.status === 401) throw new AuthError("Not authenticated");
+    if (!res.ok) throw new Error("Failed to fetch members");
+    return res.json();
+  });
 }
 
 export async function createOrgAdminMember(
@@ -7119,10 +7199,12 @@ export type MemberRenewalResponse = {
 };
 
 export async function fetchMemberMembership(): Promise<MemberMembershipResponse> {
-  const res = await fetch("/api/member/membership");
-  if (res.status === 401) throw new AuthError("Not authenticated");
-  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Impossibile caricare il rinnovo"));
-  return res.json();
+  return withSwrCache("member:membership", 30_000, async () => {
+    const res = await fetch("/api/member/membership");
+    if (res.status === 401) throw new AuthError("Not authenticated");
+    if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Impossibile caricare il rinnovo"));
+    return res.json();
+  });
 }
 
 export async function requestMemberRenewal(): Promise<MemberRenewalResponse> {
@@ -7159,10 +7241,12 @@ export async function fetchMemberNotifications(input: {
   if (input.limit != null) params.set("limit", String(input.limit));
   if (input.unreadOnly) params.set("unread_only", "true");
   const suffix = params.size ? `?${params.toString()}` : "";
-  const res = await fetch(`/api/member/notifications${suffix}`);
-  if (res.status === 401) throw new AuthError("Not authenticated");
-  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Impossibile caricare le notifiche"));
-  return res.json();
+  return withSwrCache(`member:notifications:${suffix}`, 30_000, async () => {
+    const res = await fetch(`/api/member/notifications${suffix}`);
+    if (res.status === 401) throw new AuthError("Not authenticated");
+    if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Impossibile caricare le notifiche"));
+    return res.json();
+  });
 }
 
 export async function markMemberNotificationRead(notificationId: number): Promise<{ ok: boolean }> {
@@ -7225,10 +7309,12 @@ export async function fetchOrgAdminQuotes(input: {
   if (input.q) params.set("q", input.q);
   if (input.limit != null) params.set("limit", String(input.limit));
   if (input.offset != null) params.set("offset", String(input.offset));
-  const res = await fetch(`/api/org-admin/quotes?${params.toString()}`);
-  if (res.status === 401) throw new AuthError("Not authenticated");
-  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Impossibile caricare quote e rinnovi"));
-  return res.json();
+  return withSwrCache(quotesCacheKey(input), 30_000, async () => {
+    const res = await fetch(`/api/org-admin/quotes?${params.toString()}`);
+    if (res.status === 401) throw new AuthError("Not authenticated");
+    if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Impossibile caricare quote e rinnovi"));
+    return res.json();
+  });
 }
 
 export async function recordOrgAdminRenewalPayment(

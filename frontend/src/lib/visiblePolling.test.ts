@@ -52,4 +52,16 @@ describe("visible polling", () => {
     expect(tick).toHaveBeenCalledTimes(2);
     stop();
   });
+  it("preserves a sixty-second polling period after successful requests", async () => {
+    const tick = vi.fn().mockResolvedValue(undefined);
+    const stop = startVisiblePolling(tick, 60000);
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(tick).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(59999);
+    expect(tick).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(tick).toHaveBeenCalledTimes(2);
+    stop();
+  });
+
 });

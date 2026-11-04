@@ -204,3 +204,60 @@ def test_org_admin_qr_check_in_rejects_invalid_and_inactive_cards(client, db):
     )
     assert inactive.status_code == 409
     assert inactive.json()["detail"] == "Tessera non attiva"
+
+
+def test_active_booking_requires_current_confirmed_event_and_own_member(db):
+    from datetime import date
+    from app.models import Booking, BookingEventSeries, BookingEventTimeSlot, Form
+    from app.routes.org_admin_attendance import _find_member_active_booking_for_day
+    key = uuid.uuid4().hex
+    org = Organization(name="Event QA", slug=f"event-{key}", is_active=True)
+    other = Organization(name="Foreign QA", slug=f"foreign-{key}", is_active=True)
+    db.add_all([org, other]); db.flush()
+    member = _temporary_member(db, organization=org, suffix=key[:8])
+    form = Form(association_id=org.id, title="Ingresso", public_slug=f"entry-{key}", is_active=True)
+    db.add(form); db.flush()
+    today = date.today()
+    series = BookingEventSeries(association_id=org.id, title="Serata", recurrence_type="date", event_date=today, is_active=True, is_closed=False)
+    db.add(series); db.flush()
+    db.add(BookingEventTimeSlot(series_id=series.id, start_time="21:00", is_active=True))
+    booking = Booking(association_id=org.id, form_id=form.id, member_id=member.id, customer_name="QA", booking_date=today, booking_time="21:00", status="pending")
+    db.add(booking); db.commit()
+    lookup = lambda: _find_member_active_booking_for_day(db, org_id=org.id, member_id=member.id, attendance_date=today)
+    assert lookup() is None
+    booking.status = "confirmed"; db.commit()
+    assert lookup()["id"] == booking.id
+    assert lookup()["event_title"] == "Serata"
+    series.is_closed = True; db.commit()
+    assert lookup() is None
+    series.is_closed = False; series.is_active = False; db.commit()
+    assert lookup() is None
+    series.is_active = True; booking.status = "completed"; db.commit()
+    assert lookup() is None
+    booking.status = "confirmed"; booking.association_id = other.id; db.commit()
+    assert lookup() is None
+
+
+def test_seating_status_patch_preserves_assignment_unless_explicitly_cleared(client, db):
+    from app.models import Booking, Room, RoomTable
+    key = uuid.uuid4().hex
+    org = Organization(name="Seating QA", slug=f"seat-{key}", is_active=True, communications_enabled=True)
+    db.add(org); db.flush()
+    _login_org_admin(client, db, org_id=org.id, suffix=key)
+    room = Room(association_id=org.id, name="Sala")
+    db.add(room); db.flush()
+    table = RoomTable(association_id=org.id, room_id=room.id, name="12", capacity=4)
+    db.add(table); db.flush()
+    booking = Booking(association_id=org.id, customer_name="Socio QA", booking_date=datetime.utcnow().date(),
+        booking_time="21:00", status="confirmed", party_size=2, room_id=room.id, table_id=table.id, notes="Conservare")
+    db.add(booking); db.commit()
+    result = client.patch(f"/api/org-admin/bookings/{booking.id}", json={"status": "seated", "notify_customer": False})
+    assert result.status_code == 200, result.text
+    assert result.json()["booking"]["room_id"] == room.id
+    assert result.json()["booking"]["table_id"] == table.id
+    db.refresh(booking)
+    assert booking.notes == "Conservare"
+    cleared = client.patch(f"/api/org-admin/bookings/{booking.id}", json={"status": "confirmed", "room_id": None, "table_id": None, "notify_customer": False})
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["booking"]["room_id"] is None
+    assert cleared.json()["booking"]["table_id"] is None

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CENTRAL_COMMUNICATIONS_PATH, NOTIFICATIONS_UPDATED_EVENT, notifyCommunicationRead } from "../../../lib/centralCommunications";
+import { startVisiblePolling } from "../../../lib/visiblePolling";
+import { readCachedApi, subscribeApiCache } from "../../../lib/swrCache";
 import {
   AuthError,
   deleteOrgAdminNotification,
@@ -60,16 +62,32 @@ const OrgAdminNotificationBell = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [error, setError] = useState("");
   const [refresh, setRefresh] = useState(0);
+  const mutationLock = useRef(false);
+  const mutationEpoch = useRef(0);
+  const [mutating, setMutating] = useState(false);
+
+  useEffect(() => subscribeApiCache(key => {
+    if (mutationLock.current) return;
+    if (key === "org-admin:unread-count") {
+      const response = readCachedApi<{ unread_count: number }>(key);
+      if (response) setUnreadCount(response.unread_count);
+    } else if (key === "org-admin:notifications:20") {
+      const response = readCachedApi<{ items: OrgAdminNotification[]; unread_count: number }>(key);
+      if (response) { setItems(response.items); setUnreadCount(response.unread_count); setLoading(false); }
+    }
+  }), []);
 
   useEffect(() => {
     let active = true;
     let latestRequest = 0;
 
     const loadCount = async () => {
+      if (mutationLock.current) return;
+      const epoch = mutationEpoch.current;
       const requestId = ++latestRequest;
       try {
         const response = await fetchOrgAdminUnreadNotificationCount();
-        if (!active || requestId !== latestRequest) return;
+        if (!active || requestId !== latestRequest || epoch !== mutationEpoch.current) return;
         setUnreadCount(response.unread_count);
       } catch (err) {
         if (!active) return;
@@ -88,30 +106,27 @@ const OrgAdminNotificationBell = () => {
     void loadCount();
     window.addEventListener(NOTIFICATIONS_UPDATED_EVENT, reload);
     window.addEventListener("focus", reload);
-    document.addEventListener("visibilitychange", reload);
-    const intervalId = window.setInterval(() => {
-      if (!document.hidden) void loadCount();
-    }, 30000);
+    const stopPolling = startVisiblePolling(() => loadCount(), 30000);
 
     return () => {
       active = false;
-      window.clearInterval(intervalId);
+      stopPolling();
       window.removeEventListener(NOTIFICATIONS_UPDATED_EVENT, reload);
       window.removeEventListener("focus", reload);
-      document.removeEventListener("visibilitychange", reload);
     };
   }, [navigate]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || mutationLock.current) return;
 
+    const epoch = mutationEpoch.current;
     let active = true;
     setLoading(true);
     setError("");
 
     fetchOrgAdminNotifications(20)
       .then((response) => {
-        if (!active) return;
+        if (!active || epoch !== mutationEpoch.current) return;
         setItems(response.items);
         setUnreadCount(response.unread_count);
       })
@@ -151,64 +166,64 @@ const OrgAdminNotificationBell = () => {
     };
   }, [open]);
 
+  function beginMutation() {
+    if (mutationLock.current) return false;
+    mutationLock.current = true;
+    mutationEpoch.current += 1;
+    setMutating(true);
+    return true;
+  }
+  function finishMutation() { mutationLock.current = false; setMutating(false); }
+  function handleError(err: unknown, fallback: string) {
+    if (err instanceof AuthError) navigate("/org-admin/login", { replace: true });
+    else setError(err instanceof Error ? err.message : fallback);
+  }
+
   const handleNotificationClick = async (notification: OrgAdminNotification) => {
-    try {
-      setError("");
-      if (!notification.is_read) {
-        await markOrgAdminNotificationRead(notification.id);
-        setItems((current) =>
-          current.map((item) =>
-            item.id === notification.id ? { ...item, is_read: true, read_at: new Date().toISOString() } : item,
-          ),
-        );
-        setUnreadCount((current) => Math.max(0, current - 1));
-        notifyCommunicationRead();
-      }
-      setOpen(false);
-      navigate(notification.href || "/org-admin");
-    } catch (err) {
-      if (err instanceof AuthError) {
-        navigate("/org-admin/login", { replace: true });
-        return;
-      }
-      setError(err instanceof Error ? err.message : "Errore apertura notifica.");
+    if (!beginMutation()) return;
+    setError("");
+    if (!notification.is_read) {
+      setItems(current => current.map(item => item.id === notification.id ? { ...item, is_read: true, read_at: new Date().toISOString() } : item));
+      setUnreadCount(current => Math.max(0, current - 1));
     }
+    try {
+      if (!notification.is_read) await markOrgAdminNotificationRead(notification.id);
+      notifyCommunicationRead();
+      setOpen(false);
+      const href = notification.href;
+      navigate(href?.startsWith("/org-admin") && !href.startsWith("//") ? href : "/org-admin");
+    } catch (err) {
+      if (!notification.is_read) {
+        setItems(current => current.map(item => item.id === notification.id ? notification : item));
+        setUnreadCount(current => current + 1);
+      }
+      handleError(err, "Errore apertura notifica.");
+    } finally { finishMutation(); }
   };
 
   const handleMarkAllRead = async () => {
-    try {
-      setMarkingAll(true);
-      setError("");
-      await markAllOrgAdminNotificationsRead();
-      setItems((current) => current.map((item) => ({ ...item, is_read: true, read_at: item.read_at || new Date().toISOString() })));
-      setUnreadCount(0);
-      notifyCommunicationRead();
-    } catch (err) {
-      if (err instanceof AuthError) {
-        navigate("/org-admin/login", { replace: true });
-        return;
-      }
-      setError(err instanceof Error ? err.message : "Errore aggiornamento notifiche.");
-    } finally {
-      setMarkingAll(false);
-    }
+    if (!beginMutation()) return;
+    const previous = items;
+    const previousCount = unreadCount;
+    setMarkingAll(true);
+    setError("");
+    setItems(current => current.map(item => ({ ...item, is_read: true, read_at: item.read_at || new Date().toISOString() })));
+    setUnreadCount(0);
+    try { await markAllOrgAdminNotificationsRead(); notifyCommunicationRead(); }
+    catch (err) { setItems(previous); setUnreadCount(previousCount); handleError(err, "Errore aggiornamento notifiche."); }
+    finally { setMarkingAll(false); finishMutation(); }
   };
 
   const handleDismissNotification = async (notification: OrgAdminNotification) => {
-    try {
-      setError("");
-      const result = await deleteOrgAdminNotification(notification.id);
-      setItems((current) => current.filter((item) => item.id !== notification.id));
-      if (result.was_unread) {
-        setUnreadCount((current) => Math.max(0, current - 1));
-      }
-    } catch (err) {
-      if (err instanceof AuthError) {
-        navigate("/org-admin/login", { replace: true });
-        return;
-      }
-      setError(err instanceof Error ? err.message : "Errore eliminazione notifica.");
-    }
+    if (!beginMutation()) return;
+    const previous = items;
+    const previousCount = unreadCount;
+    setError("");
+    setItems(current => current.filter(item => item.id !== notification.id));
+    if (!notification.is_read) setUnreadCount(current => Math.max(0, current - 1));
+    try { await deleteOrgAdminNotification(notification.id); notifyCommunicationRead(); }
+    catch (err) { setItems(previous); setUnreadCount(previousCount); handleError(err, "Errore eliminazione notifica."); }
+    finally { finishMutation(); }
   };
 
   return (
@@ -245,7 +260,7 @@ const OrgAdminNotificationBell = () => {
               <button
                 type="button"
                 onClick={() => void handleMarkAllRead()}
-                disabled={markingAll || unreadCount === 0}
+                disabled={mutating || markingAll || unreadCount === 0}
                 className="text-[10px] font-bold uppercase tracking-[0.22em] text-brand disabled:opacity-40"
               >
                 {markingAll ? "..." : "Segna tutto letto"}
@@ -292,6 +307,7 @@ const OrgAdminNotificationBell = () => {
                         </div>
                         <button
                           type="button"
+                          disabled={mutating}
                           onClick={() => void handleNotificationClick(notification)}
                           className="mt-3 block text-left"
                         >
@@ -303,6 +319,7 @@ const OrgAdminNotificationBell = () => {
                         {!notification.is_read && <span className="mt-1 h-2.5 w-2.5 rounded-full bg-brand shadow-[0_0_0_6px_rgba(15,118,110,0.12)]" />}
                         <button
                           type="button"
+                          disabled={mutating}
                           onClick={() => void handleDismissNotification(notification)}
                           className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-400 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
                           aria-label="Elimina notifica"

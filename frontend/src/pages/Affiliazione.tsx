@@ -1,3 +1,4 @@
+import { startVisiblePolling } from "../lib/visiblePolling";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -800,10 +801,7 @@ const Affiliazione = () => {
   useEffect(() => {
     if (!token || !hasRealSubmission || !videoEnabled || welcomeVideoReady) return;
 
-    const pollId = window.setInterval(() => {
-      void refreshDraft(token, false).catch(() => {});
-    }, 8000);
-    return () => window.clearInterval(pollId);
+    return startVisiblePolling(async () => { await refreshDraft(token, false); }, 8000);
   }, [hasRealSubmission, refreshDraft, token, videoEnabled, welcomeVideoReady]);
 
   useEffect(() => {

@@ -1,3 +1,4 @@
+import "./OrgAdminBookings.css";
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -461,12 +462,12 @@ export default function OrgAdminBookings() {
   const queryBookingId = parsePositiveInt(searchParams.get("bookingId"));
   const [loading, setLoading] = useState(true);
   const [locked, setLocked] = useState(false);
-  const [section, setSectionState] = useState<SectionTab>(normalizeSection(searchParams.get("section")));
+  const [section, setSectionState] = useState<SectionTab>(queryBookingId ? "agenda" : normalizeSection(searchParams.get("section")));
   const [agendaMonth, setAgendaMonth] = useState(firstDayOfMonthIso(todayIso()));
   const [mapDate, setMapDate] = useState(todayIso());
   const [mapTime, setMapTime] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [dayFilter, setDayFilter] = useState<DayStatusFilter>("pending");
+  const [dayFilter, setDayFilter] = useState<DayStatusFilter>(queryBookingId ? "all" : "pending");
   const [formFilter, setFormFilter] = useState<number | "">("");
   const [forms, setForms] = useState<AssociationFormSummary[]>([]);
   const [rooms, setRooms] = useState<AssociationRoom[]>([]);
@@ -489,6 +490,7 @@ export default function OrgAdminBookings() {
   const dailySummary = useMemo(() => new Map(periodDays.map((day) => [day.date, day])), [periodDays]);
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(searchParams.get("date") || todayIso());
   const [selectedBookingId, setSelectedBookingId] = useState<number | null>(queryBookingId);
+  const [externalBookingTarget, setExternalBookingTarget] = useState<number | null>(queryBookingId);
   const [selectedBooking, setSelectedBooking] = useState<AssociationBooking | null>(null);
   const [isMobileAgendaViewport, setIsMobileAgendaViewport] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(max-width: 720px)").matches : false,
@@ -501,6 +503,7 @@ export default function OrgAdminBookings() {
   const [assignmentTableId, setAssignmentTableId] = useState<number | "">("");
   const [assignmentTables, setAssignmentTables] = useState<AssociationRoomTable[]>([]);
   const [saving, setSaving] = useState("");
+  const mutationLock = useRef(false);
   const [deleteTarget, setDeleteTarget] = useState<null | { type: "room" | "table"; id: number; name: string }>(null);
   const [managementOverlay, setManagementOverlay] = useState<BookingManagementOverlay>(null);
   
@@ -533,6 +536,7 @@ export default function OrgAdminBookings() {
 
   const selectBooking = useCallback(
     (bookingId: number | null) => {
+      setExternalBookingTarget(null);
       setSelectedBookingId(bookingId);
       const nextParams = new URLSearchParams(searchParams);
       if (bookingId) {
@@ -610,6 +614,14 @@ export default function OrgAdminBookings() {
       setAgendaMonth(firstDayOfMonthIso(queryDate));
     }
     if (queryBookingId) {
+      if (queryBookingId !== selectedBookingId) {
+        setExternalBookingTarget(queryBookingId);
+        setDayFilter("all");
+        setStatusFilter("");
+        setFormFilter("");
+        setDayPage(0);
+        setSectionState("agenda");
+      }
       setSelectedBookingId((current) => (current === queryBookingId ? current : queryBookingId));
     }
   }, [queryBookingId, searchParams]);
@@ -858,7 +870,7 @@ export default function OrgAdminBookings() {
   }
 
   async function handleBookingStatus(status: string) {
-    if (!selectedBookingId || !selectedBooking) return;
+    if (!selectedBookingId || !selectedBooking || mutationLock.current || saving) return;
     const isPendingLinkedRequest = Boolean(
       selectedBooking.submission_id
         && selectedBooking.source_form?.id
@@ -874,6 +886,14 @@ export default function OrgAdminBookings() {
       setRequestRejectOpen(true);
       return;
     }
+    mutationLock.current = true;
+    bookingsController.current?.abort();
+    const previousBooking = selectedBooking;
+    const optimisticBooking: AssociationBooking = { ...selectedBooking, status };
+    setSelectedBooking(optimisticBooking);
+    setListItems((current) =>
+      current.map((item) => (item.id === selectedBookingId ? optimisticBooking : item)),
+    );
     setSaving("booking-status");
     try {
       const { booking } = await updateOrgAdminBooking(selectedBookingId, {
@@ -882,20 +902,26 @@ export default function OrgAdminBookings() {
         table_id: selectedBooking.table_id,
         notes: selectedBooking.notes,
       });
-      setSelectedBooking(booking);
-      await loadBookings();
-      if (selectedRoomId) await loadRoomState(selectedRoomId);
+      setSelectedBooking(current => current?.id === booking.id ? booking : current);
+      setListItems(current => current.map(item => item.id === booking.id ? booking : item));
+      void loadBookings();
+      if (selectedRoomId) void loadRoomState(selectedRoomId);
       if (window.matchMedia("(max-width: 720px)").matches && status !== "pending" && status !== "new") {
         setDayFilter("managed");
       }
       showToast({ tone: "success", title: "Stato aggiornato", message: `Prenotazione impostata su ${status}.` });
     } catch (err) {
+      setSelectedBooking(current => current?.id === previousBooking.id ? previousBooking : current);
+      setListItems((current) =>
+        current.map((item) => (item.id === previousBooking.id ? previousBooking : item)),
+      );
       showToast({
         tone: "error",
         title: "Aggiornamento non riuscito",
         message: err instanceof Error ? err.message : "Errore aggiornamento stato prenotazione.",
       });
     } finally {
+      mutationLock.current = false;
       setSaving("");
     }
   }
@@ -1183,52 +1209,60 @@ export default function OrgAdminBookings() {
     }
   }
 
+  // Keep the touched row responsive; a failed refresh must not undo a saved mutation.
+  function displayBooking(booking: AssociationBooking) {
+    setSelectedBooking(current => current?.id === booking.id ? booking : current);
+    setListItems(current => current.map(item => item.id === booking.id ? booking : item));
+  }
+
   async function handleAssignmentSave() {
-    if (!selectedBookingId || !assignmentRoomId || typeof assignmentRoomId !== "number") return;
+    if (!selectedBookingId || !selectedBooking || !assignmentRoomId || typeof assignmentRoomId !== "number" || mutationLock.current || saving) return;
+    mutationLock.current = true;
+    bookingsController.current?.abort();
+    const previous = selectedBooking;
+    const room = rooms.find(item => item.id === assignmentRoomId) ?? null;
+    const table = assignmentTables.find(item => item.id === assignmentTableId) ?? null;
+    displayBooking({ ...previous, room_id: assignmentRoomId, table_id: table?.id ?? null, room, table });
     setSaving("assignment");
     try {
-      const { booking } = await assignOrgAdminBookingTable(selectedBookingId, {
+      const { booking } = await assignOrgAdminBookingTable(previous.id, {
         room_id: assignmentRoomId,
         table_id: typeof assignmentTableId === "number" ? assignmentTableId : null,
       });
-      setSelectedBooking(booking);
-      syncMapWithBooking(booking);
-      await loadBookings();
-      await loadRoomState(assignmentRoomId, {
-        date: booking.booking_date,
-        time: booking.booking_time ? booking.booking_time.slice(0, 5) : null,
-      });
+      displayBooking(booking);
+      void loadBookings();
+      void loadRoomState(assignmentRoomId, { date: booking.booking_date, time: booking.booking_time?.slice(0, 5) });
       showToast({ tone: "success", title: "Assegnazione salvata", message: "Sala e tavolo collegati alla prenotazione." });
     } catch (err) {
-      showToast({
-        tone: "error",
-        title: "Assegnazione non riuscita",
-        message: err instanceof Error ? err.message : "Errore assegnazione tavolo.",
-      });
+      displayBooking(previous);
+      showToast({ tone: "error", title: "Assegnazione non riuscita", message: err instanceof Error ? err.message : "Errore assegnazione tavolo." });
     } finally {
+      mutationLock.current = false;
       setSaving("");
     }
   }
 
   async function handleAssignmentClear() {
-    if (!selectedBookingId) return;
+    if (!selectedBookingId || !selectedBooking || mutationLock.current || saving) return;
+    mutationLock.current = true;
+    bookingsController.current?.abort();
+    const previous = selectedBooking;
+    displayBooking({ ...previous, room_id: null, table_id: null, room: null, table: null });
     setSaving("assignment-clear");
     try {
-      const { booking } = await unassignOrgAdminBookingTable(selectedBookingId);
-      setSelectedBooking(booking);
+      const { booking } = await unassignOrgAdminBookingTable(previous.id);
+      displayBooking(booking);
       setAssignmentRoomId("");
       setAssignmentTableId("");
       setSelectedMapTableId(null);
-      await loadBookings();
-      if (selectedRoomId) await loadRoomState(selectedRoomId);
+      void loadBookings();
+      if (selectedRoomId) void loadRoomState(selectedRoomId);
       showToast({ tone: "success", title: "Assegnazione rimossa", message: "La prenotazione non ha piu sala o tavolo." });
     } catch (err) {
-      showToast({
-        tone: "error",
-        title: "Operazione non riuscita",
-        message: err instanceof Error ? err.message : "Errore rimozione assegnazione.",
-      });
+      displayBooking(previous);
+      showToast({ tone: "error", title: "Operazione non riuscita", message: err instanceof Error ? err.message : "Errore rimozione assegnazione." });
     } finally {
+      mutationLock.current = false;
       setSaving("");
     }
   }
@@ -1509,6 +1543,7 @@ export default function OrgAdminBookings() {
             setSelectedCalendarDate={setSelectedCalendarDate}
             activeDayItems={activeDayItems}
             selectedBookingId={selectedBookingId}
+            externalBookingTarget={externalBookingTarget}
             setSelectedBookingId={selectBooking}
             selectedBooking={selectedBooking}
             rooms={rooms}
@@ -2212,6 +2247,7 @@ function AgendaSection(props: {
   setSelectedCalendarDate: (value: string | null) => void;
   activeDayItems: AssociationBooking[];
   selectedBookingId: number | null;
+  externalBookingTarget: number | null;
   setSelectedBookingId: (id: number | null) => void;
   selectedBooking: AssociationBooking | null;
   rooms: AssociationRoom[];
@@ -2243,6 +2279,11 @@ function AgendaSection(props: {
   const selectedDayPending = selectedSummary?.request_pending ?? 0;
   const selectedDayConfirmed = selectedSummary?.confirmed ?? 0;
   const [detailSheetOpen, setDetailSheetOpen] = useState(false);
+  useEffect(() => {
+    if (props.isMobileAgendaViewport && props.externalBookingTarget && props.selectedBookingId === props.externalBookingTarget && props.selectedBooking?.id === props.externalBookingTarget) {
+      setDetailSheetOpen(true);
+    }
+  }, [props.isMobileAgendaViewport, props.externalBookingTarget, props.selectedBookingId, props.selectedBooking?.id]);
 
   const selectDay = (dateKey: string, expandFirstBooking = false) => {
     const items = props.bookingsByDay.get(dateKey) ?? [];
@@ -2973,7 +3014,7 @@ function BookingDetailPanel(props: {
           <BookingServiceStatusControls
             booking={props.selectedBooking}
             onStatusChange={props.onStatusChange}
-            saving={props.saving === "booking-status"}
+            saving={Boolean(props.saving) || props.requestActionState === "loading"}
             compact
           />
 
@@ -3017,7 +3058,7 @@ function BookingDetailPanel(props: {
                 {props.selectedBooking.table?.name ? (
                   <button
                     type="button"
-                    disabled={props.saving === "assignment-clear"}
+                    disabled={Boolean(props.saving) || props.requestActionState === "loading"}
                     onClick={props.onClearAssignment}
                   >
                     Rimuovi
@@ -3042,7 +3083,7 @@ function BookingDetailPanel(props: {
                   <button
                     type="button"
                     className="booking-request-mobile-card__assignment-save"
-                    disabled={!props.assignmentRoomId || props.saving.startsWith("assignment")}
+                    disabled={!props.assignmentRoomId || Boolean(props.saving) || props.requestActionState === "loading"}
                     onClick={props.onSaveAssignment}
                   >
                     {props.saving === "assignment" ? "Salvataggio..." : "Salva tavolo"}
@@ -3272,7 +3313,7 @@ function BookingDetailPanel(props: {
       <BookingServiceStatusControls
         booking={props.selectedBooking}
         onStatusChange={props.onStatusChange}
-        saving={props.saving === "booking-status"}
+        saving={Boolean(props.saving) || props.requestActionState === "loading"}
       />
 
       <div className="rounded-[1.25rem] bg-slate-50/50 p-6 ring-1 ring-inset ring-slate-200/60">
@@ -3286,7 +3327,7 @@ function BookingDetailPanel(props: {
           assignmentTables={props.assignmentTables}
         />
         <div className="mt-6">
-          <ActionRow primaryLabel="Salva assegnazione" secondaryLabel="Rimuovi" onPrimary={props.onSaveAssignment} onSecondary={props.onClearAssignment} busy={props.saving.startsWith("assignment")} />
+          <ActionRow primaryLabel="Salva assegnazione" secondaryLabel="Rimuovi" onPrimary={props.onSaveAssignment} onSecondary={props.onClearAssignment} busy={Boolean(props.saving) || props.requestActionState === "loading"} />
         </div>
       </div>
       </>

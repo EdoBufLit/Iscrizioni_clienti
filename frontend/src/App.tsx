@@ -1,13 +1,14 @@
 import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import ErrorBoundary from "./components/ErrorBoundary";
-import Layout from "./components/Layout";
+
 import { ToastProvider } from "./components/ui/ToastProvider";
 import { UnsavedChangesProvider } from "./components/ui/UnsavedChangesProvider";
-import Home from "./pages/Home";
-import Associazioni from "./pages/Associazioni";
 import { useStatePlatformCapabilities } from "./hooks/useStatePlatformCapabilities";
 
+const Layout = lazy(() => import("./components/Layout"));
+const Home = lazy(() => import("./pages/Home"));
+const Associazioni = lazy(() => import("./pages/Associazioni"));
 const Servizi = lazy(() => import("./pages/Servizi"));
 const Affiliazione = lazy(() => import("./pages/Affiliazione"));
 const AffiliazioneInfo = lazy(() => import("./pages/AffiliazioneInfo"));

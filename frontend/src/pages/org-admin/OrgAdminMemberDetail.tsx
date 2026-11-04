@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   AuthError,
+  apiFetch,
   createManualPayment,
   fetchOrgAdminMemberDetail,
   fetchOrgAdminMembershipSettings,
@@ -248,7 +249,7 @@ function MemberDetailContent() {
 
     setSendingAccess(true);
     try {
-      const res = await fetch(`/api/org-admin/members/${member.id}/send-access`, {
+      const res = await apiFetch(`/api/org-admin/members/${member.id}/send-access`, {
         method: "POST",
       });
       if (!res.ok) {
@@ -360,7 +361,7 @@ function MemberDetailContent() {
 
     try {
       const disposition = isPrint ? "inline" : "attachment";
-      const res = await fetch(`/api/org-admin/members/${member.id}/card.pdf?disposition=${disposition}`);
+      const res = await apiFetch(`/api/org-admin/members/${member.id}/card.pdf?disposition=${disposition}`);
       if (!res.ok) {
         let detail = "Errore generazione PDF tessera.";
         try {
@@ -426,7 +427,7 @@ function MemberDetailContent() {
     setReviewingDocId(docId);
     setDocActionState(docId, "loading");
     try {
-      const res = await fetch(`/api/org-admin/documents/${docId}/approve`, {
+      const res = await apiFetch(`/api/org-admin/documents/${docId}/approve`, {
         method: "POST",
       });
 
@@ -472,7 +473,7 @@ function MemberDetailContent() {
     setReviewingDocId(rejectingDoc.id);
     setDocActionState(rejectingDoc.id, "loading");
     try {
-      const res = await fetch(`/api/org-admin/documents/${rejectingDoc.id}/reject`, {
+      const res = await apiFetch(`/api/org-admin/documents/${rejectingDoc.id}/reject`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rejection_note: note }),
@@ -536,7 +537,7 @@ function MemberDetailContent() {
     setIsSubmittingDecision(true);
     setDecisionActionState(decisionDraft.decision, "loading");
     try {
-      const res = await fetch(`/api/org-admin/members/${id}/decision`, {
+      const res = await apiFetch(`/api/org-admin/members/${id}/decision`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ decision: decisionDraft.decision, notes: decisionDraft.notes }),
@@ -630,7 +631,7 @@ function MemberDetailContent() {
     const url = doc.download_url || `/api/org-admin/documents/${doc.id}`;
     setDownloadingDocId(doc.id);
     try {
-      const res = await fetch(url);
+      const res = await apiFetch(url);
       if (!res.ok) {
         const payload = await res.json().catch(() => null);
         const detail = payload?.detail ?? "Errore durante il download";
@@ -680,7 +681,7 @@ function MemberDetailContent() {
   const confirmDelete = async () => {
     setDeleteActionState("loading");
     try {
-      const res = await fetch(`/api/org-admin/members/${id}`, {
+      const res = await apiFetch(`/api/org-admin/members/${id}`, {
         method: "DELETE",
       });
       if (!res.ok) throw new Error("Errore durante l'eliminazione");

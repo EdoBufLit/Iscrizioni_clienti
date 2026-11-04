@@ -46,6 +46,15 @@ beforeEach(() => {
 });
 
 describe("Completamento iscrizione limitato", () => {
+  it("rende la timeline raggiungibile dalla sessione limitata e collega l'azione al documento mancante", async () => {
+    mount(); await ready();
+    expect(screen.getByRole("heading", { name: "Stato attivazione iscrizione" })).toBeVisible();
+    expect(screen.getByText("1. Dati inviati").closest("li")).toHaveClass("is-done");
+    expect(screen.getByText("2. Documenti caricati").closest("li")).toHaveAttribute("aria-current", "step");
+    expect(screen.getByRole("link", { name: "Carica il documento di identità" })).toHaveAttribute("href", "#member-onboarding-identity");
+    expect(screen.getByLabelText("Documento di identità")).toHaveAttribute("id", "member-onboarding-identity");
+    expect(document.querySelector('a[href="/dashboard"]')).not.toBeInTheDocument();
+  });
   it("rimuove il fragment prima dell'exchange e condivide il bootstrap in StrictMode", async () => {
     window.history.replaceState({}, "", "/completa-iscrizione#token=synthetic-one-use");
     vi.mocked(establishMemberOnboardingSession).mockImplementation(async token => {
@@ -81,6 +90,8 @@ describe("Completamento iscrizione limitato", () => {
     submit();
     await waitFor(() => expect(completeMemberOnboarding).toHaveBeenCalledExactlyOnceWith({ newPassword: "PasswordLocale123!", identityDocument: identity, fiscalCodeDocument: fiscal }));
     expect(await screen.findByRole("heading", { name: "Completamento ricevuto" })).toBeInTheDocument();
+    expect(screen.getByText("2. Documenti caricati").closest("li")).toHaveClass("is-done");
+    expect(screen.getByText("3. Approvazione del circolo").closest("li")).toHaveAttribute("aria-current", "step");
     expect(screen.getByRole("status")).toHaveTextContent("In attesa di verifica e attivazione");
     expect(screen.queryByRole("link", { name: "Accedi" })).not.toBeInTheDocument();
     expect(document.querySelector('a[href="/dashboard"]')).not.toBeInTheDocument();

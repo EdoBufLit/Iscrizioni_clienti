@@ -4,6 +4,8 @@ import ModalShell from "../../components/ui/ModalShell";
 import { AuthError, fetchMemberNotifications, markMemberNotificationRead, type MemberAreaNotification } from "../../lib/api";
 import { formatMemberDate } from "../../lib/memberDates";
 import { memberNotificationHref } from "../../lib/memberAccount";
+import { startVisiblePolling } from "../../lib/visiblePolling";
+import { readCachedApi, subscribeApiCache } from "../../lib/swrCache";
 
 export const MEMBER_NOTIFICATIONS_UPDATED = "member-notifications-updated";
 
@@ -16,15 +18,23 @@ export default function MemberNotificationBell() {
   const [error, setError] = useState("");
   const [opening, setOpening] = useState<number | null>(null);
   const openingLock = useRef(false);
+  const mutationEpoch = useRef(0);
   const close = useCallback(() => setOpen(false), []);
+  useEffect(() => subscribeApiCache(key => {
+    if (key !== "member:notifications:?limit=20" || openingLock.current) return;
+    const response = readCachedApi<{ items: MemberAreaNotification[]; unread_count: number }>(key);
+    if (response) { setItems(response.items); setUnread(response.unread_count); setLoading(false); setError(""); }
+  }), []);
   useEffect(() => {
     let active = true; let sequence = 0;
     async function load() {
+      if (openingLock.current) return;
+      const epoch = mutationEpoch.current;
       const request = ++sequence;
       if (open) setLoading(true);
       try {
         const response = await fetchMemberNotifications({ limit: 20 });
-        if (active && request === sequence) { setItems(response.items); setUnread(response.unread_count); setError(""); }
+        if (active && request === sequence && epoch === mutationEpoch.current) { setItems(response.items); setUnread(response.unread_count); setError(""); }
       } catch (reason) {
         if (!active || request !== sequence) return;
         if (reason instanceof AuthError) { navigate("/login", { replace: true }); return; }
@@ -33,22 +43,29 @@ export default function MemberNotificationBell() {
     }
     const refresh = () => { if (!document.hidden) void load(); };
     void load();
-    const timer = window.setInterval(refresh, 30000);
+    const stopPolling = startVisiblePolling(() => load(), 30000);
     window.addEventListener("focus", refresh);
-    document.addEventListener("visibilitychange", refresh);
     window.addEventListener(MEMBER_NOTIFICATIONS_UPDATED, refresh);
-    return () => { active = false; window.clearInterval(timer); window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); window.removeEventListener(MEMBER_NOTIFICATIONS_UPDATED, refresh); };
+    return () => { active = false; stopPolling(); window.removeEventListener("focus", refresh); window.removeEventListener(MEMBER_NOTIFICATIONS_UPDATED, refresh); };
   }, [open, navigate]);
 
   async function visit(item: MemberAreaNotification) {
     if (openingLock.current) return;
-    openingLock.current = true; setOpening(item.id); setError("");
+    openingLock.current = true; mutationEpoch.current += 1; setOpening(item.id); setError("");
+    if (!item.is_read) {
+      setItems((current) => current.map((n) => (n.id === item.id ? { ...n, is_read: true } : n)));
+      setUnread((current) => Math.max(0, current - 1));
+    }
     try {
       if (!item.is_read) await markMemberNotificationRead(item.id);
       window.dispatchEvent(new Event(MEMBER_NOTIFICATIONS_UPDATED));
       setOpen(false);
       navigate(memberNotificationHref(item.href));
     } catch (reason) {
+      if (!item.is_read) {
+        setItems(current => current.map(n => n.id === item.id ? item : n));
+        setUnread(current => current + 1);
+      }
       if (reason instanceof AuthError) navigate("/login", { replace: true });
       else setError(reason instanceof Error ? reason.message : "Impossibile aprire la notifica.");
     } finally { openingLock.current = false; setOpening(null); }

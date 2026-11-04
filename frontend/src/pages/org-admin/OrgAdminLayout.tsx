@@ -1,3 +1,4 @@
+import { prefetchDashboardRoute } from "../../lib/apiPrefetch";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -408,6 +409,9 @@ const OrgAdminLayout = () => {
                           <NavLink
                             key={item.to}
                             to={item.to}
+                            onMouseEnter={() => prefetchDashboardRoute(item.to)}
+                            onFocus={() => prefetchDashboardRoute(item.to)}
+                            onTouchStart={() => prefetchDashboardRoute(item.to)}
                             end={item.end}
                             className={() => `org-admin-sidebar__link ${isActive ? "org-admin-sidebar__link--active" : ""}`}
                           >

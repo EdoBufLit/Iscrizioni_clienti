@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { fetchMe, AuthError, type MemberProfile } from "../../lib/api";
 import { applySeo } from "../../lib/seo";
@@ -9,12 +9,15 @@ import ThemeToggle from "../../components/theme/ThemeToggle";
 import MemberLogoutButton from "./MemberLogoutButton";
 import MemberNotificationBell from "./MemberNotificationBell";
 import "./MemberDashboard.css";
+import { prefetchDashboardRoute } from "../../lib/apiPrefetch";
+import { clearMemberSnapshot, readMemberSnapshot, saveMemberSnapshot } from "../../lib/memberSnapshot";
 import { memberAccountStatus } from "../../lib/memberAccount";
 
 export type DashboardContext = {
   user: MemberProfile | null;
   loading: boolean;
   profileError: string | null;
+  offline?: boolean;
   reloadProfile: () => Promise<void>;
 };
 
@@ -78,10 +81,12 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
   isActive ? sidebarLinkActive : sidebarLinkIdle;
 
 const DashboardLayout = () => {
-  const [user, setUser] = useState<MemberProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<MemberProfile | null>(() => navigator.onLine === false ? readMemberSnapshot()?.profile ?? null : null);
+  const [loading, setLoading] = useState(() => navigator.onLine !== false || !readMemberSnapshot());
+  const [offlineSavedAt, setOfflineSavedAt] = useState<number | null>(() => navigator.onLine === false ? readMemberSnapshot()?.savedAt ?? null : null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const profileRequest = useRef(0);
 
   useEffect(() => {
     applySeo({
@@ -92,25 +97,41 @@ const DashboardLayout = () => {
   }, []);
 
   const loadProfile = useCallback(async () => {
-    setLoading(true);
+    const requestId = ++profileRequest.current;
     setProfileError(null);
     try {
       const profile = await fetchMe();
+      if (requestId !== profileRequest.current) return;
       setUser(profile);
+      saveMemberSnapshot(profile);
+      setOfflineSavedAt(null);
     } catch (err) {
+      if (requestId !== profileRequest.current) return;
       if (err instanceof AuthError) {
+        clearMemberSnapshot();
+        setUser(null);
         navigate("/login", { replace: true });
         return;
       }
-      setUser(null);
-      setProfileError(err instanceof Error ? err.message : "Errore nel caricamento profilo");
+      const cached = readMemberSnapshot();
+      if (cached && (navigator.onLine === false || err instanceof TypeError)) {
+        setUser(cached.profile);
+        setOfflineSavedAt(cached.savedAt);
+        setProfileError("Modalità offline: stai visualizzando l'ultima tessera sincronizzata.");
+      } else {
+        setUser(null);
+        setProfileError(err instanceof Error ? err.message : "Errore nel caricamento profilo");
+      }
     } finally {
-      setLoading(false);
+      if (requestId === profileRequest.current) setLoading(false);
     }
   }, [navigate]);
 
   useEffect(() => {
     void loadProfile();
+    const reconnect = () => { void loadProfile(); };
+    window.addEventListener("online", reconnect);
+    return () => { profileRequest.current += 1; window.removeEventListener("online", reconnect); };
   }, [loadProfile]);
 
   const displayName = user ? `${user.first_name} ${user.last_name}` : null;
@@ -219,6 +240,9 @@ const DashboardLayout = () => {
                     key={item.label}
                     className={linkClass}
                     to={item.to}
+                    onMouseEnter={() => prefetchDashboardRoute(item.to)}
+                    onFocus={() => prefetchDashboardRoute(item.to)}
+                    onTouchStart={() => prefetchDashboardRoute(item.to)}
                     end={item.end}
                   >
                     <div className="flex h-5 w-5 items-center justify-center transition-colors">
@@ -263,7 +287,8 @@ const DashboardLayout = () => {
           </aside>
 
           <div className="member-dashboard-content mt-8 min-w-0 flex-1 md:mt-0">
-            <Outlet context={{ user, loading, profileError, reloadProfile: loadProfile } satisfies DashboardContext} />
+            {offlineSavedAt ? <div className="member-home__offline" role="status">Tessera offline - Ultima sincronizzazione: {new Intl.DateTimeFormat("it-IT", { dateStyle: "short", timeStyle: "short" }).format(offlineSavedAt)}. Lo stato verrà verificato all’ingresso.</div> : null}
+            <Outlet context={{ user, loading, profileError, offline: offlineSavedAt !== null, reloadProfile: loadProfile } satisfies DashboardContext} />
           </div>
         </div>
       </main>

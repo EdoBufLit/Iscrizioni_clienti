@@ -1,3 +1,4 @@
+import { useApiCache } from "../../hooks/useApiCache";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -42,6 +43,7 @@ const CARD_META: {
   },
   {
     key: "documents_pending_review",
+    href: "/org-admin/soci?status=review&docs=pending&review=documents",
     label: "Documenti da rivedere",
     description: "Documenti in attesa di approvazione.",
     icon: "M12 7.5h6m-6 3h6m-6 3h3m-6.75 5.25h9A2.25 2.25 0 0 0 19.5 16.5V6.75A2.25 2.25 0 0 0 17.25 4.5h-9A2.25 2.25 0 0 0 6 6.75v9.75A2.25 2.25 0 0 0 8.25 18.75Z",
@@ -71,9 +73,10 @@ const formatDateTime = (value: string | null | undefined) => {
 
 const OrgAdminDashboard = () => {
   const { admin, loading: adminLoading } = useOrgAdmin();
-  const [metrics, setMetrics] = useState<OrgAdminMetrics | null>(null);
+  const cachedMetrics = useApiCache<OrgAdminMetrics>("org-admin:metrics");
+  const [metrics, setMetrics] = useState<OrgAdminMetrics | null>(() => cachedMetrics ?? null);
   const [referralSummary, setReferralSummary] = useState<OrgAdminReferralSummary | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!cachedMetrics);
   const [metricsError, setMetricsError] = useState(false);
   const [referralError, setReferralError] = useState("");
   const [videoGuideOpen, setVideoGuideOpen] = useState(false);
@@ -83,7 +86,7 @@ const OrgAdminDashboard = () => {
   const loadDashboardData = useCallback(async () => {
     if (adminLoading || !admin) return;
 
-    setLoading(true);
+    if (!cachedMetrics) setLoading(true);
     const [metricsResult, referralResult] = await Promise.allSettled([
       fetchOrgAdminMetrics(),
       fetchOrgAdminReferralSummary(),
@@ -139,6 +142,8 @@ const OrgAdminDashboard = () => {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [videoGuideOpen]);
+
+  useEffect(() => { if (cachedMetrics) { setMetrics(cachedMetrics); setLoading(false); setMetricsError(false); } }, [cachedMetrics]);
 
   const isLoading = adminLoading || loading;
 

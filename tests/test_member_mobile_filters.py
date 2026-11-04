@@ -171,3 +171,43 @@ def test_single_member_xlsx_rejects_missing_foreign_deleted_and_unauthenticated_
 @pytest.mark.parametrize("member_id", ["0", "-1", "1.5", "abc"])
 def test_single_member_xlsx_requires_a_positive_integer(client, tenant, member_id):
     assert client.get("/api/org-admin/members.xlsx", params={"member_id": member_id}).status_code == 422
+
+
+def test_filtered_xlsx_matches_expired_search_and_tenant_scope(client, tenant):
+    db, org = tenant
+    wanted = add_member(db, org, first_name="Rinnovo", last_name="Specifico", status=MemberStatus.EXPIRED)
+    add_member(db, org, first_name="Altro", status=MemberStatus.EXPIRED)
+    add_member(db, org, first_name="Rinnovo", last_name="Attivo")
+    other = Organization(name="Other export", slug=f"export-{uuid.uuid4().hex}", is_active=True)
+    db.add(other); db.flush()
+    add_member(db, other, first_name="Rinnovo", last_name="Specifico", status=MemberStatus.EXPIRED)
+    db.commit()
+    filters = {"status": "expired", "q": "Rinnovo Specifico"}
+    listing = client.get("/api/org-admin/members", params=filters).json()
+    assert [item["id"] for item in listing["items"]] == [wanted.id]
+    rows = workbook_members(client.get("/api/org-admin/members.xlsx", params=filters))
+    assert len(rows) == 1 and rows[0][:2] == (wanted.first_name, wanted.last_name)
+
+
+def test_document_preview_inline_only_for_safe_types_and_own_tenant(client, tenant, tmp_path, monkeypatch):
+    from app.config import settings
+    db, org = tenant
+    monkeypatch.setattr(settings, "UPLOAD_DIR", str(tmp_path))
+    member = add_member(db, org)
+    path = tmp_path / "document.pdf"
+    path.write_bytes(b"%PDF-1.4\nQA")
+    doc = MemberDocument(member_id=member.id, doc_type="identity", rel_path="document.pdf", original_filename="document.pdf", mime_type="application/pdf", size_bytes=11, sha256="qa", status="uploaded")
+    db.add(doc); db.commit()
+    preview = client.get(f"/api/org-admin/documents/{doc.id}?preview=true")
+    assert preview.status_code == 200
+    assert preview.headers["content-disposition"].startswith("inline;")
+    assert "no-store" in preview.headers["cache-control"]
+    assert preview.headers["x-content-type-options"] == "nosniff"
+    assert client.get(f"/api/org-admin/documents/{doc.id}").headers["content-disposition"].startswith("attachment;")
+    doc.mime_type = "image/svg+xml"; db.commit()
+    assert client.get(f"/api/org-admin/documents/{doc.id}?preview=true").headers["content-disposition"].startswith("attachment;")
+    other = Organization(name="Foreign preview", slug=f"preview-{uuid.uuid4().hex}", is_active=True)
+    db.add(other); db.flush()
+    foreign = add_member(db, other)
+    doc.member_id = foreign.id; db.commit()
+    assert client.get(f"/api/org-admin/documents/{doc.id}?preview=true").status_code == 403

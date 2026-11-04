@@ -21,7 +21,7 @@ export function startVisiblePolling(tick: (signal: AbortSignal) => Promise<void>
     finally {
       running = false;
       if (controller === current) controller = null;
-      schedule(resumeImmediately ? 0 : Math.min(30000, delay * 2 ** failures));
+      schedule(resumeImmediately ? 0 : Math.min(Math.max(30000, delay), delay * 2 ** failures));
       resumeImmediately = false;
     }
   }

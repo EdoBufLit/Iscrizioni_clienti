@@ -6,6 +6,7 @@ import OrgAdminQuote from "./OrgAdminQuote";
 const mocks = vi.hoisted(() => ({ quotes: vi.fn(), payment: vi.fn(), mobile: false }));
 vi.mock("../../lib/api", async (original) => ({ ...await original<typeof import("../../lib/api")>(),
   fetchOrgAdminQuotes: (...args: unknown[]) => mocks.quotes(...args), recordOrgAdminRenewalPayment: (...args: unknown[]) => mocks.payment(...args) }));
+vi.mock("../../components/ui/ToastProvider", () => ({ useToast: () => ({ showToast: vi.fn() }) }));
 vi.mock("../../hooks/useMediaQuery", () => ({ useMediaQuery: () => mocks.mobile }));
 
 beforeEach(() => {

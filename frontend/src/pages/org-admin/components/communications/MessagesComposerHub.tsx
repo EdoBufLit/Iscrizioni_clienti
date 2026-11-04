@@ -1,6 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
+import { CAMPAIGN_SEGMENT_KEY, type CampaignSegment } from "../CampaignSegmentActions";
+import { useOrgAdmin } from "../../OrgAdminLayout";
 import ConfirmModal from "../../../../components/ui/ConfirmModal";
 import PromptModal from "../../../../components/ui/PromptModal";
 import Skeleton from "../../../../components/ui/Skeleton";
@@ -514,6 +516,8 @@ function MemberPicker({
   onQueryChange: (value: string) => void;
   onToggle: (member: OrgAdminMember) => void;
 }) {
+  const [selectedPage, setSelectedPage] = useState(0);
+  const currentPage = Math.min(selectedPage, Math.max(0, Math.ceil(selectedMembers.length / 20) - 1));
   const selectedIds = new Set(selectedMembers.map((member) => member.id));
 
   return (
@@ -535,7 +539,7 @@ function MemberPicker({
       </label>
       {selectedMembers.length ? (
         <div className="flex flex-wrap gap-2">
-          {selectedMembers.map((member) => (
+          {selectedMembers.slice(currentPage * 20, currentPage * 20 + 20).map((member) => (
             <button
               key={member.id}
               type="button"
@@ -548,6 +552,7 @@ function MemberPicker({
           ))}
         </div>
       ) : null}
+      {selectedMembers.length > 20 && <div className="flex flex-wrap items-center gap-2 text-sm"><span>{selectedMembers.length} soci selezionati · pagina {currentPage + 1} di {Math.ceil(selectedMembers.length / 20)}</span><button type="button" className="btn-secondary" disabled={currentPage === 0} onClick={() => setSelectedPage(currentPage - 1)}>Precedenti</button><button type="button" className="btn-secondary" disabled={(currentPage + 1) * 20 >= selectedMembers.length} onClick={() => setSelectedPage(currentPage + 1)}>Successivi</button></div>}
       <div className="grid gap-2">
         {results.map((member) => (
           <button
@@ -594,6 +599,8 @@ export function MessagesHub({
 }: MessagesHubProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const { showToast } = useToast();
+  const { admin } = useOrgAdmin();
+  const segmentHandled = useRef(false);
   const [subtab, setSubtab] = useState<Subtab>(() => {
     if (forcedSubtab) return forcedSubtab;
     return searchParams.get("tab") === "modelli" ? "templates" : "campaigns";
@@ -627,6 +634,20 @@ export function MessagesHub({
   const [memberSearchResults, setMemberSearchResults] = useState<OrgAdminMember[]>([]);
   const [selectedMembers, setSelectedMembers] = useState<OrgAdminMember[]>([]);
   const [audienceEstimate, setAudienceEstimate] = useState<number | null>(null);
+  useEffect(() => {
+    if (searchParams.get("segment") !== "selected" || !admin || loading || communicationsLocked || segmentHandled.current) return;
+    segmentHandled.current = true;
+    try {
+      const segment = JSON.parse(sessionStorage.getItem(CAMPAIGN_SEGMENT_KEY) || "null") as CampaignSegment | null;
+      if (!segment || segment.orgId !== admin.org_id || segment.adminId !== admin.id || Date.now() - segment.createdAt > 15 * 60 * 1000 || !Array.isArray(segment.ids) || !segment.ids.length) throw new Error("Segmento scaduto. Riapri Soci o Quote e prepara nuovamente la campagna.");
+      const members: OrgAdminMember[] = [...new Set(segment.ids)].filter(id => Number.isSafeInteger(id) && id > 0).map(id => ({ id, name: `Socio #${id}`, email: null, status: null, is_active: false, deleted_at: null, card_no: null, card_number: null, joined_at: null, docs_count: 0 }));
+      const draft = { ...emptyCampaignDraft(), name: segment.title, recipientMode: "selected_members" as const, memberIds: members.map(item => item.id) };
+      setCampaignDraft(draft); setSelectedMembers(members); setCampaignSavedSnapshot(serializeCampaignDraft(draft, members)); setCampaignStep("type"); setView({ kind: "campaign-builder", campaignId: null });
+      sessionStorage.removeItem(CAMPAIGN_SEGMENT_KEY);
+      setSearchParams(params => { const next = new URLSearchParams(params); next.delete("segment"); return next; }, { replace: true });
+      showToast({ tone: "success", message: `${members.length} soci selezionati. I consensi e gli indirizzi validi saranno verificati prima dell’invio.` });
+    } catch (error) { showToast({ tone: "error", message: error instanceof Error ? error.message : "Segmento non disponibile." }); }
+  }, [admin, loading, communicationsLocked, searchParams, setSearchParams, showToast]);
   const templateBuilderRef = useRef<GrapesEmailBuilderHandle | null>(null);
   const campaignBuilderRef = useRef<GrapesEmailBuilderHandle | null>(null);
 
@@ -957,7 +978,8 @@ export function MessagesHub({
         setCampaignStep("preview");
         if (draft.recipientMode === "selected_members" && draft.memberIds.length) {
           const memberLookup = await searchOrgAdminCommunicationMembers({ limit: 25 });
-          const members = memberLookup.items.filter((member) => draft.memberIds.includes(member.id));
+          const lookup = new Map(memberLookup.items.map(member => [member.id, member]));
+          const members: OrgAdminMember[] = draft.memberIds.map(id => lookup.get(id) || { id, name: `Socio #${id}`, email: null, status: null, is_active: false, deleted_at: null, card_no: null, card_number: null, joined_at: null, docs_count: 0 });
           setSelectedMembers(members);
           setCampaignSavedSnapshot(serializeCampaignDraft(draft, members));
         } else {

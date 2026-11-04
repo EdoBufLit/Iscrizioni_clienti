@@ -1,0 +1,15 @@
+.member-home__timeline { display: grid; gap: 16px; padding: 20px 24px; }
+.member-home__timeline-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.member-home__timeline-cta { color: var(--theme-brand); font-size: 13px; font-weight: 600; }
+.member-home__timeline-steps { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.member-home__timeline-steps li { display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: start; gap: 12px; padding: 12px 14px; border: 1px solid var(--theme-border); border-radius: 12px; background: var(--theme-surface-muted); }
+.member-home__timeline-steps li.is-done { border-color: color-mix(in srgb, var(--theme-success) 32%, var(--theme-border)); background: color-mix(in srgb, var(--theme-success) 8%, var(--theme-surface-solid)); }
+.member-home__timeline-steps li.is-current { border-color: var(--theme-brand); background: var(--theme-brand-soft); }
+.member-home__timeline-dot { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--theme-border-strong); background: var(--theme-surface-solid); color: var(--theme-text-muted); font-size: 12px; font-weight: 700; }
+.member-home__timeline-steps li.is-done .member-home__timeline-dot { border-color: var(--theme-success); background: var(--theme-success); color: var(--theme-on-brand); }
+.member-home__timeline-steps li.is-current .member-home__timeline-dot { border-color: var(--theme-brand); background: var(--theme-brand); color: var(--theme-on-brand); }
+.member-home__timeline-steps strong { display: block; color: var(--theme-text); font-size: 14px; font-weight: 600; }
+.member-home__timeline-steps p { margin-top: 2px; color: var(--theme-text-muted); font-size: 13px; line-height: 1.45; }
+.member-home__timeline-cta { display: inline-flex; align-items: center; min-height: 44px; overflow-wrap: anywhere; }
+.member-home__timeline-header h2 { color: var(--theme-text); font-size: 16px; font-weight: 700; }
+@media (max-width: 480px) { .member-home__timeline { padding: 16px; gap: 12px; } .member-home__timeline-steps li { padding: 10px; gap: 8px; } }

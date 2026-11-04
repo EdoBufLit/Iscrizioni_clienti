@@ -4,6 +4,7 @@ import {
   completeMemberOnboarding, establishMemberOnboardingSession, fetchMemberOnboarding,
   MemberOnboardingError, type MemberOnboardingContext,
 } from "../lib/api";
+import { MembershipProgress } from "./dashboard/MemberOnboardingTimeline";
 import { applySeo } from "../lib/seo";
 import { publicUploadHint, validatePublicDocumentUpload } from "../lib/uploadValidation";
 import "./MemberOnboarding.css";
@@ -134,10 +135,16 @@ export default function MemberOnboarding() {
     <p className="auth-copy">Riapri l'invito più recente. Se il link è scaduto o è già stato utilizzato, chiedi alla tua associazione un nuovo invito.</p>
     <button type="button" className="btn-primary" onClick={() => void retrySession()}>Riprova la sessione</button><Link className="auth-link" to="/">Torna al sito</Link>
   </>);
+  const requiredIdentity = context.organization.require_identity_document;
+  const identityReceived = !requiredIdentity || !canUpload(latestDocument(context, "identity"));
+  const timeline = <MembershipProgress uploaded={identityReceived} documentsRequired={requiredIdentity}
+    needsUpload={!identityReceived} approved={context.member.status === "pending_cards"} active={context.member.is_active}
+    action={!identityReceived ? <a className="member-home__timeline-cta" href="#member-onboarding-identity">Carica il documento di identità</a> : undefined} />;
   if (context.completed && !managingDocuments) return shell(<>
     <p className="section-title">{context.organization.name}</p><h1 className="auth-title">{context.member.is_active ? "Iscrizione attiva" : "Completamento ricevuto"}</h1>
     <p className="member-onboarding-status" role="status">{context.member.is_active ? "Puoi accedere alla tua area socio." : "In attesa di verifica e attivazione"}</p>
     <p className="auth-copy">{context.member.is_active ? "La password è pronta. Usa il normale accesso per entrare." : "I dati necessari sono stati ricevuti. La tua associazione deve verificare la pratica prima di attivare l'area socio e la tessera."}</p>
+    {timeline}
     <button type="button" className="btn-secondary" onClick={() => { setError(""); setManagingDocuments(true); }}>Gestisci documenti</button>
     {context.member.is_active ? <Link className="btn-primary" to="/login">Accedi</Link> : <Link className="btn-primary" to="/">Torna al sito</Link>}
   </>);
@@ -148,6 +155,7 @@ export default function MemberOnboarding() {
     <p className="section-title">{context.organization.name}</p><h1 className="auth-title">{managingDocuments ? "Gestisci i documenti" : "Completa la tua iscrizione"}</h1>
     <p className="auth-copy"><strong>{context.member.display_name}</strong>{context.member.email && <span className="member-onboarding-email">{context.member.email}</span>}</p>
     <p className="auth-copy">Imposta le credenziali e invia i documenti richiesti. L'accesso all'area socio sarà disponibile dopo l'attivazione dell'iscrizione.</p>
+    {timeline}
     {error && <div id="member-onboarding-error" className="auth-alert" ref={alertRef} tabIndex={-1} role="alert">{error}</div>}
     <form onSubmit={event => void submit(event)} noValidate aria-describedby={error ? "member-onboarding-error" : undefined}>
       <fieldset disabled={submitting}>

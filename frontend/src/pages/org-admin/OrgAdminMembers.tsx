@@ -1,3 +1,6 @@
+import { useApiCache } from "../../hooks/useApiCache";
+import { readCachedApi } from "../../lib/swrCache";
+import { membersCacheKey } from "../../lib/dashboardCacheKeys";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -6,10 +9,13 @@ import {
   fetchOrgAdminMembershipSettings,
   AuthError,
   type OrgAdminMember,
+  type OrgAdminMembersResponse,
   type OrgAdminMetrics,
   type OrgAdminMembershipSettings,
 } from "../../lib/api";
 import { useOrgAdmin } from "./OrgAdminLayout";
+import CampaignSegmentActions from "./components/CampaignSegmentActions";
+import DocumentReviewQueue from "./components/DocumentReviewQueue";
 import CreateMemberModal from "./components/CreateMemberModal";
 import MemberImportModal from "./components/MemberImportModal";
 import MemberBulkActions from "./components/MemberBulkActions";
@@ -98,11 +104,6 @@ const OrgAdminMembers = () => {
   const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [members, setMembers] = useState<OrgAdminMember[]>([]);
-  const [total, setTotal] = useState(0);
-  const [metrics, setMetrics] = useState<OrgAdminMetrics | null>(null);
-  const [membershipSettings, setMembershipSettings] = useState<OrgAdminMembershipSettings | null>(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const membersRequestId = useRef(0);
 
@@ -114,6 +115,20 @@ const OrgAdminMembers = () => {
   const [order, setOrder] = useState(searchParams.get("order") || "joined_at_desc");
   const [page, setPage] = useState(Math.max(1, Number(searchParams.get("page") || 1) || 1));
 
+  const cacheKey = membersCacheKey({ q: debouncedSearch, status, access, source, docs, order, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE });
+  const cachedMembers = useApiCache<OrgAdminMembersResponse>(cacheKey);
+  const cachedMetrics = useApiCache<OrgAdminMetrics>("org-admin:metrics");
+  const cachedSettings = useApiCache<OrgAdminMembershipSettings>("org-admin:membership-settings");
+  const [members, setMembers] = useState<OrgAdminMember[]>(() => cachedMembers?.items ?? []);
+  const [total, setTotal] = useState(() => cachedMembers?.total ?? 0);
+  const [metrics, setMetrics] = useState<OrgAdminMetrics | null>(() => cachedMetrics ?? null);
+  const [membershipSettings, setMembershipSettings] = useState<OrgAdminMembershipSettings | null>(() => cachedSettings ?? null);
+  const [loading, setLoading] = useState(!cachedMembers);
+  useEffect(() => { if (cachedMembers) { setMembers(cachedMembers.items); setTotal(cachedMembers.total); setLoading(false); setError(false); } }, [cachedMembers]);
+  useEffect(() => { if (cachedMetrics) setMetrics(cachedMetrics); }, [cachedMetrics]);
+  useEffect(() => { if (cachedSettings) setMembershipSettings(cachedSettings); }, [cachedSettings]);
+
+  const [reviewOpen, setReviewOpen] = useState(searchParams.get("review") === "documents");
   const [showModal, setShowModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showFiltersSheet, setShowFiltersSheet] = useState(false);
@@ -160,7 +175,9 @@ const OrgAdminMembers = () => {
       return;
     }
 
-    setLoading(true);
+    const warm = readCachedApi<OrgAdminMembersResponse>(cacheKey);
+    if (warm) { setMembers(warm.items); setTotal(warm.total); }
+    setLoading(!warm);
     setError(false);
 
     try {
@@ -191,7 +208,7 @@ const OrgAdminMembers = () => {
     } finally {
       if (requestId === membersRequestId.current) setLoading(false);
     }
-  }, [adminLoading, admin, debouncedSearch, status, access, source, docs, order, page, navigate]);
+  }, [adminLoading, admin, debouncedSearch, status, access, source, docs, order, page, navigate, cacheKey]);
 
   useEffect(() => {
     void loadMembers();
@@ -453,7 +470,7 @@ const OrgAdminMembers = () => {
               Registra presenza
             </button>
             <a
-              href="/api/org-admin/members.xlsx"
+              href={`/api/org-admin/members.xlsx?${new URLSearchParams({ status, q: debouncedSearch, access, source, docs, order }).toString()}`}
               className="btn-ghost !hidden !px-4 !py-2 text-xs font-bold uppercase tracking-widest md:!inline-flex items-center gap-2"
             >
               <svg
@@ -467,12 +484,15 @@ const OrgAdminMembers = () => {
               >
                 <path d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
               </svg>
-              Esporta Excel
+              Esporta soci filtrati
             </a>
           </div>
         ) : null}
       </header>
 
+      <div className="flex flex-wrap items-start gap-x-3 gap-y-1 mb-2"><button type="button" className="btn-secondary" onClick={() => setReviewOpen(true)}>Revisiona documenti{missingDocumentsCount > 0 ? ` (${missingDocumentsCount})` : ""}</button>
+      {admin && <CampaignSegmentActions source="soci" query={new URLSearchParams({ q: debouncedSearch, status, access, source, docs, order }).toString()} loadPage={async offset => { const result = await fetchOrgAdminMembers({ q: debouncedSearch, status, access, source, docs, order, offset, limit: 100 }); return { ids: result.items.map(item => item.id), total: result.total }; }} />}</div>
+      {reviewOpen && <DocumentReviewQueue onClose={() => { setReviewOpen(false); setSearchParams(params => { const next = new URLSearchParams(params); next.delete("review"); return next; }, { replace: true }); }} onChanged={() => { void loadMembers(); void loadMetrics(); }} />}
       {successMessage && (
         <div className="rounded-xl border border-emerald-200/50 bg-emerald-50/50 p-4 md:p-5 flex items-center justify-between gap-4 animate-in slide-in-from-top-2 duration-300">
           <div className="flex items-center gap-3">
@@ -715,14 +735,14 @@ const OrgAdminMembers = () => {
                 <span>Importa CSV</span>
               </button>
               <a
-                href="/api/org-admin/members.xlsx"
+                href={`/api/org-admin/members.xlsx?${new URLSearchParams({ status, q: debouncedSearch, access, source, docs, order }).toString()}`}
                 className="org-admin-members-sheet__action-item"
                 onClick={() => setShowActionsSheet(false)}
               >
                 <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
                 </svg>
-                <span>Esporta Excel</span>
+                <span>Esporta soci filtrati</span>
               </a>
               <button
                 type="button"
