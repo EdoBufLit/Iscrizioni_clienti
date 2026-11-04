@@ -63,6 +63,8 @@
   --theme-chrome-strong: #0a2a27;
   --theme-on-chrome: #ffffff;
   --theme-info: #245c8c;
+  --theme-purple: #6d28d9;
+  --theme-brand-soft: color-mix(in srgb, var(--theme-brand) 10%, var(--theme-surface-solid));
 }
 
 :root[data-theme="dark"] {
@@ -128,6 +130,8 @@
   --theme-chrome-strong: #132a2a;
   --theme-on-chrome: #edf4f2;
   --theme-info: #9ac8f5;
+  --theme-purple: #c4b5fd;
+  --theme-brand-soft: color-mix(in srgb, var(--theme-brand) 16%, var(--theme-surface-solid));
 }
 
 html,
@@ -393,7 +397,7 @@ select:focus {
   width: 100%;
   overflow: hidden;
   border-radius: inherit;
-  background: var(--theme-surface-solid);
+  background: var(--theme-surface-muted);
 }
 
 .theme-toggle__thumb {
@@ -404,12 +408,14 @@ select:focus {
   height: 1.5rem;
   width: 1.5rem;
   border-radius: 999px;
+  border: 1px solid var(--theme-border);
   transform: translateY(-50%);
-  background: color-mix(in srgb, var(--theme-surface-solid) 96%, transparent);
-  box-shadow: 0 6px 14px -8px rgba(0, 0, 0, 0.45);
+  background: var(--theme-surface-solid);
+  box-shadow: 0 2px 6px rgba(15, 35, 30, 0.22);
   transition:
     transform 180ms ease,
-    background-color 180ms ease;
+    background-color 180ms ease,
+    border-color 180ms ease;
 }
 
 .theme-toggle.is-dark .theme-toggle__thumb {
@@ -1201,6 +1207,11 @@ select:focus {
 :root[data-theme="dark"] .border-neutral-200\/70:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .border-neutral-200\/80:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .border-neutral-300:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-slate-100:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-slate-100\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-slate-100\/60:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-slate-100\/70:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-slate-100\/80:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .border-slate-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .border-slate-200\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .border-slate-200\/60:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
@@ -1237,6 +1248,7 @@ select:focus {
   --tw-ring-color: var(--theme-border) !important;
 }
 
+:root[data-theme="dark"] .text-neutral-950:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .text-neutral-900:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .text-neutral-800:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .text-slate-900:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
@@ -1340,15 +1352,32 @@ select:focus {
   background-color: var(--theme-table-row) !important;
 }
 
-:root[data-theme="dark"] .bg-emerald-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
+:root[data-theme="dark"] .bg-emerald-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-emerald-50\/70:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-emerald-50\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-emerald-100:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-green-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .hover\:bg-green-100:hover:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   background-color: color-mix(in srgb, var(--theme-success) 18%, var(--theme-surface-solid)) !important;
 }
 
-:root[data-theme="dark"] .bg-amber-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
+:root[data-theme="dark"] .bg-amber-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-amber-50\/70:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-amber-50\/80:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-amber-100:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-amber-100\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   background-color: color-mix(in srgb, var(--theme-warning) 18%, var(--theme-surface-solid)) !important;
 }
 
-:root[data-theme="dark"] .bg-red-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
+:root[data-theme="dark"] .bg-red-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-red-50\/80:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-red-50\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-red-50\/30:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-red-100:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-rose-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-rose-50\/70:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-rose-50\/80:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-rose-100:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   background-color: color-mix(in srgb, var(--theme-danger) 18%, var(--theme-surface-solid)) !important;
 }
 
@@ -1358,82 +1387,126 @@ select:focus {
 }
 
 :root[data-theme="dark"] .bg-blue-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-blue-50\/70:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .bg-sky-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
-:root[data-theme="dark"] .bg-cyan-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
+:root[data-theme="dark"] .bg-sky-50\/70:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-cyan-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-cyan-50\/30:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .bg-cyan-100:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   background-color: color-mix(in srgb, var(--theme-brand) 18%, var(--theme-surface-solid)) !important;
 }
 
 :root[data-theme="dark"] .bg-purple-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .bg-violet-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .bg-fuchsia-50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
-  background-color: color-mix(in srgb, #a78bfa 16%, var(--theme-surface-solid)) !important;
+  background-color: color-mix(in srgb, var(--theme-purple) 16%, var(--theme-surface-solid)) !important;
 }
 
+:root[data-theme="dark"] .border-emerald-100:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .border-emerald-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .border-emerald-200\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
-:root[data-theme="dark"] .border-emerald-200\/60:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
+:root[data-theme="dark"] .border-emerald-200\/60:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-green-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   border-color: color-mix(in srgb, var(--theme-success) 34%, var(--theme-border)) !important;
 }
 
+:root[data-theme="dark"] .ring-emerald-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
+  --tw-ring-color: color-mix(in srgb, var(--theme-success) 34%, var(--theme-border)) !important;
+}
+
+:root[data-theme="dark"] .border-amber-100:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .border-amber-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .border-amber-200\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .border-amber-200\/60:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-amber-300:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .border-orange-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .border-orange-200\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   border-color: color-mix(in srgb, var(--theme-warning) 34%, var(--theme-border)) !important;
 }
 
+:root[data-theme="dark"] .border-red-100:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .border-red-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .border-red-200\/50:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
-:root[data-theme="dark"] .border-red-200\/60:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
+:root[data-theme="dark"] .border-red-200\/60:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-red-300:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-rose-100:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-rose-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-rose-200\/60:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-rose-300:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   border-color: color-mix(in srgb, var(--theme-danger) 34%, var(--theme-border)) !important;
 }
 
+:root[data-theme="dark"] .border-blue-100:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .border-blue-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-sky-100:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .border-sky-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .border-sky-200\/60:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .border-cyan-100:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .border-cyan-200:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   border-color: color-mix(in srgb, var(--theme-brand) 34%, var(--theme-border)) !important;
 }
 
+:root[data-theme="dark"] .text-emerald-950:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .text-emerald-900:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .text-emerald-800:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
-:root[data-theme="dark"] .text-emerald-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
+:root[data-theme="dark"] .text-emerald-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-green-800:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-green-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: color-mix(in srgb, var(--theme-success) 78%, white) !important;
 }
 
+:root[data-theme="dark"] .text-emerald-900\/40:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
+  color: color-mix(in srgb, var(--theme-success) 56%, var(--theme-text-soft)) !important;
+}
+
+:root[data-theme="dark"] .text-amber-950:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-amber-900:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .text-amber-800:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .text-amber-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-orange-900:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .text-orange-800:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .text-orange-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: color-mix(in srgb, var(--theme-warning) 82%, white) !important;
 }
 
+:root[data-theme="dark"] .text-red-950:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-red-900:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .text-red-800:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .text-red-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-rose-900:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .text-rose-800:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .text-rose-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-rose-600:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .text-red-600:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: color-mix(in srgb, var(--theme-danger) 80%, white) !important;
 }
 
+:root[data-theme="dark"] .text-blue-900:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .text-blue-800:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .text-blue-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-sky-900:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .text-sky-800:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .text-sky-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-cyan-950:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-cyan-900:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .text-cyan-800:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
-:root[data-theme="dark"] .text-cyan-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
+:root[data-theme="dark"] .text-cyan-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
+:root[data-theme="dark"] .text-cyan-600\/70:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
   color: color-mix(in srgb, var(--theme-brand) 82%, white) !important;
 }
 
 :root[data-theme="dark"] .text-purple-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .text-violet-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)),
 :root[data-theme="dark"] .text-fuchsia-700:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
-  color: color-mix(in srgb, #c4b5fd 86%, white) !important;
+  color: color-mix(in srgb, var(--theme-purple) 86%, white) !important;
 }
 
 :root[data-theme="dark"] table tbody tr:nth-child(even) {
   background: var(--theme-table-stripe);
+}
+
+:root[data-theme="dark"] table tbody tr:is(.is-selected, [aria-selected="true"], .bg-emerald-50\/70, .bg-brand\/5, .bg-brand\/\[0\.05\]) {
+  background-color: color-mix(in srgb, var(--theme-brand) 16%, var(--theme-table-row)) !important;
 }
 
 @keyframes theme-skeleton-wave {
@@ -1597,16 +1670,8 @@ select:focus {
   background-image: none !important;
 }
 
-:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="text-[#"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *)) {
+:root[data-theme="dark"] .org-admin-v2 .org-admin-content [class*="text-[#"]:not(:where([data-card-branding], [data-card-branding] *, .form-public-canvas-container, .form-public-canvas-container *, .text-\[\#0b141a\], .text-\[\#86efac\], .text-\[\#d1f4cc\], .text-\[\#fca5a5\], .text-\[\#fcd34d\])) {
   color: var(--oa-muted) !important;
-}
-
-.org-admin-v2 .org-admin-content .btn-ghost,
-.org-admin-v2 .org-admin-content .btn-secondary {
-  background-color: var(--oa-panel) !important;
-  background-image: none !important;
-  color: var(--oa-brand-strong) !important;
-  border-color: var(--oa-line-strong) !important;
 }
 
 /* Super-admin pages define their own `--sa-*` tokens in index.css, which is
@@ -1744,9 +1809,25 @@ select:focus {
   filter: none;
 }
 
-:root[data-theme] :is(.btn-secondary, .btn-ghost, .signup-wizard-secondary, .sa-btn--secondary, .sa-btn--ghost) {
+:root[data-theme] :is(.btn-secondary, .signup-wizard-secondary, .sa-btn--secondary) {
   border: 1px solid var(--theme-border-strong);
   background: var(--theme-surface-solid) !important;
+  color: var(--theme-text) !important;
+  -webkit-text-fill-color: var(--theme-text) !important;
+  border-radius: 0.5rem;
+  min-height: 2.75rem;
+  box-shadow: none;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  backdrop-filter: none;
+  transform: none;
+}
+
+:root[data-theme] :is(.btn-ghost, .sa-btn--ghost) {
+  border: 1px solid var(--theme-border);
+  background: color-mix(in srgb, var(--theme-surface-solid) 68%, transparent) !important;
   color: var(--theme-text) !important;
   -webkit-text-fill-color: var(--theme-text) !important;
   border-radius: 0.5rem;
@@ -1766,6 +1847,20 @@ select:focus {
   color: var(--theme-text) !important;
   box-shadow: none;
   transform: none;
+}
+
+:root[data-theme] .org-admin-v2 .org-admin-topbar .btn-ghost {
+  border-color: rgba(255, 255, 255, 0.16) !important;
+  background: rgba(255, 255, 255, 0.09) !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+:root[data-theme] .org-admin-v2 .org-admin-topbar .btn-ghost:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.28) !important;
+  background: rgba(255, 255, 255, 0.16) !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
 }
 
 :root[data-theme] :is(.btn-primary, .btn-secondary, .btn-ghost, .signup-wizard-primary, .signup-wizard-secondary, .sa-btn--primary, .sa-btn--secondary, .sa-btn--ghost):focus-visible {

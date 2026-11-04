@@ -91,7 +91,7 @@
   --sa-warning: var(--theme-warning);
   --sa-danger: var(--theme-danger);
   --sa-info: var(--theme-info);
-  --sa-purple: var(--theme-info);
+  --sa-purple: var(--theme-purple);
   --sa-shadow: var(--theme-shadow-lg);
   --sa-shadow-soft: var(--theme-shadow-sm);
   min-height: 100vh;
@@ -409,6 +409,24 @@
   background: color-mix(in srgb, var(--sa-purple) 14%, var(--sa-panel));
 }
 
+.sa-kpi--muted .sa-kpi__icon,
+.sa-kpi--muted .sa-kpi__hint {
+  color: var(--sa-muted);
+}
+
+.sa-kpi--muted .sa-kpi__icon {
+  background: color-mix(in srgb, var(--sa-muted) 14%, var(--sa-panel));
+}
+
+.sa-kpi--accent .sa-kpi__icon,
+.sa-kpi--accent .sa-kpi__hint {
+  color: var(--sa-warning);
+}
+
+.sa-kpi--accent .sa-kpi__icon {
+  background: color-mix(in srgb, var(--sa-warning) 15%, var(--sa-panel));
+}
+
 .sa-toolbar {
   display: grid;
   gap: 1rem;
@@ -540,11 +558,11 @@
 .super-admin-v2 .btn-primary,
 .super-admin-v2 .btn-ghost {
   display: inline-flex;
-  min-height: 2.55rem;
+  min-height: 2.75rem;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  border-radius: 0.55rem !important;
+  border-radius: 0.5rem !important;
   padding: 0.65rem 1rem;
   font-size: 0.84rem;
   font-weight: 600;
@@ -643,6 +661,12 @@
   border-color: color-mix(in srgb, var(--sa-purple) 32%, var(--sa-line));
   background: color-mix(in srgb, var(--sa-purple) 11%, var(--sa-panel));
   color: var(--sa-purple);
+}
+
+.sa-chip--muted {
+  border-color: var(--sa-line);
+  background: var(--sa-panel-muted);
+  color: var(--sa-muted);
 }
 
 .sa-tabs {

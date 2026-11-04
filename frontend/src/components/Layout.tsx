@@ -60,7 +60,8 @@ const Layout = () => {
     location.pathname === "/super-admin/login";
   const isPublicFormRoute = location.pathname.startsWith("/forms/");
   const isMembershipSignupRoute =
-    location.pathname.includes("/iscrizione");
+    location.pathname.includes("/iscrizione") ||
+    location.pathname.startsWith("/affiliazione");
   const showPublicChrome = !isDashboardRoute && !isStandaloneAuthRoute && !isPublicFormRoute;
 
   usePublicMotion({ enabled: showPublicChrome, key: location.pathname });

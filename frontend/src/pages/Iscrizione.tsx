@@ -1,5 +1,6 @@
 import {
   type ChangeEvent,
+  type DragEvent,
   type FormEvent,
   type InputHTMLAttributes,
   type ReactNode,
@@ -231,9 +232,10 @@ type StepIndicatorProps = {
   current: number;
   progress: number;
   shouldReduceMotion: boolean;
+  onStepSelect?: (stepNumber: number) => void;
 };
 
-const StepIndicator = ({ current, progress, shouldReduceMotion }: StepIndicatorProps) => (
+const StepIndicator = ({ current, progress, shouldReduceMotion, onStepSelect }: StepIndicatorProps) => (
   <nav className="mx-auto max-w-3xl" aria-label="Avanzamento iscrizione">
     <p className="sr-only" aria-live="polite">
       Passaggio {current} di {STEPS.length}: {STEPS[current - 1].title}
@@ -255,6 +257,60 @@ const StepIndicator = ({ current, progress, shouldReduceMotion }: StepIndicatorP
           const number = index + 1;
           const completed = number < current;
           const active = number === current;
+          const canNavigate = completed && Boolean(onStepSelect);
+
+          const circleContent = (
+            <motion.div
+              initial={false}
+              animate={{
+                scale: active && !shouldReduceMotion ? 1.03 : 1,
+              }}
+              transition={shouldReduceMotion ? { duration: 0.01 } : { duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+              className={`relative z-10 flex h-12 w-12 items-center justify-center rounded-full border-2 text-base font-semibold transition-colors sm:h-14 sm:w-14 sm:text-lg ${
+                completed
+                  ? "border-[var(--theme-brand)] bg-[var(--theme-brand)] text-[var(--theme-on-brand)]"
+                  : active
+                    ? "border-[var(--theme-brand)] bg-[var(--theme-surface-solid)] text-[var(--theme-brand)] ring-4 ring-brand/15"
+                    : "border-[var(--theme-border)] bg-[var(--theme-surface-solid)] text-[var(--theme-text-soft)]"
+              }`}
+            >
+              <AnimatePresence mode="wait" initial={false}>
+                {completed ? (
+                  <motion.span
+                    key="check"
+                    initial={shouldReduceMotion ? false : { opacity: 0, scale: 0.6 }}
+                    animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1 }}
+                    exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.7 }}
+                  >
+                    {iconFor("m5 13 4 4L19 7", "h-6 w-6")}
+                  </motion.span>
+                ) : (
+                  <motion.span
+                    key={`step-${number}`}
+                    initial={shouldReduceMotion ? false : { opacity: 0, y: 6 }}
+                    animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+                    exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+                  >
+                    {number}
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          );
+
+          const labelContent = (
+            <p
+              className={`mt-3 text-xs font-semibold sm:mt-4 sm:text-sm md:text-base ${
+                active
+                  ? "text-[var(--theme-brand)]"
+                  : completed
+                    ? "text-[var(--theme-text)]"
+                    : "text-[var(--theme-text-soft)]"
+              }`}
+            >
+              {stepItem.label}
+            </p>
+          );
 
           return (
             <li
@@ -262,47 +318,22 @@ const StepIndicator = ({ current, progress, shouldReduceMotion }: StepIndicatorP
               className="flex flex-col items-center text-center"
               aria-current={active ? "step" : undefined}
             >
-              <motion.div
-                initial={false}
-                animate={{
-                  scale: active && !shouldReduceMotion ? 1.03 : 1,
-                }}
-                transition={shouldReduceMotion ? { duration: 0.01 } : { duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-                className={`relative z-10 flex h-12 w-12 items-center justify-center rounded-full border text-base font-semibold sm:h-14 sm:w-14 sm:text-lg ${
-                  completed || active
-                    ? "border-[var(--theme-brand)] bg-[var(--theme-brand)] text-[var(--theme-on-brand)]"
-                    : "border-[var(--theme-border)] bg-[var(--theme-surface-solid)] text-[var(--theme-text-soft)]"
-                }`}
-              >
-                <AnimatePresence mode="wait" initial={false}>
-                  {completed ? (
-                    <motion.span
-                      key="check"
-                      initial={shouldReduceMotion ? false : { opacity: 0, scale: 0.6 }}
-                      animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1 }}
-                      exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.7 }}
-                    >
-                      {iconFor("m5 13 4 4L19 7", "h-6 w-6")}
-                    </motion.span>
-                  ) : (
-                    <motion.span
-                      key={`step-${number}`}
-                      initial={shouldReduceMotion ? false : { opacity: 0, y: 6 }}
-                      animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
-                      exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
-                    >
-                      {number}
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-              <p
-                className={`mt-3 text-xs font-semibold sm:mt-4 sm:text-sm md:text-base ${
-                  active || completed ? "text-[var(--theme-text)]" : "text-[var(--theme-text-soft)]"
-                }`}
-              >
-                {stepItem.label}
-              </p>
+              {canNavigate ? (
+                <button
+                  type="button"
+                  onClick={() => onStepSelect?.(number)}
+                  className="group flex flex-col items-center rounded-xl p-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-brand)]"
+                  aria-label={`Torna al passaggio ${number}: ${stepItem.label}`}
+                >
+                  {circleContent}
+                  {labelContent}
+                </button>
+              ) : (
+                <>
+                  {circleContent}
+                  {labelContent}
+                </>
+              )}
             </li>
           );
         })}
@@ -452,7 +483,12 @@ type CheckboxCardProps = {
 
 const CheckboxCard = ({ id, checked, error, label, description, onChange }: CheckboxCardProps) => (
   <div
-    className={`block rounded-2xl border px-5 py-5 transition md:px-7 ${
+    onClick={(event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target || target.closest("a, button, input, label")) return;
+      document.getElementById(id)?.click();
+    }}
+    className={`block cursor-pointer rounded-2xl border px-5 py-5 transition md:px-7 ${
       error
         ? "border-rose-200 bg-rose-50/40"
         : checked
@@ -463,11 +499,11 @@ const CheckboxCard = ({ id, checked, error, label, description, onChange }: Chec
     <div className="flex items-start gap-4">
       <label
         htmlFor={id}
-        className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full"
+        className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl"
       >
         <input
           id={id}
-          className="h-6 w-6 rounded-full border-2 border-[var(--theme-border-strong)] text-[var(--theme-brand)] focus:ring-[var(--theme-focus)]"
+          className="h-6 w-6 rounded-md border-2 border-[var(--theme-border-strong)] text-[var(--theme-brand)] focus:ring-[var(--theme-focus)]"
           type="checkbox"
           checked={checked}
           onChange={onChange}
@@ -493,9 +529,9 @@ type SummaryItemProps = {
 };
 
 const SummaryItem = ({ label, value, muted = false }: SummaryItemProps) => (
-  <div className="min-w-0 border-b border-[var(--theme-border)] pb-5 last:border-b-0 last:pb-0">
-    <dt className="text-sm font-medium text-[var(--theme-text-muted)]">{label}</dt>
-    <dd className={`mt-2 break-words text-lg font-semibold tracking-tight [overflow-wrap:anywhere] sm:text-2xl ${muted ? "text-[var(--theme-text-soft)]" : "text-[var(--theme-text)]"}`}>
+  <div className="min-w-0 border-b border-[var(--theme-border)] pb-4 last:border-b-0 last:pb-0">
+    <dt className="text-xs font-semibold uppercase tracking-wider text-[var(--theme-text-soft)]">{label}</dt>
+    <dd className={`mt-1.5 break-words text-base font-semibold tracking-tight [overflow-wrap:anywhere] sm:text-lg ${muted ? "text-[var(--theme-text-soft)]" : "text-[var(--theme-text)]"}`}>
       {value}
     </dd>
   </div>
@@ -526,6 +562,8 @@ const Iscrizione = () => {
   const [municipalityLoading, setMunicipalityLoading] = useState(false);
   const [municipalityLookupError, setMunicipalityLookupError] = useState("");
   const [showMunicipalitySuggestions, setShowMunicipalitySuggestions] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [isDraggingDoc, setIsDraggingDoc] = useState(false);
   const errorSummaryRef = useRef<HTMLDivElement | null>(null);
   const stepHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const previousStepRef = useRef(step);
@@ -755,8 +793,7 @@ const Iscrizione = () => {
     (event: ChangeEvent<HTMLInputElement>) =>
       updateField(field, event.target.value);
 
-  const handleFile = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0] ?? null;
+  const applyIdentityFile = (file: File | null, resetInput?: () => void) => {
     if (!file) {
       updateField("documentoIdentita", null);
       return;
@@ -764,13 +801,28 @@ const Iscrizione = () => {
 
     const validationError = validatePublicDocumentUpload(file);
     if (validationError) {
-      event.target.value = "";
+      resetInput?.();
       updateField("documentoIdentita", null);
       setErrors((prev) => ({ ...prev, documentoIdentita: validationError }));
       return;
     }
 
     updateField("documentoIdentita", file);
+  };
+
+  const handleFile = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    applyIdentityFile(file, () => {
+      event.target.value = "";
+    });
+  };
+
+  const handleDropFile = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDraggingDoc(false);
+    const file = event.dataTransfer.files?.[0] ?? null;
+    applyIdentityFile(file);
   };
 
   const handleCheck =
@@ -1175,7 +1227,11 @@ const Iscrizione = () => {
             <p className="mx-auto mt-4 max-w-3xl text-base leading-7 text-[var(--theme-text-muted)] sm:mt-5 sm:text-lg">
               Compila i dati, aggiungi i documenti e controlla il riepilogo prima di inviare.
             </p>
-            <button type="button" className="btn-secondary mt-4" onClick={() => setRenewalMode(true)}>Già socio? Rinnova la tessera</button>
+            {step === 1 ? (
+              <button type="button" className="btn-secondary mt-4" onClick={() => setRenewalMode(true)}>
+                Già socio? Rinnova la tessera
+              </button>
+            ) : null}
           </header>
 
           {adultsOnlyBannerEnabled ? (
@@ -1195,7 +1251,17 @@ const Iscrizione = () => {
           ) : null}
 
           <div className="mt-9 sm:mt-12 md:mt-14">
-            <StepIndicator current={step} progress={progress} shouldReduceMotion={shouldReduceMotion} />
+            <StepIndicator
+              current={step}
+              progress={progress}
+              shouldReduceMotion={shouldReduceMotion}
+              onStepSelect={(targetStep) => {
+                if (targetStep < step) {
+                  setErrors({});
+                  moveToStep(targetStep, -1);
+                }
+              }}
+            />
           </div>
 
           <form className="mt-8 sm:mt-10 md:mt-14" onSubmit={handleSubmit}>
@@ -1410,48 +1476,63 @@ const Iscrizione = () => {
                             </label>
                           </div>
                           {form.statoEsteroNascita ? (
-                            <select
-                              id="comuneNascita"
-                              className={fieldError("comuneNascita") ? fieldErrClass : fieldOkClass}
-                              value={form.comuneNascitaCode}
-                              onChange={handleForeignBirthCountryChange}
-                              aria-invalid={fieldError("comuneNascita") ? true : undefined}
-                              aria-describedby="comuneNascita-message"
-                            >
-                              <option value="">Seleziona lo Stato estero...</option>
-                              {FOREIGN_BIRTH_PLACES.map((country) => (
-                                <option key={country.code} value={country.code}>
-                                  {country.name} - {country.code}
-                                </option>
-                              ))}
-                            </select>
+                            <div className="relative">
+                              <select
+                                id="comuneNascita"
+                                className={`${fieldError("comuneNascita") ? fieldErrClass : fieldOkClass} appearance-none pr-14`}
+                                value={form.comuneNascitaCode}
+                                onChange={handleForeignBirthCountryChange}
+                                aria-invalid={fieldError("comuneNascita") ? true : undefined}
+                                aria-describedby="comuneNascita-message"
+                              >
+                                <option value="">Seleziona lo Stato estero...</option>
+                                {FOREIGN_BIRTH_PLACES.map((country) => (
+                                  <option key={country.code} value={country.code}>
+                                    {country.name} - {country.code}
+                                  </option>
+                                ))}
+                              </select>
+                              <div className="pointer-events-none absolute inset-y-0 right-5 flex items-center text-[var(--theme-text-soft)]">
+                                {iconFor("m6 9 6 6 6-6", "h-5 w-5")}
+                              </div>
+                            </div>
                           ) : (
-                            <input
-                              id="comuneNascita"
-                              className={fieldError("comuneNascita") ? fieldErrClass : fieldOkClass}
-                              type="text"
-                              autoComplete="off"
-                              placeholder="es. Roma"
-                              value={form.comuneNascita}
-                              onChange={handleBirthPlaceChange}
-                              onFocus={() => setShowMunicipalitySuggestions(true)}
-                              onKeyDown={(event) => {
-                                if (event.key === "Escape") {
-                                  setShowMunicipalitySuggestions(false);
-                                } else if (event.key === "ArrowDown" && municipalitySuggestions.length > 0) {
-                                  event.preventDefault();
-                                  document
-                                    .querySelector<HTMLElement>("#municipality-suggestions [role='option']")
-                                    ?.focus();
-                                }
-                              }}
-                              role="combobox"
-                              aria-autocomplete="list"
-                              aria-expanded={showMunicipalitySuggestions && form.comuneNascita.trim().length >= 2}
-                              aria-controls="municipality-suggestions"
-                              aria-invalid={fieldError("comuneNascita") ? true : undefined}
-                              aria-describedby="comuneNascita-message"
-                            />
+                            <div className="relative">
+                              <input
+                                id="comuneNascita"
+                                className={`${fieldError("comuneNascita") ? fieldErrClass : fieldOkClass} ${form.comuneNascitaCode ? "pr-12" : ""}`}
+                                type="text"
+                                autoComplete="off"
+                                placeholder="es. Roma"
+                                value={form.comuneNascita}
+                                onChange={handleBirthPlaceChange}
+                                onFocus={() => setShowMunicipalitySuggestions(true)}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Escape") {
+                                    setShowMunicipalitySuggestions(false);
+                                  } else if (event.key === "ArrowDown" && municipalitySuggestions.length > 0) {
+                                    event.preventDefault();
+                                    document
+                                      .querySelector<HTMLElement>("#municipality-suggestions [role='option']")
+                                      ?.focus();
+                                  }
+                                }}
+                                role="combobox"
+                                aria-autocomplete="list"
+                                aria-expanded={showMunicipalitySuggestions && form.comuneNascita.trim().length >= 2}
+                                aria-controls="municipality-suggestions"
+                                aria-invalid={fieldError("comuneNascita") ? true : undefined}
+                                aria-describedby="comuneNascita-message"
+                              />
+                              {form.comuneNascitaCode ? (
+                                <span
+                                  className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-[var(--theme-success)]"
+                                  aria-hidden="true"
+                                >
+                                  {iconFor("m5 13 4 4L19 7", "h-5 w-5")}
+                                </span>
+                              ) : null}
+                            </div>
                           )}
                           {!form.statoEsteroNascita &&
                           showMunicipalitySuggestions &&
@@ -1462,16 +1543,36 @@ const Iscrizione = () => {
                                 <p className="px-5 py-4 text-sm text-[var(--theme-text-muted)]">Ricerca comuni in corso...</p>
                               ) : municipalitySuggestions.length > 0 ? (
                                 <ul id="municipality-suggestions" className="max-h-72 overflow-y-auto py-2" role="listbox">
-                                  {municipalitySuggestions.map((item) => (
+                                  {municipalitySuggestions.map((item, idx) => (
                                     <li key={item.code}>
                                       <button
-                                        className="flex w-full items-center justify-between gap-3 px-5 py-3 text-left text-sm text-[var(--theme-text-muted)] transition hover:bg-[var(--theme-surface-2)]"
+                                        className="flex w-full items-center justify-between gap-3 px-5 py-3 text-left text-sm text-[var(--theme-text-muted)] transition hover:bg-[var(--theme-surface-2)] focus:bg-[var(--theme-surface-2)] focus:outline-none"
                                         type="button"
                                         role="option"
                                         aria-selected={false}
                                         onMouseDown={(event) => {
                                           event.preventDefault();
                                           selectMunicipality(item);
+                                        }}
+                                        onKeyDown={(event) => {
+                                          const options = Array.from(
+                                            document.querySelectorAll<HTMLElement>("#municipality-suggestions [role='option']"),
+                                          );
+                                          if (event.key === "ArrowDown") {
+                                            event.preventDefault();
+                                            options[Math.min(idx + 1, options.length - 1)]?.focus();
+                                          } else if (event.key === "ArrowUp") {
+                                            event.preventDefault();
+                                            if (idx === 0) {
+                                              document.getElementById("comuneNascita")?.focus();
+                                            } else {
+                                              options[idx - 1]?.focus();
+                                            }
+                                          } else if (event.key === "Escape") {
+                                            event.preventDefault();
+                                            document.getElementById("comuneNascita")?.focus();
+                                            setShowMunicipalitySuggestions(false);
+                                          }
                                         }}
                                         onClick={() => selectMunicipality(item)}
                                       >
@@ -1605,17 +1706,30 @@ const Iscrizione = () => {
                           </p>
                         </div>
                         <div className="mt-6 max-w-2xl">
-                          <TextField
-                            id="password"
-                            label="Password"
-                            error={errors.password}
-                            hint={!errors.password ? `Minimo ${MEMBER_PASSWORD_MIN_LENGTH} caratteri.` : undefined}
-                            placeholder="Inserisci una password"
-                            value={form.password}
-                            onChange={handleText("password")}
-                            autoComplete="new-password"
-                            type="password"
-                          />
+                          <div className="relative">
+                            <TextField
+                              id="password"
+                              label="Password"
+                              error={errors.password}
+                              hint={!errors.password ? `Minimo ${MEMBER_PASSWORD_MIN_LENGTH} caratteri.` : undefined}
+                              placeholder="Inserisci una password"
+                              value={form.password}
+                              onChange={handleText("password")}
+                              autoComplete="new-password"
+                              type={showPassword ? "text" : "password"}
+                              inputClassName="pr-14"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword((prev) => !prev)}
+                              className="absolute right-3 top-[2.35rem] inline-flex h-9 w-9 items-center justify-center rounded-lg text-[var(--theme-text-muted)] transition hover:bg-[var(--theme-surface-2)] hover:text-[var(--theme-text)]"
+                              aria-label={showPassword ? "Nascondi password" : "Mostra password"}
+                            >
+                              {showPassword
+                                ? iconFor("M3.98 8.223A10.477 10.477 0 0 0 1.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.451 10.451 0 0 1 12 4.5c4.756 0 8.773 3.162 10.065 7.498a10.522 10.522 0 0 1-4.293 5.774M6.228 6.228 3 3m3.228 3.228 3.65 3.65m7.894 7.894L21 21m-3.228-3.228-3.65-3.65m0 0a3 3 0 1 0-4.243-4.243m4.242 4.242L9.88 9.88", "h-5 w-5")
+                                : iconFor("M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178ZM15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z", "h-5 w-5")}
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1661,7 +1775,12 @@ const Iscrizione = () => {
                                     <p className="truncate text-lg font-semibold text-[var(--theme-text)]">
                                       {form.documentoIdentita.name}
                                     </p>
-                                    <p className="mt-1 text-sm text-[var(--theme-text-muted)]">Documento pronto per l'invio.</p>
+                                    <p className="mt-1 text-sm text-[var(--theme-text-muted)]">
+                                      Documento pronto per l&apos;invio
+                                      {form.documentoIdentita.size > 0
+                                        ? ` (${(form.documentoIdentita.size / (1024 * 1024)).toFixed(2)} MB)`
+                                        : "."}
+                                    </p>
                                   </div>
                                 </div>
                                 <button
@@ -1682,10 +1801,28 @@ const Iscrizione = () => {
                             >
                               <label
                                 htmlFor="documentoIdentita"
+                                onDragEnter={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  setIsDraggingDoc(true);
+                                }}
+                                onDragOver={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  if (!isDraggingDoc) setIsDraggingDoc(true);
+                                }}
+                                onDragLeave={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  setIsDraggingDoc(false);
+                                }}
+                                onDrop={handleDropFile}
                                 className={`group block cursor-pointer rounded-2xl border-2 border-dashed px-6 py-10 text-center transition md:px-10 ${
                                   errors.documentoIdentita
                                     ? "border-rose-300 bg-rose-50/40"
-                                    : "border-[var(--theme-border)] bg-[var(--theme-surface-2)] hover:border-[var(--theme-brand)] hover:bg-[var(--theme-surface-2)]"
+                                    : isDraggingDoc
+                                      ? "border-[var(--theme-brand)] bg-[var(--theme-brand-soft)]"
+                                      : "border-[var(--theme-border)] bg-[var(--theme-surface-2)] hover:border-[var(--theme-brand)] hover:bg-[var(--theme-surface-2)]"
                                 }`}
                               >
                                 <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-[var(--theme-surface-solid)] text-[var(--theme-text-soft)] transition group-hover:text-[var(--theme-brand)]">
@@ -1824,10 +1961,19 @@ const Iscrizione = () => {
                     <div className="signup-wizard-card surface px-6 py-8 md:px-10 md:py-10">
                       <div className="grid gap-10 lg:grid-cols-2 lg:gap-16">
                         <section>
-                          <p className="flex items-center gap-3 text-sm font-semibold text-[var(--theme-brand)]">
-                            {iconFor("M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z", "h-4 w-4")}
-                            Dati personali
-                          </p>
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="flex items-center gap-3 text-sm font-semibold text-[var(--theme-brand)]">
+                              {iconFor("M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z", "h-4 w-4")}
+                              Dati personali
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => moveToStep(1, -1)}
+                              className="text-xs font-semibold text-[var(--theme-brand)] underline-offset-4 hover:underline"
+                            >
+                              Modifica
+                            </button>
+                          </div>
                           <dl className="mt-7 space-y-5">
                             <SummaryItem label="Nominativo completo" value={fullName} muted={fullName === "futuro socio"} />
                             <SummaryItem label="Data di nascita" value={formatDateDisplay(form.dataNascita)} muted={!form.dataNascita} />
@@ -1842,10 +1988,19 @@ const Iscrizione = () => {
                         </section>
 
                         <section>
-                          <p className="flex items-center gap-3 text-sm font-semibold text-[var(--theme-brand)]">
-                            {iconFor("M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75", "h-4 w-4")}
-                            Riepilogo contatti
-                          </p>
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="flex items-center gap-3 text-sm font-semibold text-[var(--theme-brand)]">
+                              {iconFor("M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75", "h-4 w-4")}
+                              Riepilogo contatti
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => moveToStep(2, -1)}
+                              className="text-xs font-semibold text-[var(--theme-brand)] underline-offset-4 hover:underline"
+                            >
+                              Modifica
+                            </button>
+                          </div>
                           <dl className="mt-7 space-y-5">
                             <SummaryItem
                               label="Tipo tessera"
@@ -1971,11 +2126,9 @@ const Iscrizione = () => {
                     ? membershipPaymentRequired
                       ? "Creazione checkout..."
                       : "Invio in corso..."
-                    : confirmReady
-                      ? membershipPaymentRequired
-                        ? membershipPaymentButtonLabel
-                        : "Conferma iscrizione"
-                      : "Preparo conferma..."}
+                    : membershipPaymentRequired
+                      ? membershipPaymentButtonLabel
+                      : "Conferma iscrizione"}
                   {!submitting ? iconFor("m9 18 6-6-6-6", "h-5 w-5") : null}
                 </button>
               )}

@@ -5,17 +5,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import Iscrizione from "./Iscrizione";
 
 const fetchOrganizationDetail = vi.fn();
+const searchMunicipalities = vi.fn();
 
 vi.mock("../lib/api", () => ({
   createMembershipPaymentCheckout: vi.fn(),
   fetchOrganizationDetail: (...args: unknown[]) => fetchOrganizationDetail(...args),
   joinOrganization: vi.fn(),
   registerMember: vi.fn(),
-  searchMunicipalities: vi.fn().mockResolvedValue([]),
+  searchMunicipalities: (...args: unknown[]) => searchMunicipalities(...args),
 }));
 
 describe("Iscrizione accessibility", () => {
   beforeEach(() => {
+    searchMunicipalities.mockResolvedValue([]);
     fetchOrganizationDetail.mockResolvedValue({
       id: 1,
       name: "Associazione Demo",
@@ -60,6 +62,27 @@ describe("Iscrizione accessibility", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Nome:/ }));
     expect(firstName).toHaveFocus();
+  });
+
+  it("chiude i suggerimenti con Escape e riporta il focus al comune senza riaprirli", async () => {
+    searchMunicipalities.mockResolvedValue([{ name: "Roma", code: "H501", province: "RM" }]);
+    render(
+      <MemoryRouter initialEntries={["/associazioni/demo/iscrizione"]}>
+        <Routes>
+          <Route path="/associazioni/:slug/iscrizione" element={<Iscrizione />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    const input = await screen.findByRole("combobox", { name: "Comune di nascita" });
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "Ro" } });
+    const option = await screen.findByRole("option", { name: /Roma/ });
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    expect(option).toHaveFocus();
+    fireEvent.keyDown(option, { key: "Escape" });
+    expect(input).toHaveFocus();
+    expect(input).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
 
   it("mostra Contanti come scelta fissa quando l'associazione attiva la modalità dedicata", async () => {

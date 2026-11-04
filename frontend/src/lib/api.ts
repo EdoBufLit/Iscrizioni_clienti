@@ -2458,6 +2458,7 @@ export type MembershipPaymentStatusResponse = {
   card_status: string;
   message: string;
   can_retry: boolean;
+  org_slug?: string | null;
   active_card_page_url?: string | null;
   card_verification_token?: string | null;
   card_verification_url?: string | null;

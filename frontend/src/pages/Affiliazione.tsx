@@ -13,7 +13,11 @@ import {
   type AffiliationSubmitResponse,
 } from "../lib/api";
 import { applySeo } from "../lib/seo";
-import { affiliationDocumentStatusMeta, resolveStatusMeta } from "../lib/statusLabels";
+import {
+  affiliationDocumentStatusMeta,
+  affiliationStatusMeta,
+  resolveStatusMeta,
+} from "../lib/statusLabels";
 import { publicUploadHint, validatePublicDocumentUpload } from "../lib/uploadValidation";
 import { useStatePlatformCapabilities } from "../hooks/useStatePlatformCapabilities";
 import FullscreenVideoOverlay from "../components/affiliation/FullscreenVideoOverlay";
@@ -77,10 +81,10 @@ const LAST_WIZARD_STEP = 5;
 const SUBMITTED_WIZARD_STEP = 6;
 
 const INTRO_CHECKLIST_ITEMS = [
-  "Statuto dell'associazione (PDF)",
-  "Atto costitutivo (PDF)",
-  "Codice fiscale associazione",
-  "Documento Presidente",
+  "Statuto firmato (PDF o immagine)",
+  "Atto costitutivo (PDF o immagine)",
+  "Documento d'identità Presidente",
+  "Codice fiscale Presidente",
   "Documento Vicepresidente",
   "Documento Segretario/Tesoriere",
 ] as const;
@@ -259,9 +263,11 @@ const Affiliazione = () => {
   const [submitResult, setSubmitResult] = useState<AffiliationSubmitResponse | null>(null);
   const [showVideoOverlay, setShowVideoOverlay] = useState(false);
   const [notice, setNotice] = useState("");
+  const [attemptedSteps, setAttemptedSteps] = useState<Record<number, boolean>>({});
   const { capabilities, loading: capabilitiesLoading } = useStatePlatformCapabilities();
   const stripeFallbackAppliedRef = useRef(false);
   const autoOpenedVideoRef = useRef(false);
+  const wizardTopRef = useRef<HTMLDivElement>(null);
   const currentStepRef = useRef(currentStep);
   const showIntroScreenRef = useRef(showIntroScreen);
   const tokenRef = useRef(token);
@@ -381,7 +387,7 @@ const Affiliazione = () => {
         },
         { idempotencyKey },
       );
-      applyDraftState(created, options?.syncForm ?? true);
+      applyDraftState(created, options?.syncForm ?? false);
       return created;
     },
     [applyDraftState, draft, form, referralFromQuery, refreshDraft, token],
@@ -419,7 +425,7 @@ const Affiliazione = () => {
 
   const syncDraftData = useCallback(async () => {
     try {
-      const ensuredDraft = await ensureServerDraft({ syncForm: true });
+      const ensuredDraft = await ensureServerDraft({ syncForm: false });
       const normalizedStatus = String(ensuredDraft.status || "").trim().toLowerCase();
       if (SUBMITTED_STATUSES.has(normalizedStatus)) {
         return ensuredDraft;
@@ -637,7 +643,7 @@ const Affiliazione = () => {
       try {
         setUploadingType(docType);
         setError("");
-        const currentDraft = await ensureServerDraft({ syncForm: true });
+        const currentDraft = await ensureServerDraft({ syncForm: false });
         await uploadAffiliationDocument(currentDraft.public_token, docType, file);
         await refreshDraft(currentDraft.public_token, false);
       } catch (err) {
@@ -656,7 +662,7 @@ const Affiliazione = () => {
     }
     try {
       setError("");
-      const currentDraft = await ensureServerDraft({ syncForm: true });
+      const currentDraft = await ensureServerDraft({ syncForm: false });
       if (SUBMITTED_STATUSES.has(String(currentDraft.status || "").trim().toLowerCase())) {
         return;
       }
@@ -708,13 +714,15 @@ const Affiliazione = () => {
       applyDraftState(response.application, false);
       setShowIntroScreen(false);
       setCurrentStep(SUBMITTED_WIZARD_STEP);
-      setShowVideoOverlay(true);
+      if (videoEnabled) {
+        setShowVideoOverlay(true);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore invio richiesta");
     } finally {
       setSubmitting(false);
     }
-  }, [applyDraftState, syncDraftData, validation.firstInvalidStep, validation.issues.length]);
+  }, [applyDraftState, syncDraftData, validation.firstInvalidStep, validation.issues.length, videoEnabled]);
 
   const onOpenInstantWelcomeVideo = () => {
     setShowVideoOverlay(true);
@@ -814,34 +822,90 @@ const Affiliazione = () => {
     }
   }, [hasRealSubmission, personalizedVideoUrl, showVideoOverlay, videoEnabled, welcomeVideoReady]);
 
+  const scrollWizardTop = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const topEl = wizardTopRef.current;
+    if (topEl && typeof topEl.scrollIntoView === "function") {
+      topEl.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, []);
+
+  const persistCurrentStep = useCallback(async () => {
+    if (currentStep === 1 || currentStep === 2 || currentStep === 4) {
+      const currentDraft = await ensureServerDraft({ syncForm: false });
+      if (SUBMITTED_STATUSES.has(String(currentDraft.status || "").trim().toLowerCase())) {
+        return false;
+      }
+      if (currentStep === 1 || currentStep === 4) {
+        await saveApplicationDetails(currentDraft.public_token);
+      }
+      if (currentStep === 2) {
+        await saveApplicationPeople(currentDraft.public_token);
+      }
+    }
+    return true;
+  }, [currentStep, ensureServerDraft, saveApplicationDetails, saveApplicationPeople]);
+
   const onGoPrevStep = () => {
     setError("");
     setCurrentStep((value) => Math.max(FIRST_WIZARD_STEP, value - 1));
+    scrollWizardTop();
   };
 
   const onGoNextStep = async () => {
+    setAttemptedSteps((prev) => ({ ...prev, [currentStep]: true }));
     if (hasCurrentStepErrors) {
       setError("Completa i campi obbligatori dello step prima di continuare.");
+      scrollWizardTop();
       return;
     }
     try {
       setSaving(true);
       setError("");
-
-      if (currentStep === 1 || currentStep === 2 || currentStep === 4) {
-        const currentDraft = await ensureServerDraft({ syncForm: true });
-        if (SUBMITTED_STATUSES.has(String(currentDraft.status || "").trim().toLowerCase())) {
-          return;
-        }
-        if (currentStep === 1 || currentStep === 4) {
-          await saveApplicationDetails(currentDraft.public_token);
-        }
-        if (currentStep === 2) {
-          await saveApplicationPeople(currentDraft.public_token);
-        }
-      }
-
+      const canContinue = await persistCurrentStep();
+      if (!canContinue) return;
       setCurrentStep((value) => Math.min(LAST_WIZARD_STEP, value + 1));
+      scrollWizardTop();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore salvataggio step");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onSelectWizardStep = async (targetStep: number) => {
+    if (targetStep === currentStep || saving || submitting) return;
+    if (targetStep < currentStep) {
+      setError("");
+      setCurrentStep(targetStep);
+      scrollWizardTop();
+      return;
+    }
+    // Going forward requires current step to be valid and persisted
+    setAttemptedSteps((prev) => ({ ...prev, [currentStep]: true }));
+    if (hasCurrentStepErrors) {
+      setError("Completa i campi obbligatori dello step corrente prima di passare allo step successivo.");
+      scrollWizardTop();
+      return;
+    }
+    for (let s = currentStep + 1; s < targetStep; s += 1) {
+      if ((validation.stepErrors[s] || []).length > 0) {
+        setAttemptedSteps((prev) => ({ ...prev, [s]: true }));
+        setCurrentStep(s);
+        setError("Completa i passaggi intermedi obbligatori prima di proseguire.");
+        scrollWizardTop();
+        return;
+      }
+    }
+    try {
+      setSaving(true);
+      setError("");
+      const canContinue = await persistCurrentStep();
+      if (!canContinue) return;
+      setCurrentStep(targetStep);
+      scrollWizardTop();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore salvataggio step");
     } finally {
@@ -851,8 +915,8 @@ const Affiliazione = () => {
 
   if (capabilitiesLoading || loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="bg-white rounded-2xl shadow-xl p-8 text-sm text-slate-500 text-center animate-pulse flex flex-col items-center gap-4">
+      <div className="signup-wizard-shell min-h-[100dvh] flex items-center justify-center">
+        <div className="surface rounded-2xl p-8 text-sm text-[var(--theme-text-muted)] text-center animate-pulse flex flex-col items-center gap-4">
            <svg className="animate-spin w-8 h-8 text-brand" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
            Caricamento procedura...
         </div>
@@ -861,15 +925,15 @@ const Affiliazione = () => {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-slate-50/50 py-8 md:py-12 font-sans text-slate-900 pb-32">
+    <div ref={wizardTopRef} className="signup-wizard-shell min-h-[100dvh] py-8 md:py-12 font-sans text-[var(--theme-text)] pb-36">
       <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-        
+
         {/* Header minimal */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900">
+          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-[var(--theme-text)]">
             Affilia la tua Associazione
           </h1>
-          <p className="mt-3 text-sm md:text-base text-slate-500 max-w-xl mx-auto">
+          <p className="mt-3 text-sm md:text-base text-[var(--theme-text-muted)] max-w-xl mx-auto">
             Completa la procedura guidata per richiedere l'affiliazione ad ASSONAM.
           </p>
         </div>
@@ -896,89 +960,104 @@ const Affiliazione = () => {
         )}
 
         {error && (
-          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-800 shadow-sm flex items-start gap-3">
+          <div role="alert" className="mb-6 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-800 shadow-sm flex items-start gap-3">
             <svg className="w-5 h-5 text-red-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-            <div>{error}</div>
+            <div className="space-y-1">
+              <div className="font-semibold">{error}</div>
+              {attemptedSteps[currentStep] && stepErrors.length > 0 && (
+                <ul className="list-disc pl-4 text-xs space-y-0.5 pt-1">
+                  {stepErrors.map((errItem) => (
+                    <li key={errItem}>{errItem}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
         )}
 
         {/* Stepper top */}
         {!showIntroScreen && !hasRealSubmission && (
-          <div className="mb-10 mt-4">
-            <div className="flex items-center justify-between relative z-0" role="tablist" aria-label="Passaggi affiliazione">
-              {/* Line behind */}
-              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-slate-200 rounded-full -z-10"></div>
-              <div 
-                className="absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-brand transition-all duration-500 ease-out rounded-full -z-10"
-                style={{ width: `${progressPercent}%` }}
+          <nav className="mb-8 mt-4" aria-label="Passaggi affiliazione">
+            <div className="relative">
+              <div className="absolute left-[10%] right-[10%] top-4 h-1 rounded-full bg-[var(--theme-border)]" aria-hidden="true"></div>
+              <div
+                className="absolute left-[10%] top-4 h-1 rounded-full bg-[var(--theme-brand)] transition-all duration-500 ease-out"
+                style={{ width: `calc(80% * ${progressPercent / 100})` }}
+                aria-hidden="true"
               ></div>
-              
-              {WIZARD_PROGRESS_STEPS.map((item) => {
-                const isActive = item.step === progressActiveStep;
-                const isCompleted = item.step < progressActiveStep;
-                return (
-                  <button
-                    key={item.step}
-                    type="button"
-                    id={`affiliation-step-tab-${item.step}`}
-                    role="tab"
-                    aria-selected={isActive}
-                    aria-controls={`affiliation-step-panel-${item.step}`}
-                    onClick={() => {
-                      setShowIntroScreen(false);
-                      setCurrentStep(item.step);
-                    }}
-                    className={`group relative flex flex-col items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 rounded-lg p-1 transition-transform hover:scale-105`}
-                  >
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shadow-sm transition-colors border-2
-                      ${isActive 
-                        ? "bg-white border-brand text-brand ring-4 ring-brand/10" 
-                        : isCompleted 
-                          ? "bg-brand border-brand text-white" 
-                          : "bg-white border-slate-200 text-slate-400 group-hover:border-slate-300"
-                      }`}
-                    >
-                      {isCompleted ? (
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                      ) : (
-                        item.step
-                      )}
-                    </div>
-                    <span className={`text-[10px] sm:text-[11px] font-bold uppercase tracking-widest absolute -bottom-7 w-max text-center
-                      ${isActive ? "text-brand" : isCompleted ? "text-slate-700" : "text-slate-400 hidden sm:block"}
-                    `}>
-                      {item.label}
-                    </span>
-                  </button>
-                );
-              })}
+              <ol className="relative z-10 grid grid-cols-5 gap-1 sm:gap-2">
+                {WIZARD_PROGRESS_STEPS.map((item) => {
+                  const isActive = item.step === progressActiveStep;
+                  const isCompleted = item.step < progressActiveStep;
+                  return (
+                    <li key={item.step} className="flex flex-col items-center">
+                      <button
+                        type="button"
+                        id={`affiliation-step-tab-${item.step}`}
+                        aria-current={isActive ? "step" : undefined}
+                        aria-controls={`affiliation-step-panel-${item.step}`}
+                        onClick={() => {
+                          setShowIntroScreen(false);
+                          void onSelectWizardStep(item.step);
+                        }}
+                        className="group flex w-full flex-col items-center gap-1.5 rounded-lg p-1 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+                      >
+                        <span
+                          className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs sm:text-sm font-bold shadow-sm transition-colors ${
+                            isActive
+                              ? "border-[var(--theme-brand)] bg-[var(--theme-surface-solid)] text-[var(--theme-brand)] ring-4 ring-brand/15"
+                              : isCompleted
+                                ? "border-[var(--theme-brand)] bg-[var(--theme-brand)] text-[var(--theme-on-brand)]"
+                                : "border-[var(--theme-border)] bg-[var(--theme-surface-solid)] text-[var(--theme-text-soft)] group-hover:border-[var(--theme-border-strong)]"
+                          }`}
+                        >
+                          {isCompleted ? (
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                          ) : (
+                            item.step
+                          )}
+                        </span>
+                        <span
+                          className={`max-w-full truncate text-[9px] sm:text-[11px] font-bold uppercase tracking-tight sm:tracking-wider ${
+                            isActive
+                              ? "text-[var(--theme-brand)]"
+                              : isCompleted
+                                ? "text-[var(--theme-text)]"
+                                : "text-[var(--theme-text-soft)]"
+                          }`}
+                        >
+                          {item.label}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
             </div>
-          </div>
+          </nav>
         )}
 
         {/* Main Card */}
-        <div className="bg-white rounded-[2rem] shadow-2xl shadow-slate-200/50 border border-slate-100 overflow-hidden transition-all relative">
-          
+        <div className="surface signup-wizard-card rounded-[1.5rem] sm:rounded-[2rem] border border-[var(--theme-border)] overflow-hidden transition-all relative">
+
           {showIntroScreen && (
             <div className="p-6 sm:p-12 space-y-8 relative overflow-hidden">
-              <div className="absolute top-0 right-0 -mt-16 -mr-16 w-64 h-64 bg-brand/5 rounded-full blur-3xl pointer-events-none"></div>
-              
               <div className="text-center relative z-10">
-                <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-brand/10 to-brand/5 text-brand mb-6 shadow-inner border border-brand/10">
+                <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-[var(--theme-brand-soft)] text-[var(--theme-brand)] mb-6 border border-[var(--theme-border)]">
                   <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                 </div>
-                <h2 className="text-3xl font-extrabold text-slate-900">Inizia la tua richiesta</h2>
-                <p className="mt-3 text-base text-slate-500 max-w-md mx-auto leading-relaxed">
-                  La procedura richiede circa 10 minuti. Assicurati di avere a disposizione i documenti in formato PDF.
+                <h2 className="text-2xl sm:text-3xl font-extrabold text-[var(--theme-text)]">Inizia la tua richiesta</h2>
+                <p className="mt-3 text-base text-[var(--theme-text-muted)] max-w-md mx-auto leading-relaxed">
+                  La procedura richiede circa 10 minuti. Assicurati di avere a disposizione i documenti richiesti in formato PDF o immagine.
                 </p>
               </div>
 
-              <div className="bg-slate-50 rounded-2xl p-6 sm:p-8 border border-slate-100 relative z-10">
-                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-5">Checklist necessaria</h3>
+              <div className="bg-[var(--theme-surface-2)] rounded-2xl p-5 sm:p-8 border border-[var(--theme-border)] relative z-10">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-[var(--theme-text-soft)] mb-5">Checklist necessaria</h3>
                 <ul className="grid sm:grid-cols-2 gap-4">
                   {INTRO_CHECKLIST_ITEMS.map((item) => (
-                    <li key={item} className="flex items-start gap-3 text-sm text-slate-700 font-medium">
-                      <svg className="w-5 h-5 text-brand shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                    <li key={item} className="flex items-start gap-3 text-sm text-[var(--theme-text)] font-medium">
+                      <svg className="w-5 h-5 text-[var(--theme-brand)] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                       <span className="leading-snug">{item}</span>
                     </li>
                   ))}
@@ -988,7 +1067,7 @@ const Affiliazione = () => {
               <div className="pt-4 text-center relative z-10">
                 <button
                   type="button"
-                  className="inline-flex items-center justify-center w-full sm:w-auto min-w-[240px] h-14 px-8 rounded-xl bg-gradient-to-r from-brand to-brand-light text-white text-lg font-bold tracking-wide shadow-xl shadow-brand/20 hover:-translate-y-1 hover:shadow-2xl hover:shadow-brand/30 transition-all focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none"
+                  className="btn-primary inline-flex items-center justify-center w-full sm:w-auto min-w-[240px] h-14 px-8 rounded-xl text-lg font-bold tracking-wide disabled:opacity-70 disabled:cursor-not-allowed"
                   disabled={saving}
                   onClick={() => void onStartWizard()}
                 >
@@ -1004,106 +1083,106 @@ const Affiliazione = () => {
           )}
 
           {!showIntroScreen && !hasRealSubmission && currentStep === 1 && (
-            <div id="affiliation-step-panel-1" role="tabpanel" aria-labelledby="affiliation-step-tab-1" className="p-6 sm:p-10 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="border-b border-slate-100 pb-5">
-                <h2 className="text-2xl font-extrabold text-slate-900">Dati dell'Associazione</h2>
-                <p className="mt-1 text-sm text-slate-500">Inserisci i riferimenti principali e i dati del referente della richiesta.</p>
+            <div id="affiliation-step-panel-1" role="region" aria-labelledby="affiliation-step-tab-1" className="p-5 sm:p-10 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="border-b border-[var(--theme-border)] pb-5">
+                <h2 className="text-2xl font-extrabold text-[var(--theme-text)]">Dati dell'Associazione</h2>
+                <p className="mt-1 text-sm text-[var(--theme-text-muted)]">Inserisci i riferimenti principali e i dati del referente della richiesta.</p>
               </div>
 
               <div className="grid gap-6 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Nome associazione <span className="text-red-500">*</span></label>
-                  <input className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-medium focus:bg-white focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all placeholder:font-normal" placeholder="Associazione XYZ" value={form.organization_name} onChange={(e) => onFieldChange("organization_name", e.target.value)} />
+                  <label htmlFor="aff-org-name" className="text-xs font-bold text-[var(--theme-text)] uppercase tracking-wider">Nome associazione <span className="text-red-500">*</span></label>
+                  <input id="aff-org-name" className="theme-input w-full h-12 px-4 rounded-xl border text-sm font-medium outline-none transition-all placeholder:font-normal" placeholder="Associazione XYZ" value={form.organization_name} onChange={(e) => onFieldChange("organization_name", e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Ragione sociale</label>
-                  <input className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-medium focus:bg-white focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all placeholder:font-normal" placeholder="Opzionale" value={form.organization_legal_name} onChange={(e) => onFieldChange("organization_legal_name", e.target.value)} />
+                  <label htmlFor="aff-org-legal-name" className="text-xs font-bold text-[var(--theme-text)] uppercase tracking-wider">Ragione sociale</label>
+                  <input id="aff-org-legal-name" className="theme-input w-full h-12 px-4 rounded-xl border text-sm font-medium outline-none transition-all placeholder:font-normal" placeholder="Opzionale" value={form.organization_legal_name} onChange={(e) => onFieldChange("organization_legal_name", e.target.value)} />
                 </div>
-                
+
                 <div className="space-y-1.5 sm:col-span-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Indirizzo Sede Legale</label>
-                  <input className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-medium focus:bg-white focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all placeholder:font-normal" placeholder="Via Roma 1" value={form.address_line1} onChange={(e) => onFieldChange("address_line1", e.target.value)} />
+                  <label htmlFor="aff-address" className="text-xs font-bold text-[var(--theme-text)] uppercase tracking-wider">Indirizzo Sede Legale</label>
+                  <input id="aff-address" className="theme-input w-full h-12 px-4 rounded-xl border text-sm font-medium outline-none transition-all placeholder:font-normal" placeholder="Via Roma 1" value={form.address_line1} onChange={(e) => onFieldChange("address_line1", e.target.value)} />
                 </div>
-                
+
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Città</label>
-                  <input className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-medium focus:bg-white focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all placeholder:font-normal" placeholder="Roma" value={form.city} onChange={(e) => onFieldChange("city", e.target.value)} />
+                  <label htmlFor="aff-city" className="text-xs font-bold text-[var(--theme-text)] uppercase tracking-wider">Città</label>
+                  <input id="aff-city" className="theme-input w-full h-12 px-4 rounded-xl border text-sm font-medium outline-none transition-all placeholder:font-normal" placeholder="Roma" value={form.city} onChange={(e) => onFieldChange("city", e.target.value)} />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">CAP</label>
-                    <input className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-medium focus:bg-white focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all placeholder:font-normal" placeholder="00100" value={form.postal_code} onChange={(e) => onFieldChange("postal_code", e.target.value)} />
+                    <label htmlFor="aff-postal-code" className="text-xs font-bold text-[var(--theme-text)] uppercase tracking-wider">CAP</label>
+                    <input id="aff-postal-code" className="theme-input w-full h-12 px-4 rounded-xl border text-sm font-medium outline-none transition-all placeholder:font-normal" placeholder="00100" value={form.postal_code} onChange={(e) => onFieldChange("postal_code", e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Provincia</label>
-                    <input className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-medium focus:bg-white focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all placeholder:font-normal" placeholder="RM" value={form.province} onChange={(e) => onFieldChange("province", e.target.value)} />
+                    <label htmlFor="aff-province" className="text-xs font-bold text-[var(--theme-text)] uppercase tracking-wider">Provincia</label>
+                    <input id="aff-province" className="theme-input w-full h-12 px-4 rounded-xl border text-sm font-medium outline-none transition-all placeholder:font-normal" placeholder="RM" value={form.province} onChange={(e) => onFieldChange("province", e.target.value)} />
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Codice Fiscale Associazione</label>
-                  <input className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-bold focus:bg-white focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all uppercase placeholder:font-normal placeholder:normal-case" placeholder="11 cifre" value={form.tax_code} onChange={(e) => onFieldChange("tax_code", e.target.value)} />
+                  <label htmlFor="aff-tax-code" className="text-xs font-bold text-[var(--theme-text)] uppercase tracking-wider">Codice Fiscale Associazione</label>
+                  <input id="aff-tax-code" className="theme-input w-full h-12 px-4 rounded-xl border text-sm font-bold outline-none transition-all uppercase placeholder:font-normal placeholder:normal-case" placeholder="11 cifre" value={form.tax_code} onChange={(e) => onFieldChange("tax_code", e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Partita IVA (se presente)</label>
-                  <input className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-bold focus:bg-white focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all placeholder:font-normal" placeholder="11 cifre" value={form.vat_number} onChange={(e) => onFieldChange("vat_number", e.target.value)} />
+                  <label htmlFor="aff-vat-number" className="text-xs font-bold text-[var(--theme-text)] uppercase tracking-wider">Partita IVA (se presente)</label>
+                  <input id="aff-vat-number" className="theme-input w-full h-12 px-4 rounded-xl border text-sm font-bold outline-none transition-all placeholder:font-normal" placeholder="11 cifre" value={form.vat_number} onChange={(e) => onFieldChange("vat_number", e.target.value)} />
                 </div>
 
-                <div className="sm:col-span-2 pt-8 border-t border-slate-100">
-                  <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
-                    <svg className="w-5 h-5 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                <div className="sm:col-span-2 pt-8 border-t border-[var(--theme-border)]">
+                  <h3 className="text-lg font-bold text-[var(--theme-text)] mb-6 flex items-center gap-2">
+                    <svg className="w-5 h-5 text-[var(--theme-brand)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                     Dati Referente Pratica
                   </h3>
                 </div>
-                
+
                 <div className="space-y-1.5 sm:col-span-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Nome e Cognome <span className="text-red-500">*</span></label>
-                  <input className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-medium focus:bg-white focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all placeholder:font-normal" placeholder="Mario Rossi" value={form.applicant_full_name} onChange={(e) => onFieldChange("applicant_full_name", e.target.value)} />
+                  <label htmlFor="aff-applicant-name" className="text-xs font-bold text-[var(--theme-text)] uppercase tracking-wider">Nome e Cognome <span className="text-red-500">*</span></label>
+                  <input id="aff-applicant-name" className="theme-input w-full h-12 px-4 rounded-xl border text-sm font-medium outline-none transition-all placeholder:font-normal" placeholder="Mario Rossi" value={form.applicant_full_name} onChange={(e) => onFieldChange("applicant_full_name", e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Telefono <span className="text-red-500">*</span></label>
-                  <input type="tel" className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-medium focus:bg-white focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all placeholder:font-normal" placeholder="+39" value={form.applicant_phone} onChange={(e) => onFieldChange("applicant_phone", e.target.value)} />
+                  <label htmlFor="aff-applicant-phone" className="text-xs font-bold text-[var(--theme-text)] uppercase tracking-wider">Telefono <span className="text-red-500">*</span></label>
+                  <input id="aff-applicant-phone" type="tel" className="theme-input w-full h-12 px-4 rounded-xl border text-sm font-medium outline-none transition-all placeholder:font-normal" placeholder="+39" value={form.applicant_phone} onChange={(e) => onFieldChange("applicant_phone", e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Email <span className="text-red-500">*</span></label>
-                  <input type="email" className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-medium focus:bg-white focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all placeholder:font-normal" placeholder="mario@esempio.it" value={form.applicant_email} onChange={(e) => onFieldChange("applicant_email", e.target.value)} />
+                  <label htmlFor="aff-applicant-email" className="text-xs font-bold text-[var(--theme-text)] uppercase tracking-wider">Email <span className="text-red-500">*</span></label>
+                  <input id="aff-applicant-email" type="email" className="theme-input w-full h-12 px-4 rounded-xl border text-sm font-medium outline-none transition-all placeholder:font-normal" placeholder="mario@esempio.it" value={form.applicant_email} onChange={(e) => onFieldChange("applicant_email", e.target.value)} />
                 </div>
               </div>
             </div>
           )}
 
           {!showIntroScreen && !hasRealSubmission && currentStep === 2 && (
-            <div id="affiliation-step-panel-2" role="tabpanel" aria-labelledby="affiliation-step-tab-2" className="p-6 sm:p-10 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="border-b border-slate-100 pb-5">
-                <h2 className="text-2xl font-extrabold text-slate-900">Cariche e Referenti</h2>
-                <p className="mt-1 text-sm text-slate-500">Inserisci i responsabili del direttivo dell'associazione.</p>
+            <div id="affiliation-step-panel-2" role="region" aria-labelledby="affiliation-step-tab-2" className="p-5 sm:p-10 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="border-b border-[var(--theme-border)] pb-5">
+                <h2 className="text-2xl font-extrabold text-[var(--theme-text)]">Cariche e Referenti</h2>
+                <p className="mt-1 text-sm text-[var(--theme-text-muted)]">Inserisci i responsabili del direttivo dell'associazione.</p>
               </div>
 
               <div className="space-y-8">
                 {people.map((person, index) => (
-                  <div key={person.role} className="rounded-2xl border border-slate-200 bg-slate-50/30 p-6 sm:p-8 hover:border-brand/30 hover:shadow-md transition-all group">
+                  <div key={person.role} className="rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-surface-2)] p-5 sm:p-8 hover:border-[var(--theme-border-strong)] transition-all group">
                     <div className="flex items-center gap-3 mb-6">
-                      <div className="w-2 h-8 bg-brand rounded-full group-hover:scale-y-110 transition-transform"></div>
-                      <h3 className="font-extrabold text-slate-800 uppercase tracking-widest text-sm">
+                      <div className="w-2 h-8 bg-[var(--theme-brand)] rounded-full group-hover:scale-y-110 transition-transform"></div>
+                      <h3 className="font-extrabold text-[var(--theme-text)] uppercase tracking-widest text-sm">
                         {ROLE_ITEMS.find((item) => item.role === person.role)?.label || person.role}
                       </h3>
                     </div>
                     <div className="grid gap-5 sm:grid-cols-2">
                       <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Nome Completo</label>
-                        <input className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-white text-sm font-medium focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all" placeholder="Nome" value={person.full_name} onChange={(e) => onPersonChange(index, "full_name", e.target.value)} />
+                        <label htmlFor={`aff-person-name-${person.role}`} className="text-[11px] font-bold text-[var(--theme-text-muted)] uppercase tracking-wider">Nome Completo <span className="text-red-500">*</span></label>
+                        <input id={`aff-person-name-${person.role}`} className="theme-input w-full h-11 px-4 rounded-xl border text-sm font-medium outline-none transition-all" placeholder="Nome e cognome" value={person.full_name} onChange={(e) => onPersonChange(index, "full_name", e.target.value)} />
                       </div>
                       <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Email</label>
-                        <input type="email" className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-white text-sm font-medium focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all" placeholder="Email" value={person.email} onChange={(e) => onPersonChange(index, "email", e.target.value)} />
+                        <label htmlFor={`aff-person-email-${person.role}`} className="text-[11px] font-bold text-[var(--theme-text-muted)] uppercase tracking-wider">Email <span className="text-red-500">*</span></label>
+                        <input id={`aff-person-email-${person.role}`} type="email" className="theme-input w-full h-11 px-4 rounded-xl border text-sm font-medium outline-none transition-all" placeholder="Email" value={person.email} onChange={(e) => onPersonChange(index, "email", e.target.value)} />
                       </div>
                       <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Telefono</label>
-                        <input type="tel" className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-white text-sm font-medium focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all" placeholder="+39" value={person.phone} onChange={(e) => onPersonChange(index, "phone", e.target.value)} />
+                        <label htmlFor={`aff-person-phone-${person.role}`} className="text-[11px] font-bold text-[var(--theme-text-muted)] uppercase tracking-wider">Telefono</label>
+                        <input id={`aff-person-phone-${person.role}`} type="tel" className="theme-input w-full h-11 px-4 rounded-xl border text-sm font-medium outline-none transition-all" placeholder="+39" value={person.phone} onChange={(e) => onPersonChange(index, "phone", e.target.value)} />
                       </div>
                       <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Codice Fiscale</label>
-                        <input className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-white text-sm font-bold focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all uppercase placeholder:font-normal placeholder:normal-case" placeholder="16 caratteri" value={person.fiscal_code} onChange={(e) => onPersonChange(index, "fiscal_code", e.target.value)} />
+                        <label htmlFor={`aff-person-cf-${person.role}`} className="text-[11px] font-bold text-[var(--theme-text-muted)] uppercase tracking-wider">Codice Fiscale</label>
+                        <input id={`aff-person-cf-${person.role}`} className="theme-input w-full h-11 px-4 rounded-xl border text-sm font-bold outline-none transition-all uppercase placeholder:font-normal placeholder:normal-case" placeholder="16 caratteri" value={person.fiscal_code} onChange={(e) => onPersonChange(index, "fiscal_code", e.target.value)} />
                       </div>
                     </div>
                   </div>
@@ -1113,25 +1192,30 @@ const Affiliazione = () => {
           )}
 
           {!showIntroScreen && !hasRealSubmission && currentStep === 3 && (
-            <div id="affiliation-step-panel-3" role="tabpanel" aria-labelledby="affiliation-step-tab-3" className="p-6 sm:p-10 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="border-b border-slate-100 pb-5">
-                <h2 className="text-2xl font-extrabold text-slate-900">Upload Documenti</h2>
-                <p className="mt-1 text-sm text-slate-500">Carica i file richiesti. {publicUploadHint}. La segreteria convaliderà i documenti manualmente.</p>
+            <div id="affiliation-step-panel-3" role="region" aria-labelledby="affiliation-step-tab-3" className="p-5 sm:p-10 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="border-b border-[var(--theme-border)] pb-5">
+                <h2 className="text-2xl font-extrabold text-[var(--theme-text)]">Upload Documenti</h2>
+                <p className="mt-1 text-sm text-[var(--theme-text-muted)]">Carica i file richiesti. {publicUploadHint}. La segreteria convaliderà i documenti manualmente.</p>
               </div>
 
               <div className="grid gap-5 sm:grid-cols-2">
                 {DOC_ITEMS.map((doc) => {
                   const docData = docsByType.get(doc.type);
                   const isUploaded = !!docData;
-                  const status = resolveStatusMeta(affiliationDocumentStatusMeta, docData?.status, "Non caricato");
-                  
+                  const isDraftUpload =
+                    (!draft?.status || draft.status === "draft") &&
+                    (docData?.status === "uploaded" || docData?.status === "pending");
+                  const status = isDraftUpload
+                    ? { label: "Caricato", tone: "border-emerald-200 bg-emerald-50 text-emerald-700" }
+                    : resolveStatusMeta(affiliationDocumentStatusMeta, docData?.status, "Non caricato");
+
                   return (
-                    <div key={doc.type} className={`relative flex flex-col justify-between rounded-2xl border-2 p-5 transition-all ${isUploaded ? 'border-brand/40 bg-brand/[0.02] shadow-sm' : 'border-dashed border-slate-300 bg-slate-50/80 hover:bg-slate-50 hover:border-slate-400'}`}>
+                    <div key={doc.type} className={`relative flex flex-col justify-between rounded-2xl border-2 p-5 transition-all ${isUploaded ? 'border-[var(--theme-brand)] bg-[var(--theme-brand-soft)] shadow-sm' : 'border-dashed border-[var(--theme-border-strong)] bg-[var(--theme-surface-2)] hover:border-[var(--theme-brand)]'}`}>
                       <div className="mb-6">
                         <div className="flex items-start justify-between gap-3">
-                          <h3 className="font-bold text-sm text-slate-900 leading-tight">{doc.label}</h3>
+                          <h3 className="font-bold text-sm text-[var(--theme-text)] leading-tight">{doc.label}</h3>
                           {isUploaded && (
-                            <span className="shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-brand text-white shadow-sm">
+                            <span className="shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-[var(--theme-brand)] text-[var(--theme-on-brand)] shadow-sm">
                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                             </span>
                           )}
@@ -1142,7 +1226,7 @@ const Affiliazione = () => {
                               {status.label}
                             </span>
                             {docData.download_url && (
-                              <a href={docData.download_url} target="_blank" rel="noreferrer" className="text-xs font-semibold text-brand hover:underline flex items-center gap-1">
+                              <a href={docData.download_url} target="_blank" rel="noreferrer" className="text-xs font-semibold text-[var(--theme-brand)] hover:underline flex items-center gap-1">
                                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                 Vedi file
                               </a>
@@ -1157,12 +1241,12 @@ const Affiliazione = () => {
                       </div>
 
                       <div className="mt-auto">
-                        <label className={`cursor-pointer w-full flex items-center justify-center h-12 px-4 rounded-xl text-sm font-bold transition-all ${
-                          uploadingType === doc.type 
-                            ? 'bg-slate-200 text-slate-500 cursor-wait' 
-                            : isUploaded 
-                              ? 'bg-white border-2 border-slate-200 text-slate-600 hover:border-brand hover:text-brand' 
-                              : 'bg-slate-900 text-white shadow-md hover:-translate-y-0.5 hover:shadow-lg'
+                        <label htmlFor={`aff-doc-${doc.type}`} className={`cursor-pointer w-full flex items-center justify-center h-12 px-4 rounded-xl text-sm font-bold transition-all focus-within:ring-2 focus-within:ring-[var(--theme-brand)] focus-within:ring-offset-2 ${
+                          uploadingType === doc.type
+                            ? 'bg-[var(--theme-surface-2)] text-[var(--theme-text-muted)] cursor-wait'
+                            : isUploaded
+                              ? 'btn-secondary'
+                              : 'btn-primary'
                         }`}>
                           {uploadingType === doc.type ? (
                             <span className="flex items-center gap-2">
@@ -1178,9 +1262,10 @@ const Affiliazione = () => {
                             </span>
                           )}
                           <input
+                            id={`aff-doc-${doc.type}`}
                             type="file"
                             accept=".pdf,.jpg,.jpeg,.png"
-                            className="hidden"
+                            className="sr-only"
                             disabled={uploadingType === doc.type}
                             onChange={(event) => {
                               const file = event.target.files?.[0];
@@ -1198,65 +1283,64 @@ const Affiliazione = () => {
           )}
 
           {!showIntroScreen && !hasRealSubmission && currentStep === 4 && (
-            <div id="affiliation-step-panel-4" role="tabpanel" aria-labelledby="affiliation-step-tab-4" className="p-6 sm:p-10 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="border-b border-slate-100 pb-5">
-                <h2 className="text-2xl font-extrabold text-slate-900">Pagamento</h2>
-                <p className="mt-1 text-sm text-slate-500">Scegli come saldare la quota associativa.</p>
+            <div id="affiliation-step-panel-4" role="region" aria-labelledby="affiliation-step-tab-4" className="p-5 sm:p-10 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="border-b border-[var(--theme-border)] pb-5">
+                <h2 className="text-2xl font-extrabold text-[var(--theme-text)]">Pagamento</h2>
+                <p className="mt-1 text-sm text-[var(--theme-text-muted)]">Scegli come saldare la quota associativa.</p>
               </div>
 
-              <div className="bg-slate-900 rounded-2xl p-8 text-white flex items-center justify-between shadow-lg relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl -mr-10 -mt-10"></div>
+              <div className="rounded-2xl border border-[var(--theme-border-strong)] bg-[var(--theme-chrome)] p-6 sm:p-8 text-[var(--theme-on-chrome)] flex items-center justify-between shadow-lg relative overflow-hidden">
                 <div className="relative z-10">
-                  <p className="text-brand-light text-xs font-bold uppercase tracking-widest mb-1">Quota Affiliazione Annuale</p>
-                  <p className="text-4xl sm:text-5xl font-extrabold tracking-tight">
+                  <p className="text-[var(--theme-on-chrome)]/80 text-xs font-bold uppercase tracking-widest mb-1">Quota Affiliazione Annuale</p>
+                  <p className="text-3xl sm:text-5xl font-extrabold tracking-tight">
                     {feeLabel}
                   </p>
                   {!paymentEnabled ? (
-                    <p className="mt-3 max-w-md text-sm font-medium text-slate-300">
+                    <p className="mt-3 max-w-md text-sm font-medium text-[var(--theme-on-chrome)]/80">
                       La segreteria confermerà importo e modalità prima del saldo.
                     </p>
                   ) : null}
                 </div>
                 <div className="hidden sm:flex w-16 h-16 rounded-full bg-white/10 items-center justify-center relative z-10">
-                  <svg className="w-8 h-8 text-brand-light" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+                  <svg className="w-8 h-8 text-[var(--theme-on-chrome)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
                 </div>
               </div>
 
               <div className="space-y-4">
-                <h3 className="font-bold text-slate-900 text-sm uppercase tracking-wider">Metodo di pagamento</h3>
+                <h3 className="font-bold text-[var(--theme-text)] text-sm uppercase tracking-wider">Metodo di pagamento <span className="text-red-500">*</span></h3>
                 <div className="grid sm:grid-cols-2 gap-4">
-                  <label className={`relative flex flex-col p-6 rounded-2xl border-2 cursor-pointer transition-all ${
-                    form.payment_method === "stripe" ? 'border-brand bg-brand/5 ring-4 ring-brand/10' : 'border-slate-200 bg-white hover:border-slate-300'
+                  <label htmlFor="aff-pay-stripe" className={`relative flex flex-col p-6 rounded-2xl border-2 cursor-pointer transition-all focus-within:ring-2 focus-within:ring-[var(--theme-brand)] ${
+                    form.payment_method === "stripe" ? 'border-[var(--theme-brand)] bg-[var(--theme-brand-soft)] ring-4 ring-brand/10' : 'border-[var(--theme-border)] bg-[var(--theme-surface-solid)] hover:border-[var(--theme-border-strong)]'
                   } ${!stripeEnabled ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}>
                     <div className="flex items-center justify-between mb-3">
-                      <span className="font-extrabold text-slate-900 text-lg">Carta di Credito</span>
-                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${form.payment_method === "stripe" ? 'border-brand' : 'border-slate-300'}`}>
-                        {form.payment_method === "stripe" && <div className="w-3 h-3 bg-brand rounded-full"></div>}
+                      <span className="font-extrabold text-[var(--theme-text)] text-lg">Carta di Credito</span>
+                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${form.payment_method === "stripe" ? 'border-[var(--theme-brand)]' : 'border-[var(--theme-border-strong)]'}`}>
+                        {form.payment_method === "stripe" && <div className="w-3 h-3 bg-[var(--theme-brand)] rounded-full"></div>}
                       </div>
                     </div>
-                    <p className="text-sm text-slate-500 font-medium flex-grow leading-relaxed">Pagamento sicuro e immediato tramite Stripe. Attivazione automatica.</p>
-                    <input type="radio" className="hidden" checked={form.payment_method === "stripe"} disabled={!stripeEnabled} onChange={() => onFieldChange("payment_method", "stripe")} />
+                    <p className="text-sm text-[var(--theme-text-muted)] font-medium flex-grow leading-relaxed">Pagamento sicuro e immediato tramite Stripe. Attivazione automatica.</p>
+                    <input id="aff-pay-stripe" type="radio" name="affiliation-payment-method" className="sr-only" checked={form.payment_method === "stripe"} disabled={!stripeEnabled} onChange={() => onFieldChange("payment_method", "stripe")} />
                   </label>
 
-                  <label className={`relative flex flex-col p-6 rounded-2xl border-2 cursor-pointer transition-all ${
-                    form.payment_method === "bank_transfer" ? 'border-brand bg-brand/5 ring-4 ring-brand/10' : 'border-slate-200 bg-white hover:border-slate-300'
+                  <label htmlFor="aff-pay-bank" className={`relative flex flex-col p-6 rounded-2xl border-2 cursor-pointer transition-all focus-within:ring-2 focus-within:ring-[var(--theme-brand)] ${
+                    form.payment_method === "bank_transfer" ? 'border-[var(--theme-brand)] bg-[var(--theme-brand-soft)] ring-4 ring-brand/10' : 'border-[var(--theme-border)] bg-[var(--theme-surface-solid)] hover:border-[var(--theme-border-strong)]'
                   }`}>
                     <div className="flex items-center justify-between mb-3">
-                      <span className="font-extrabold text-slate-900 text-lg">Bonifico Bancario</span>
-                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${form.payment_method === "bank_transfer" ? 'border-brand' : 'border-slate-300'}`}>
-                        {form.payment_method === "bank_transfer" && <div className="w-3 h-3 bg-brand rounded-full"></div>}
+                      <span className="font-extrabold text-[var(--theme-text)] text-lg">Bonifico Bancario</span>
+                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${form.payment_method === "bank_transfer" ? 'border-[var(--theme-brand)]' : 'border-[var(--theme-border-strong)]'}`}>
+                        {form.payment_method === "bank_transfer" && <div className="w-3 h-3 bg-[var(--theme-brand)] rounded-full"></div>}
                       </div>
                     </div>
-                    <p className="text-sm text-slate-500 font-medium flex-grow leading-relaxed">Attivazione manuale post verifica contabile da parte di ASSONAM.</p>
-                    <input type="radio" className="hidden" checked={form.payment_method === "bank_transfer"} onChange={() => onFieldChange("payment_method", "bank_transfer")} />
+                    <p className="text-sm text-[var(--theme-text-muted)] font-medium flex-grow leading-relaxed">Attivazione manuale post verifica contabile da parte di ASSONAM.</p>
+                    <input id="aff-pay-bank" type="radio" name="affiliation-payment-method" className="sr-only" checked={form.payment_method === "bank_transfer"} onChange={() => onFieldChange("payment_method", "bank_transfer")} />
                   </label>
                 </div>
               </div>
 
               {form.payment_method === "stripe" && stripeEnabled && (
-                <div className="bg-[#635BFF]/5 border border-[#635BFF]/20 rounded-2xl p-6 sm:p-8 text-center animate-in fade-in">
-                  <p className="text-sm font-semibold text-[#635BFF] mb-5">Verrai reindirizzato al portale sicuro di Stripe per completare il pagamento in 1 minuto.</p>
-                  <button type="button" className="inline-flex items-center justify-center h-14 px-10 rounded-xl bg-[#635BFF] hover:bg-[#5851E5] text-white text-lg font-bold tracking-wide shadow-lg shadow-[#635BFF]/30 transition-all hover:-translate-y-0.5 focus:ring-4 focus:ring-[#635BFF]/30" onClick={onOpenStripeCheckout}>
+                <div className="bg-[var(--theme-surface-2)] border border-[var(--theme-border)] rounded-2xl p-6 sm:p-8 text-center animate-in fade-in">
+                  <p className="text-sm font-semibold text-[var(--theme-text)] mb-5">Verrai reindirizzato al portale sicuro di Stripe per completare il pagamento in 1 minuto.</p>
+                  <button type="button" className="btn-primary inline-flex items-center justify-center h-14 px-10 rounded-xl text-lg font-bold tracking-wide" onClick={onOpenStripeCheckout}>
                     <svg className="w-6 h-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8V7a4 4 0 00-8 0v4h8z" /></svg>
                     Paga con Stripe
                   </button>
@@ -1264,23 +1348,23 @@ const Affiliazione = () => {
               )}
 
               {form.payment_method === "bank_transfer" && (
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 sm:p-8 animate-in fade-in space-y-6">
+                <div className="bg-[var(--theme-surface-2)] border border-[var(--theme-border)] rounded-2xl p-5 sm:p-8 animate-in fade-in space-y-6">
                   <div className="text-center sm:text-left">
-                    <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Coordinate Bancarie ASSONAM</p>
-                    <div className="font-mono text-base sm:text-xl font-bold bg-white border border-slate-200 rounded-xl p-4 mb-4 select-all break-all text-brand tracking-wider shadow-sm text-center">
+                    <p className="text-xs font-bold uppercase tracking-widest text-[var(--theme-text-muted)] mb-4">Coordinate Bancarie ASSONAM</p>
+                    <div className="font-mono text-base sm:text-xl font-bold bg-[var(--theme-surface-solid)] border border-[var(--theme-border)] rounded-xl p-4 mb-4 select-all break-all text-[var(--theme-brand)] tracking-wider shadow-sm text-center">
                       {draft?.payment_config.bank_iban || "-"}
                     </div>
-                    <p className="text-sm text-slate-600 font-medium">Causale obbligatoria: <strong className="text-slate-900 bg-amber-100/50 border border-amber-200 px-2 py-1 rounded select-all">{draft?.payment_config.bank_causale_prefix || "AFFILIAZIONE"} - {draft?.payment_config.reference_code || "AFFILIAZIONE"}</strong></p>
+                    <p className="text-sm text-[var(--theme-text-muted)] font-medium">Causale obbligatoria: <strong className="text-amber-800 bg-amber-50 border border-amber-200 px-2 py-1 rounded select-all">{draft?.payment_config.bank_causale_prefix || "AFFILIAZIONE"} - {draft?.payment_config.reference_code || "AFFILIAZIONE"}</strong></p>
                   </div>
-                  
-                  <div className="grid gap-5 sm:grid-cols-2 pt-6 border-t border-slate-200">
+
+                  <div className="grid gap-5 sm:grid-cols-2 pt-6 border-t border-[var(--theme-border)]">
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Data Prevista Versamento</label>
-                      <input type="date" className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-white text-sm font-medium focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all" value={form.manual_preferred_date} onChange={(e) => onFieldChange("manual_preferred_date", e.target.value)} />
+                      <label htmlFor="aff-manual-date" className="text-xs font-bold text-[var(--theme-text)] uppercase tracking-wider">Data Prevista Versamento</label>
+                      <input id="aff-manual-date" type="date" className="theme-input w-full h-12 px-4 rounded-xl border text-sm font-medium outline-none transition-all" value={form.manual_preferred_date} onChange={(e) => onFieldChange("manual_preferred_date", e.target.value)} />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Nome Referente Bonifico</label>
-                      <input type="text" placeholder="Nome di chi effettua il bonifico" className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-white text-sm font-medium focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all" value={form.manual_contact} onChange={(e) => onFieldChange("manual_contact", e.target.value)} />
+                      <label htmlFor="aff-manual-contact" className="text-xs font-bold text-[var(--theme-text)] uppercase tracking-wider">Nome Referente Bonifico <span className="text-red-500">*</span></label>
+                      <input id="aff-manual-contact" type="text" placeholder="Nome di chi effettua il bonifico" className="theme-input w-full h-12 px-4 rounded-xl border text-sm font-medium outline-none transition-all" value={form.manual_contact} onChange={(e) => onFieldChange("manual_contact", e.target.value)} />
                     </div>
                   </div>
                 </div>
@@ -1289,41 +1373,41 @@ const Affiliazione = () => {
           )}
 
           {!showIntroScreen && !hasRealSubmission && currentStep === 5 && (
-            <div id="affiliation-step-panel-5" role="tabpanel" aria-labelledby="affiliation-step-tab-5" className="p-6 sm:p-10 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="border-b border-slate-100 pb-5">
-                <h2 className="text-2xl font-extrabold text-slate-900">Riepilogo Finale</h2>
-                <p className="mt-1 text-sm text-slate-500">Un ultimo controllo prima di inviare definitivamente la richiesta.</p>
+            <div id="affiliation-step-panel-5" role="region" aria-labelledby="affiliation-step-tab-5" className="p-5 sm:p-10 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="border-b border-[var(--theme-border)] pb-5">
+                <h2 className="text-2xl font-extrabold text-[var(--theme-text)]">Riepilogo Finale</h2>
+                <p className="mt-1 text-sm text-[var(--theme-text-muted)]">Un ultimo controllo prima di inviare definitivamente la richiesta.</p>
               </div>
 
-              <div className="bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden">
-                <dl className="divide-y divide-slate-100 text-sm md:text-base">
+              <div className="bg-[var(--theme-surface-2)] rounded-2xl border border-[var(--theme-border)] overflow-hidden">
+                <dl className="divide-y divide-[var(--theme-border)] text-sm md:text-base">
                   <div className="flex flex-col sm:flex-row sm:justify-between p-5 gap-2">
-                    <dt className="text-slate-500 font-semibold">Associazione</dt>
-                    <dd className="font-bold text-slate-900 sm:text-right">{form.organization_name || "-"}</dd>
+                    <dt className="text-[var(--theme-text-muted)] font-semibold">Associazione</dt>
+                    <dd className="font-bold text-[var(--theme-text)] sm:text-right">{form.organization_name || "-"}</dd>
                   </div>
                   <div className="flex flex-col sm:flex-row sm:justify-between p-5 gap-2">
-                    <dt className="text-slate-500 font-semibold">Referente</dt>
-                    <dd className="font-bold text-slate-900 sm:text-right">{form.applicant_full_name || "-"}</dd>
+                    <dt className="text-[var(--theme-text-muted)] font-semibold">Referente</dt>
+                    <dd className="font-bold text-[var(--theme-text)] sm:text-right">{form.applicant_full_name || "-"}</dd>
                   </div>
                   <div className="flex flex-col sm:flex-row sm:justify-between p-5 gap-2 items-start sm:items-center">
-                    <dt className="text-slate-500 font-semibold">Metodo Pagamento</dt>
-                    <dd className="font-bold text-slate-900 sm:text-right uppercase text-xs tracking-wider bg-slate-200 px-3 py-1.5 rounded-lg">
+                    <dt className="text-[var(--theme-text-muted)] font-semibold">Metodo Pagamento</dt>
+                    <dd className="font-bold text-[var(--theme-text)] sm:text-right uppercase text-xs tracking-wider bg-[var(--theme-surface-solid)] border border-[var(--theme-border)] px-3 py-1.5 rounded-lg">
                       {form.payment_method === 'stripe' ? 'Carta di Credito' : form.payment_method === 'bank_transfer' ? 'Bonifico' : form.payment_method || "-"}
                     </dd>
                   </div>
                   <div className="flex flex-col sm:flex-row sm:justify-between p-5 gap-2 items-start sm:items-center">
-                    <dt className="text-slate-500 font-semibold">Documenti Caricati</dt>
-                    <dd className="font-bold text-slate-900 sm:text-right">
-                      <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-brand/10 text-brand text-sm">{docsByType.size}</span>
-                      <span className="text-slate-500 text-sm ml-2 font-medium">/ 6 Obbligatori</span>
+                    <dt className="text-[var(--theme-text-muted)] font-semibold">Documenti Caricati</dt>
+                    <dd className="font-bold text-[var(--theme-text)] sm:text-right">
+                      <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-[var(--theme-brand-soft)] text-[var(--theme-brand)] text-sm">{docsByType.size}</span>
+                      <span className="text-[var(--theme-text-muted)] text-sm ml-2 font-medium">/ 6 Obbligatori</span>
                     </dd>
                   </div>
                 </dl>
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Note Aggiuntive (Opzionale)</label>
-                <textarea className="w-full min-h-[120px] p-4 rounded-xl border border-slate-200 bg-slate-50/50 text-sm font-medium focus:bg-white focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all resize-y" placeholder="Comunicazioni per la segreteria..." value={form.notes} onChange={(e) => onFieldChange("notes", e.target.value)} />
+                <label htmlFor="aff-notes" className="text-xs font-bold text-[var(--theme-text)] uppercase tracking-wider">Note Aggiuntive (Opzionale)</label>
+                <textarea id="aff-notes" className="theme-input w-full min-h-[120px] p-4 rounded-xl border text-sm font-medium outline-none transition-all resize-y" placeholder="Comunicazioni per la segreteria..." value={form.notes} onChange={(e) => onFieldChange("notes", e.target.value)} />
               </div>
 
               {validation.issues.length > 0 ? (
@@ -1342,7 +1426,7 @@ const Affiliazione = () => {
                 </div>
               ) : (
                 <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/50 p-6 flex flex-col sm:flex-row items-center sm:items-start gap-5 text-center sm:text-left">
-                  <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                  <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 shrink-0">
                     <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                   </div>
                   <div>
@@ -1355,32 +1439,36 @@ const Affiliazione = () => {
           )}
 
           {hasRealSubmission && (
-            <div className="p-8 sm:p-16 text-center space-y-8 animate-in zoom-in-95 duration-500">
-              <div className="mx-auto w-28 h-28 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center mb-8 border-4 border-emerald-100 shadow-xl shadow-emerald-100/50">
-                <svg className="w-14 h-14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+            <div className="p-6 sm:p-16 text-center space-y-8 animate-in zoom-in-95 duration-500">
+              <div className="mx-auto w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center mb-6 border-4 border-emerald-200 shadow-sm">
+                <svg className="w-12 h-12 sm:w-14 sm:h-14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
               </div>
-              <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight">Richiesta Inviata!</h2>
-              <p className="text-lg text-slate-500 max-w-lg mx-auto font-medium">
+              <h2 className="text-3xl sm:text-4xl font-extrabold text-[var(--theme-text)] tracking-tight">Richiesta Inviata!</h2>
+              <p className="text-base sm:text-lg text-[var(--theme-text-muted)] max-w-lg mx-auto font-medium">
                 Abbiamo preso in carico la tua domanda di affiliazione. Riceverai presto aggiornamenti dalla segreteria.
               </p>
-              
-              <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 inline-block text-center sm:text-left w-full max-w-sm mx-auto mt-6">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 text-center">Stato Pratica</p>
+
+              <div className="bg-[var(--theme-surface-2)] rounded-2xl p-6 border border-[var(--theme-border)] inline-block text-center sm:text-left w-full max-w-sm mx-auto mt-6">
+                <p className="text-xs font-bold text-[var(--theme-text-soft)] uppercase tracking-widest mb-3 text-center">Stato Pratica</p>
                 <div className="flex items-center justify-center gap-3">
                   <span className="relative flex h-4 w-4">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-4 w-4 bg-amber-500"></span>
                   </span>
-                  <strong className="text-slate-800 font-extrabold uppercase tracking-wider text-lg">{submitResult?.status || draft?.status || "In Revisione"}</strong>
+                  <strong className="text-[var(--theme-text)] font-extrabold uppercase tracking-wider text-lg">
+                    {resolveStatusMeta(affiliationStatusMeta, submitResult?.status || draft?.status, "In revisione").label}
+                  </strong>
                 </div>
               </div>
 
-              <div className="pt-10 flex flex-col sm:flex-row justify-center gap-4">
-                <button type="button" className="inline-flex items-center justify-center h-14 px-8 rounded-xl bg-brand text-white font-bold tracking-wide shadow-lg shadow-brand/30 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-brand/40 transition-all text-lg" onClick={onOpenInstantWelcomeVideo}>
-                  <svg className="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" /></svg>
-                  Guarda Video
-                </button>
-                <Link to="/" className="inline-flex items-center justify-center h-14 px-8 rounded-xl bg-white border-2 border-slate-200 text-slate-700 font-bold hover:bg-slate-50 transition-all text-lg">
+              <div className="pt-8 flex flex-col sm:flex-row justify-center gap-4">
+                {videoEnabled ? (
+                  <button type="button" className="btn-primary inline-flex items-center justify-center h-14 px-8 rounded-xl font-bold tracking-wide text-lg" onClick={onOpenInstantWelcomeVideo}>
+                    <svg className="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" /></svg>
+                    Guarda Video
+                  </button>
+                ) : null}
+                <Link to="/" className="btn-secondary inline-flex items-center justify-center h-14 px-8 rounded-xl font-bold text-lg">
                   Torna alla Home
                 </Link>
               </div>
@@ -1389,21 +1477,21 @@ const Affiliazione = () => {
 
           {/* Sticky Footer */}
           {!showIntroScreen && !hasRealSubmission && (
-            <div className="fixed bottom-0 left-0 w-full bg-white/95 backdrop-blur-xl border-t border-slate-200 p-4 sm:p-5 z-40 md:sticky md:bottom-auto md:w-auto md:bg-slate-50/50 md:backdrop-blur-none md:border-t md:border-slate-100 md:p-6 shadow-[0_-20px_40px_rgba(0,0,0,0.08)] md:shadow-none">
+            <div className="fixed bottom-0 left-0 w-full bg-[var(--theme-surface-solid)]/95 backdrop-blur-xl border-t border-[var(--theme-border)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:p-5 z-40 md:sticky md:bottom-auto md:w-auto md:bg-[var(--theme-surface-2)] md:backdrop-blur-none md:border-t md:border-[var(--theme-border)] md:p-6 shadow-[0_-20px_40px_rgba(0,0,0,0.08)] md:shadow-none">
               <div className="max-w-3xl mx-auto flex items-center justify-between gap-4">
                 <button
                   type="button"
-                  className="px-6 h-12 rounded-xl text-sm font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="btn-secondary px-6 h-12 rounded-xl text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed"
                   onClick={onGoPrevStep}
                   disabled={progressActiveStep <= 1 || saving}
                 >
                   Indietro
                 </button>
-                
+
                 {progressActiveStep < 5 ? (
                   <button
                     type="button"
-                    className="inline-flex items-center justify-center px-10 h-12 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold shadow-lg shadow-slate-900/20 hover:shadow-xl transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                    className="btn-primary inline-flex items-center justify-center px-10 h-12 rounded-xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={() => void onGoNextStep()}
                     disabled={saving}
                   >
@@ -1412,7 +1500,7 @@ const Affiliazione = () => {
                 ) : (
                   <button
                     type="button"
-                    className="inline-flex items-center justify-center px-10 h-12 rounded-xl bg-brand hover:bg-brand-light text-white text-sm font-bold shadow-lg shadow-brand/30 hover:shadow-xl transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed disabled:transform-none"
+                    className="btn-primary inline-flex items-center justify-center px-10 h-12 rounded-xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={submitting || validation.issues.length > 0}
                     onClick={() => void onSubmit()}
                   >
