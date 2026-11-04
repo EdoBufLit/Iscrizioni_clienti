@@ -10,6 +10,7 @@ import {
   type SuperAdminProfile,
   type SuperAdminSessionInfo,
 } from "../../lib/api";
+import { SuperAdminPageHeader } from "./components/SuperAdminPrimitives";
 
 const formatDateTime = (value: string) =>
   new Intl.DateTimeFormat("it-IT", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
@@ -115,12 +116,13 @@ const SuperAdminSecurity = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <header>
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-neutral-500">Accesso privilegiato</p>
-        <h1 className="mt-1 text-2xl font-semibold text-neutral-950">Sicurezza</h1>
-        <p className="mt-1 text-sm text-neutral-600">Secondo fattore, codici di recupero, password e dispositivi collegati.</p>
-      </header>
+    <div className="sa-page">
+      <SuperAdminPageHeader
+        icon="shield"
+        eyebrow="Accesso privilegiato"
+        title="Sicurezza"
+        subtitle="Secondo fattore, codici di recupero, password e dispositivi collegati."
+      />
 
       {error ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{error}</div> : null}
       {message ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">{message}</div> : null}
@@ -139,12 +141,12 @@ const SuperAdminSecurity = () => {
         <form className="mt-5 flex max-w-lg flex-col gap-3 sm:flex-row" onSubmit={verifyStepUp}>
           <div className="flex-1">
             <label className="text-sm font-medium text-neutral-800" htmlFor="security-step-up">Codice per operazioni sensibili</label>
-            <input id="security-step-up" className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 font-mono tracking-widest focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20" value={stepUpCode} onChange={(event) => setStepUpCode(event.target.value)} autoComplete="one-time-code" inputMode="numeric" />
+            <input id="security-step-up" className="theme-input mt-1 w-full rounded-lg border px-3 py-2 font-mono tracking-widest" value={stepUpCode} onChange={(event) => setStepUpCode(event.target.value)} autoComplete="one-time-code" inputMode="numeric" />
           </div>
           <button className="btn-primary self-end px-4 py-2" disabled={busy || !stepUpCode.trim()} type="submit">Verifica</button>
         </form>
 
-        <button className="mt-4 rounded-lg border border-neutral-300 px-4 py-2 text-sm font-semibold text-neutral-800 disabled:cursor-not-allowed disabled:opacity-50" type="button" disabled={!stepUpActive || busy} onClick={regenerateCodes}>
+        <button className="sa-btn mt-4 disabled:cursor-not-allowed disabled:opacity-50" type="button" disabled={!stepUpActive || busy} onClick={regenerateCodes}>
           Rigenera codici di recupero
         </button>
 
@@ -164,7 +166,7 @@ const SuperAdminSecurity = () => {
             <h2 id="sessions-heading" className="font-semibold text-neutral-950">Sessioni attive</h2>
             <p className="text-sm text-neutral-600">Revoca immediatamente dispositivi non riconosciuti.</p>
           </div>
-          <button className="rounded-lg border border-neutral-300 px-3 py-2 text-sm font-semibold" type="button" disabled={busy || sessions.length < 2} onClick={revokeOthers}>Revoca le altre</button>
+          <button className="sa-btn" type="button" disabled={busy || sessions.length < 2} onClick={revokeOthers}>Revoca le altre</button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[680px] text-left text-sm">
@@ -188,8 +190,8 @@ const SuperAdminSecurity = () => {
         <h2 id="password-heading" className="font-semibold text-neutral-950">Cambia password</h2>
         <p className="mt-1 text-sm text-neutral-600">Richiede la verifica MFA recente e revoca le altre sessioni.</p>
         <form className="mt-4 grid max-w-2xl gap-4 sm:grid-cols-2" onSubmit={changePassword}>
-          <div><label className="text-sm font-medium" htmlFor="current-password">Password attuale</label><input id="current-password" className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2" type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></div>
-          <div><label className="text-sm font-medium" htmlFor="new-password">Nuova password</label><input id="new-password" className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2" type="password" minLength={12} autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></div>
+          <div><label className="text-sm font-medium" htmlFor="current-password">Password attuale</label><input id="current-password" className="theme-input mt-1 w-full rounded-lg border px-3 py-2" type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></div>
+          <div><label className="text-sm font-medium" htmlFor="new-password">Nuova password</label><input id="new-password" className="theme-input mt-1 w-full rounded-lg border px-3 py-2" type="password" minLength={12} autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></div>
           <button className="btn-primary px-4 py-2 sm:col-span-2 sm:w-fit" type="submit" disabled={!stepUpActive || busy || !currentPassword || newPassword.length < 12}>Aggiorna password</button>
         </form>
       </section>

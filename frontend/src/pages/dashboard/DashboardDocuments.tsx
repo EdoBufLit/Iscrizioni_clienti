@@ -110,7 +110,7 @@ export default function DashboardDocuments() {
     finally { setStatuteDownloading(false); }
   }
 
-  return <div className="member-documents">
+  return <div className="member-documents" data-tour="member-documents">
     <header><h1>Documentazione</h1><p>Carica i documenti e inviali alla tua associazione per la verifica.</p></header>
     <section className="surface member-documents__statute" aria-labelledby="member-statute-title">
       <div><h2 id="member-statute-title">Statuto associativo</h2><p>{statuteLoading ? "Caricamento…" : statute?.available ? [statute.filename || "Statuto.pdf", formatBytes(statute.size_bytes)].filter(Boolean).join(" · ") : "Non ancora disponibile"}</p></div>
@@ -122,7 +122,7 @@ export default function DashboardDocuments() {
     <section aria-labelledby="member-certifications-title">
       <h2 id="member-certifications-title">Certificazioni personali</h2>
       <p className="member-documents__hint">{publicUploadHint}</p>
-      {loading ? <p role="status">Caricamento documenti…</p> : error ? <div className="member-documents__error" role="alert">{error} <button type="button" onClick={() => void load(true)}>Riprova</button></div> : <div className="member-documents__list">
+      {loading ? <p role="status">Caricamento documenti…</p> : error ? <div className="member-documents__error" role="alert">{error} <button type="button" className="btn-secondary ml-2 px-3 py-1.5 text-xs" onClick={() => void load(true)}>Riprova</button></div> : <div className="member-documents__list">
         {types.map(type => {
           const history = documents.get(type) ?? [];
           const latest = history[0]; const status = latest?.status ?? "missing";

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useOutletContext } from "react-router-dom";
+import { useNavigate, useOutletContext } from "react-router-dom";
 import {
   AuthError,
   deleteOrganization,
@@ -311,7 +311,7 @@ const SuperAdminOrganizations = () => {
         icon="users"
         eyebrow="Governance"
         title="Associazioni"
-        subtitle="Governance completa delle entit? affiliate e configurazione lotti card."
+        subtitle="Governance completa delle entità affiliate e configurazione lotti card."
         actions={
           <SuperAdminActionButton
             tone="primary"
@@ -332,25 +332,6 @@ const SuperAdminOrganizations = () => {
         <SuperAdminKpiCard label="Numerazione condivisa" value={organizationStats.shared.toLocaleString("it-IT")} hint="ASSONAM central" icon="cards" tone="warning" />
         <SuperAdminKpiCard label="Numerazione dedicata" value={organizationStats.dedicated.toLocaleString("it-IT")} hint="Range proprio" icon="shield" tone="purple" />
       </section>
-
-      <div className="hidden">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight text-neutral-900">Registro Associazioni</h2>
-          <p className="mt-1 text-sm font-medium text-neutral-500">
-            Governance completa delle entità affiliate e configurazione lotti card.
-          </p>
-        </div>
-        <button
-          className="btn-primary"
-          onClick={() => openModal("create")}
-          data-component="superadmin-orgs-open-modal"
-        >
-          <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-          Nuova associazione
-        </button>
-      </div>
 
       <SuperAdminToolbar>
         <div className="sa-toolbar__row">
@@ -435,6 +416,25 @@ const SuperAdminOrganizations = () => {
             </select>
           </div>
 
+          <div className="sa-toolbar__field">
+            <label htmlFor="super-admin-org-pagesize">Righe</label>
+            <select
+              id="super-admin-org-pagesize"
+              className="premium-select"
+              value={pageSize}
+              onChange={(event) => {
+                setPageSize(Number(event.target.value));
+                setPage(1);
+              }}
+            >
+              {PAGE_SIZE_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option} righe
+                </option>
+              ))}
+            </select>
+          </div>
+
           <SuperAdminActionButton icon="refresh" onClick={resetFilters} className="self-end">
             Reset
           </SuperAdminActionButton>
@@ -455,86 +455,6 @@ const SuperAdminOrganizations = () => {
           </button>
         </div>
       </SuperAdminToolbar>
-
-      <div className="hidden">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center">
-          <div className="flex-1 min-w-0 relative">
-            <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 group-focus-within:text-brand transition-colors">
-              <svg
-                className="h-5 w-5"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <circle cx="11" cy="11" r="7" />
-                <path d="m20 20-3.5-3.5" />
-              </svg>
-            </span>
-            <input
-              id="super-admin-org-search"
-              type="search"
-              value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  applySearchImmediately();
-                }
-              }}
-              placeholder="Cerca per nome, slug o email..."
-              className="theme-input w-full rounded-xl pl-12 pr-12 py-2.5 text-sm font-semibold"
-            />
-            {searchInput && (
-              <button
-                type="button"
-                onClick={clearSearch}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-900 transition-colors"
-              >
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M18 6 6 18M6 6l12 12" />
-                </svg>
-              </button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3">
-            <select
-              className="premium-select min-w-[160px]"
-              value={pageSize}
-              onChange={(event) => {
-                setPageSize(Number(event.target.value));
-                setPage(1);
-              }}
-            >
-              {PAGE_SIZE_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option} righe
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="mt-2 px-3 pb-1 flex items-center justify-between border-t border-neutral-100/50 pt-3">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
-            {total === 0 ? "Nessun risultato" : `${startIndex}-${endIndex} di ${total.toLocaleString("it-IT")} entità`}
-          </p>
-          <div className="flex items-center gap-2">
-            {isFetching && (
-              <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-brand uppercase tracking-widest animate-pulse">
-                <span className="h-1.5 w-1.5 rounded-full bg-brand" />
-                Aggiornamento...
-              </span>
-            )}
-            <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
-              Pagina {page} / {totalPages}
-            </span>
-          </div>
-        </div>
-      </div>
 
       <SuperAdminTableShell className="sa-orgs-table-shell overflow-hidden">
         <div data-component="superadmin-orgs-table-v2">
@@ -800,262 +720,56 @@ const SuperAdminOrganizations = () => {
               })
             )}
           </div>
-        </div>
-      </SuperAdminTableShell>
+          {totalPages > 1 && (
+            <div className="flex flex-col gap-4 border-t border-neutral-100 bg-neutral-50/30 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 text-center sm:text-left">
+                {total === 0 ? "Nessun risultato" : `${startIndex}-${endIndex} di ${total.toLocaleString("it-IT")} entità · Pagina ${page} di ${totalPages}`}
+                {isFetching ? " · Aggiornamento..." : ""}
+              </p>
+              <div className="flex items-center justify-center gap-1.5">
+                <button
+                  type="button"
+                  className="btn-ghost !px-3 !py-1.5 !text-[10px] font-bold uppercase tracking-widest disabled:opacity-30"
+                  onClick={() => setPage(page - 1)}
+                  disabled={page <= 1}
+                >
+                  ← Precedente
+                </button>
 
-      <SuperAdminTableShell
-        title="Registro associazioni"
-        subtitle={`${filteredOrgs.length.toLocaleString("it-IT")} righe visibili su ${total.toLocaleString("it-IT")} entit?`}
-        action={isFetching ? <SuperAdminStatusChip tone="info" dot>Aggiornamento</SuperAdminStatusChip> : null}
-        className="hidden"
-      >
-        <div data-component="superadmin-orgs-table">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-neutral-100 bg-neutral-50/50">
-                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Nome</th>
-                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Slug</th>
-                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Località</th>
-                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Piattaforma</th>
-                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Affiliazione</th>
-                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 text-center">Tessere</th>
-                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 text-right">Azioni</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-neutral-50">
-              {filteredOrgs.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-5 py-10">
-                    <SuperAdminEmptyState
-                      title={q ? "Nessuna corrispondenza" : "Database vuoto"}
-                      description="Modifica i filtri o crea una nuova associazione."
-                      action={
-                        <SuperAdminActionButton tone="primary" icon="plus" onClick={() => openModal("create")}>
-                          Nuova associazione
-                        </SuperAdminActionButton>
-                      }
-                    />
-                  </td>
-                </tr>
-              ) : (
-                filteredOrgs.map((org) => (
-                  <tr
-                    key={org.id}
-                    data-tone={platformTone(org)}
-                    data-affiliation-tone={affiliationTone(org.affiliation_status)}
-                    className="group transition-colors hover:bg-neutral-50/50"
-                  >
-                    <td className="px-5 py-4">
-                      <p className="text-sm font-bold text-neutral-900 group-hover:text-brand transition-colors">{org.name}</p>
-                      <p className="text-[10px] text-neutral-400 mt-0.5">ID: {org.id}</p>
-                    </td>
-                    <td className="px-5 py-4">
-                      <code className="text-[11px] font-mono font-bold text-neutral-500 bg-neutral-100 px-1.5 py-0.5 rounded uppercase">{org.slug}</code>
-                    </td>
-                    <td className="px-5 py-4">
-                      <p className="text-sm font-medium text-neutral-600">
-                        {org.city} <span className="text-neutral-400">{org.province ? `(${org.province})` : ""}</span>
-                      </p>
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="flex flex-col items-start gap-1.5">
-                        {org.is_archived || org.deleted_at ? (
-                          <span className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-bold text-neutral-500 uppercase tracking-tighter ring-1 ring-inset ring-neutral-200">
-                            Archiviata
-                          </span>
-                        ) : (
-                          <span
-                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-tighter ring-1 ring-inset ${
-                              org.is_active
-                                ? "bg-emerald-50 text-emerald-700 ring-emerald-200/50"
-                                : "bg-neutral-50 text-neutral-400 ring-neutral-200"
-                            }`}
-                          >
-                            {org.is_active ? "Attiva" : "Sospesa"}
-                          </span>
-                        )}
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-tighter ring-1 ring-inset ${
-                            org.accounting_enabled
-                              ? "bg-amber-50 text-amber-700 ring-amber-200/50"
-                              : "bg-neutral-50 text-neutral-400 ring-neutral-200"
-                          }`}
-                        >
-                          {org.accounting_enabled ? "Contabilità on" : "Contabilità off"}
-                        </span>
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-tighter ring-1 ring-inset ${
-                            org.communications_enabled
-                              ? "bg-sky-50 text-sky-700 ring-sky-200/60"
-                              : "bg-neutral-50 text-neutral-400 ring-neutral-200"
-                          }`}
-                        >
-                          {org.communications_enabled ? "Comunicazioni on" : "Comunicazioni off"}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4">
-                      {org.affiliation_status ? (
-                        <div className="flex flex-col gap-1.5 items-start">
-                          <span
-                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-tighter ring-1 ring-inset ${
-                              org.affiliation_status === "approved"
-                                ? "bg-emerald-50 text-emerald-700 ring-emerald-200/50"
-                                : org.affiliation_status === "under_review"
-                                  ? "bg-amber-50 text-amber-700 ring-amber-200/50"
-                                  : org.affiliation_status === "changes_requested"
-                                    ? "bg-orange-50 text-orange-700 ring-orange-200/50"
-                                    : org.affiliation_status === "rejected"
-                                      ? "bg-red-50 text-red-700 ring-red-200/50"
-                                      : "bg-neutral-50 text-neutral-400 ring-neutral-200"
-                            }`}
-                          >
-                            {org.affiliation_status.replace('_', ' ')}
-                          </span>
-                          {org.affiliation_application_id && (
-                            <Link
-                              to={`/super-admin/affiliazioni?applicationId=${org.affiliation_application_id}`}
-                              className="text-[10px] font-bold text-brand hover:text-brand-dark transition-colors uppercase tracking-widest flex items-center gap-1"
-                            >
-                              Apri pratica
-                              <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                <path d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                              </svg>
-                            </Link>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-[10px] font-bold text-neutral-300 uppercase tracking-widest">Nessuna</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-4 text-center">
-                      {org.card_min ? (
-                        <div className="flex flex-col items-center">
-                          <span className="text-sm font-bold text-neutral-900 tabular-nums">
-                            {org.card_min}-{org.card_max}
-                          </span>
-                          <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-tighter">
-                            Range impostato
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-[10px] font-bold text-neutral-300 uppercase tracking-widest">Non config.</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-4 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {isSuperAdmin && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              void handleToggleCommunications(org, !Boolean(org.communications_enabled))
-                            }
-                            className={`btn-ghost !px-2.5 !py-1 !text-[10px] font-bold uppercase tracking-widest ${
-                              org.communications_enabled
-                                ? "!border-sky-200 !text-sky-700 hover:!bg-sky-50"
-                                : "!border-neutral-200 !text-neutral-600 hover:!bg-neutral-50"
-                            }`}
-                            disabled={communicationsSavingOrgId === org.id}
-                            title="Attiva o disattiva il modulo Comunicazioni"
-                          >
-                            {communicationsSavingOrgId === org.id
-                              ? "Salvataggio..."
-                              : org.communications_enabled
-                                ? "Comunicazioni off"
-                                : "Comunicazioni on"}
-                          </button>
-                        )}
-                        <button
-                          onClick={() => openModal(org.card_min ? "view-batches" : "range", org)}
-                          className="btn-ghost !px-2.5 !py-1 !text-[10px] font-bold uppercase tracking-widest"
-                          title={org.card_min ? "Gestione lotti" : "Imposta range iniziale"}
-                        >
-                          {org.card_min ? "Lotti" : "Range"}
-                        </button>
-                        {isSuperAdmin && (
-                          <>
-                            <button
-                              onClick={() => openModal("branding", org)}
-                              className="btn-ghost !px-2.5 !py-1 !text-[10px] font-bold uppercase tracking-widest"
-                              title="Configurazione branding e notifiche"
-                            >
-                              Setup
-                            </button>
-                            <button
-                              onClick={() => openIntegrationModal(org)}
-                              className="btn-ghost !px-2.5 !py-1 !text-[10px] font-bold uppercase tracking-widest"
-                              title="Integrazione API esterne"
-                            >
-                              API
-                            </button>
-                            <button
-                              onClick={() => handleDelete(org)}
-                              className="btn-ghost !px-2.5 !py-1 !text-[10px] font-bold uppercase tracking-widest !text-red-600 !border-red-100 hover:!bg-red-50"
-                              title="Elimina o archivia associazione"
-                            >
-                              Elimina
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                <div className="flex items-center gap-1">
+                  {visiblePages.map((value, index) =>
+                    value === "ellipsis" ? (
+                      <span key={`ellipsis-${index}`} className="px-1 text-neutral-300 font-bold">
+                        ...
+                      </span>
+                    ) : (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setPage(value)}
+                        className={`h-8 min-w-[32px] rounded-lg text-[10px] font-bold transition-all ${
+                          value === page
+                            ? "bg-brand text-white shadow-md shadow-brand/20"
+                            : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
+                        }`}
+                      >
+                        {value}
+                      </button>
+                    ),
+                  )}
+                </div>
 
-        {totalPages > 1 && (
-          <div className="flex flex-col gap-4 border-t border-neutral-100 bg-neutral-50/30 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400 text-center sm:text-left">
-              Pagina {page} di {totalPages}
-            </p>
-            <div className="flex items-center justify-center gap-1.5">
-              <button
-                type="button"
-                className="btn-ghost !px-3 !py-1.5 !text-[10px] font-bold uppercase tracking-widest disabled:opacity-30"
-                onClick={() => setPage(page - 1)}
-                disabled={page <= 1}
-              >
-                ← Precedente
-              </button>
-
-              <div className="flex items-center gap-1">
-                {visiblePages.map((value, index) =>
-                  value === "ellipsis" ? (
-                    <span key={`ellipsis-${index}`} className="px-1 text-neutral-300 font-bold">
-                      ...
-                    </span>
-                  ) : (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setPage(value)}
-                      className={`h-8 min-w-[32px] rounded-lg text-[10px] font-bold transition-all ${
-                        value === page
-                          ? "bg-brand text-white shadow-md shadow-brand/20"
-                          : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
-                      }`}
-                    >
-                      {value}
-                    </button>
-                  ),
-                )}
+                <button
+                  type="button"
+                  className="btn-ghost !px-3 !py-1.5 !text-[10px] font-bold uppercase tracking-widest disabled:opacity-30"
+                  onClick={() => setPage(page + 1)}
+                  disabled={page >= totalPages}
+                >
+                  Successiva →
+                </button>
               </div>
-
-              <button
-                type="button"
-                className="btn-ghost !px-3 !py-1.5 !text-[10px] font-bold uppercase tracking-widest disabled:opacity-30"
-                onClick={() => setPage(page + 1)}
-                disabled={page >= totalPages}
-              >
-                Successiva →
-              </button>
             </div>
-          </div>
-        )}
+          )}
         </div>
       </SuperAdminTableShell>
 

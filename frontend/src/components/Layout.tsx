@@ -49,7 +49,8 @@ const Layout = () => {
 
   const isDashboardRoute = useMemo(
     () =>
-      location.pathname.startsWith("/dashboard") ||
+      (location.pathname.startsWith("/dashboard") &&
+        location.pathname !== "/dashboard/documenti/correzione") ||
       location.pathname.startsWith("/org-admin") ||
       location.pathname.startsWith("/super-admin") ||
       location.pathname.startsWith("/admin"),

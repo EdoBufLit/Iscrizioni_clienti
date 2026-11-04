@@ -179,13 +179,11 @@ const SuperAdminOrgAdmins = () => {
 
   return (
     <div className="sa-page">
-      <div className="min-h-[48px]">
-        {error ? (
-          <div className="rounded-xl border border-red-200/50 bg-red-50/50 p-5 text-sm font-bold text-red-900">
-            {error}
-          </div>
-        ) : null}
-      </div>
+      {error ? (
+        <div className="rounded-xl border border-red-200/50 bg-red-50/50 p-5 text-sm font-bold text-red-900">
+          {error}
+        </div>
+      ) : null}
 
       <SuperAdminPageHeader
         icon="shield"
@@ -364,7 +362,7 @@ const SuperAdminOrgAdmins = () => {
             </header>
             <div className="sa-modal__body">
               <p className="text-sm text-neutral-600">
-                Stai revocando l'accesso a questo account. L'azione e reversibile tramite una nuova creazione dell'account.
+                Stai revocando l'accesso a questo account. L'azione è reversibile tramite una nuova creazione dell'account.
               </p>
               {deleteError ? (
                 <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-600">{deleteError}</p>

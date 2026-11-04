@@ -786,7 +786,7 @@ function MemberDetailContent() {
     {canUseCardActions && member.card_verification_url && <a href={member.card_verification_url} target="_blank" rel="noreferrer" className="member-detail-text-link mt-4 inline-flex">Verifica tessera ↗</a>}
   </section>;
 
-  return <div className="member-detail">
+  return <div className="container-shell org-admin-mobile-page member-detail">
     <Link to="/org-admin/soci" className="member-detail-back"><span aria-hidden="true">←</span> Soci</Link>
     <MemberDetailHeader member={member} activeTab={activeTab} onTabChange={setActiveTab} onEdit={openProfile} onShowCard={showCard} />
     {canRenewAnnual && <section className="member-detail-panel" aria-label="Rinnovo tessera annuale">
@@ -938,7 +938,7 @@ function MemberDetailContent() {
                             type="button"
                             onClick={() => handleDownloadDoc(doc)}
                             disabled={downloadingDocId === doc.id}
-                            className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg flex items-center gap-1 text-sm font-medium transition-colors disabled:opacity-50"
+                            className="p-2 text-[var(--theme-brand)] hover:bg-[var(--theme-surface-2)] rounded-lg flex items-center gap-1 text-sm font-medium transition-colors disabled:opacity-50"
                             title="Scarica documento" aria-label={`Scarica ${doc.filename}`}
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>

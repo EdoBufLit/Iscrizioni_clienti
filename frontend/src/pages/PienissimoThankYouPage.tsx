@@ -143,7 +143,7 @@ const PienissimoThankYouPage = () => {
     : (queryWalletEnabled || walletEnabled);
 
   return (
-    <section className="py-16" data-reveal="fade-up">
+    <section className="pt-28 pb-16" data-reveal="fade-up">
       <div className="container-shell">
         <div className="surface-strong mx-auto max-w-[32rem] p-6 sm:p-8">
 
@@ -221,10 +221,10 @@ const PienissimoThankYouPage = () => {
 
               {/* Wallet links — only show if actually enabled */}
               {effectiveWalletEnabled && walletGoogleUrl && (
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div>
                   {walletGoogleUrl && (
                     <a
-                      className="inline-flex min-h-11 items-center justify-center rounded-xl border border-brand/40 bg-white px-3 py-2 text-xs font-semibold text-brand hover:bg-brand/5"
+                      className="btn-secondary inline-flex min-h-11 w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold"
                       href={walletGoogleUrl}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -254,7 +254,7 @@ const PienissimoThankYouPage = () => {
                 </label>
                 <input
                   id="pienissimo-email"
-                  className="mt-2 w-full px-4 py-2.5 text-sm"
+                  className="theme-input mt-2 w-full rounded-xl border px-4 py-2.5 text-sm"
                   type="email"
                   autoComplete="email"
                   required
@@ -277,7 +277,7 @@ const PienissimoThankYouPage = () => {
                 </label>
                 <input
                   id="pienissimo-first-name"
-                  className="mt-2 w-full px-4 py-2.5 text-sm"
+                  className="theme-input mt-2 w-full rounded-xl border px-4 py-2.5 text-sm"
                   type="text"
                   autoComplete="given-name"
                   value={firstName}
@@ -292,7 +292,7 @@ const PienissimoThankYouPage = () => {
                 </label>
                 <input
                   id="pienissimo-last-name"
-                  className="mt-2 w-full px-4 py-2.5 text-sm"
+                  className="theme-input mt-2 w-full rounded-xl border px-4 py-2.5 text-sm"
                   type="text"
                   autoComplete="family-name"
                   value={lastName}

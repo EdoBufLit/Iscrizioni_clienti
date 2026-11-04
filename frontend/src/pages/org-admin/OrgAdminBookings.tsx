@@ -187,21 +187,19 @@ function formatServiceStatusLabel(status: string) {
 }
 
 function serviceStatusButtonLabel(status: string) {
-  if (status === "completed") return "OK";
-  if (status === "cancelled") return "X";
   switch (status) {
     case "new":
-      return "N";
+      return "Nuova";
     case "pending":
-      return "A";
+      return "Attesa";
     case "confirmed":
-      return "C";
+      return "Conferm.";
     case "seated":
-      return "S";
+      return "Seduta";
     case "completed":
-      return "OK";
+      return "Compl.";
     case "cancelled":
-      return "X";
+      return "Annull.";
     case "no_show":
       return "No show";
     default:
@@ -1747,7 +1745,7 @@ export default function OrgAdminBookings() {
 
       <ModalShell open={isCreatingManual} onClose={() => setIsCreatingManual(false)} title="Nuova prenotazione">
         <form onSubmit={(e) => { e.preventDefault(); void handleManualBookingSave(); }} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Nome cliente *">
               <input 
                 className={inputClass} 
@@ -1767,7 +1765,7 @@ export default function OrgAdminBookings() {
             </Field>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Data">
               <input 
                 type="date" 
@@ -1786,7 +1784,7 @@ export default function OrgAdminBookings() {
             </Field>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Telefono">
               <input 
                 className={inputClass} 
@@ -1804,7 +1802,7 @@ export default function OrgAdminBookings() {
             </Field>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Sala">
               <select 
                 className={inputClass} 

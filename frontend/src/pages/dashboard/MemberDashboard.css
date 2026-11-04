@@ -45,7 +45,7 @@
 .member-documents header p, .member-documents__statute p { margin-top: 6px; font-size: 14px; color: var(--theme-text-muted); overflow-wrap: anywhere; }
 .member-documents__statute { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 12px; padding: 20px; }
 .member-documents__statute > .member-documents__error { grid-column: 1/-1; }
-.member-documents__download { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 12px; gap: 6px; border-radius: 10px; color: var(--theme-brand); background: var(--theme-brand-soft); font-size: 13px; font-weight: 600; }
+.member-documents__download { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 12px; gap: 6px; border: 1px solid color-mix(in srgb, var(--theme-brand) 28%, var(--theme-border)); border-radius: 10px; color: var(--theme-brand); background: var(--theme-brand-soft); font-size: 13px; font-weight: 600; }
 .member-documents__download svg { width: 20px; height: 20px; flex-shrink: 0; }
 .member-documents__hint { margin-top: 8px; font-size: 13px; color: var(--theme-text-muted); overflow-wrap: anywhere; }
 .member-documents__list { display: grid; gap: 16px; margin-top: 16px; }
@@ -53,8 +53,8 @@
 .member-documents__item.is-targeted { outline: 2px solid var(--theme-brand); outline-offset: 2px; }
 .member-documents__item-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
 .member-documents__badge { display: inline-flex; padding: 4px 10px; border: 1px solid var(--theme-border); border-radius: 20px; font-size: 12px; font-weight: 600; background: var(--theme-surface-muted); }
-.member-documents__badge.is-approved { color: var(--theme-brand); background: var(--theme-brand-soft); }
-.member-documents__badge.is-rejected { color: var(--theme-danger); }
+.member-documents__badge.is-approved { border-color: color-mix(in srgb, var(--theme-brand) 30%, var(--theme-border)); color: var(--theme-brand); background: var(--theme-brand-soft); }
+.member-documents__badge.is-rejected { border-color: color-mix(in srgb, var(--theme-danger) 34%, var(--theme-border)); background: color-mix(in srgb, var(--theme-danger) 12%, var(--theme-surface-solid)); color: var(--theme-danger); }
 .member-documents__file { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; min-width: 0; font-size: 13px; }
 .member-documents__file > span { min-width: 0; overflow-wrap: anywhere; }
 .member-documents__file a { display: inline-flex; align-items: center; min-height: 44px; color: var(--theme-brand); font-weight: 600; }

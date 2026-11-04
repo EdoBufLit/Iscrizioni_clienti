@@ -120,7 +120,7 @@ const MemberDocumentCorrection = () => {
     return (
       <section className="auth-page" aria-busy="true">
         <div className="container-shell w-full">
-          <div className="auth-shell mx-auto max-w-3xl p-8 md:p-10">
+          <div className="auth-shell mx-auto max-w-3xl p-5 sm:p-8 md:p-10">
             <p className="section-title">Area riservata</p>
             <h1 className="section-heading auth-title">Verifica del link in corso</h1>
             <p className="auth-copy mt-4 text-sm leading-7" role="status">
@@ -136,16 +136,19 @@ const MemberDocumentCorrection = () => {
     return (
       <section className="auth-page">
         <div className="container-shell w-full">
-          <div className="auth-shell mx-auto max-w-3xl p-8 md:p-10">
+          <div className="auth-shell mx-auto max-w-3xl p-5 sm:p-8 md:p-10">
             <p className="section-title">Documento inviato</p>
             <h1 className="section-heading auth-title">Nuova versione ricevuta</h1>
             <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-sm leading-7 text-emerald-800" role="status">
               Il documento è tornato in revisione. Riceverai le successive comunicazioni
               dalla tua associazione.
             </div>
-            <div className="mt-8">
+            <div className="mt-8 flex flex-wrap gap-3">
               <Link className="btn-primary px-6 py-2.5" to="/">
                 Torna al sito
+              </Link>
+              <Link className="btn-secondary px-6 py-2.5" to="/dashboard/documenti">
+                Area riservata
               </Link>
             </div>
           </div>
@@ -158,7 +161,7 @@ const MemberDocumentCorrection = () => {
     return (
       <section className="auth-page">
         <div className="container-shell w-full">
-          <div className="auth-shell mx-auto max-w-3xl p-8 md:p-10">
+          <div className="auth-shell mx-auto max-w-3xl p-5 sm:p-8 md:p-10">
             <p className="section-title">Area riservata</p>
             <h1 className="section-heading auth-title">Link non disponibile</h1>
             <div className="auth-alert mt-6 px-4 py-3 text-sm leading-6" role="alert">
@@ -184,7 +187,7 @@ const MemberDocumentCorrection = () => {
   return (
     <section className="auth-page">
       <div className="container-shell w-full">
-        <div className="auth-shell mx-auto max-w-3xl p-8 md:p-10">
+        <div className="auth-shell mx-auto max-w-3xl p-5 sm:p-8 md:p-10">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="section-title">Area riservata · accesso limitato</p>

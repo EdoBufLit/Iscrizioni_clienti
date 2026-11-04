@@ -928,7 +928,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
             </button>
           </div>
 
-          <div className={modalType === "branding" ? "sa-setup-error" : modalType === "view-batches" ? "sa-lots-error" : "mt-4 min-h-[48px]"}>
+          <div className={modalType === "branding" ? "sa-setup-error" : modalType === "view-batches" ? "sa-lots-error" : submitError ? "mt-4" : ""}>
             {submitError && (
               <div className="rounded-md border border-red-200/60 bg-red-50 px-4 py-3">
                 <p className="text-sm text-red-700">{submitError}</p>
@@ -1393,7 +1393,12 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                     key={item.key}
                     type="button"
                     className={setupTab === item.key ? "is-active" : ""}
-                    onClick={() => setSetupTab(item.key)}
+                    onClick={() => {
+                      setSetupTab(item.key);
+                      document
+                        .getElementById(`sa-setup-sec-${item.key}`)
+                        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }}
                   >
                     <SuperAdminIcon name={item.icon} className="h-4 w-4" />
                     {item.label}
@@ -1402,7 +1407,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
               </aside>
               <div className="sa-setup-content">
             <div className="grid gap-4">
-              <section className="sa-setup-section">
+              <section id="sa-setup-sec-general" className="sa-setup-section">
                 <div className="sa-setup-section__heading">
                   <h4>Informazioni generali</h4>
                   <p>Dati principali e identificativi dell'associazione.</p>
@@ -1456,7 +1461,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                       Numero utilizzato per gli alert WhatsApp delle tessere.
                     </p>
                   </div>
-                  <div>
+                  <div id="sa-setup-sec-branding">
                     <label className="block text-xs font-medium text-neutral-600">
                       URL logo tessera (facoltativo)
                     </label>
@@ -1475,7 +1480,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                   </div>
                 </div>
               </section>
-              <div className="rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
+              <div id="sa-setup-sec-numbering" className="rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-neutral-600">
@@ -1598,7 +1603,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                   </>
                 )}
               </div>
-              <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3">
+              <div id="sa-setup-sec-signup" className="rounded-md border border-neutral-200 bg-neutral-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-neutral-600">
                   Impostazioni iscrizioni
                 </p>
@@ -1941,7 +1946,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                 ) : null}
               </div>
 
-              <div className="rounded-2xl border border-neutral-200 bg-neutral-50/80 p-4">
+              <div id="sa-setup-sec-communications" className="rounded-2xl border border-neutral-200 bg-neutral-50/80 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-600">

@@ -34,7 +34,7 @@ const DashboardProfile = () => {
 
       <div className="surface overflow-hidden border-neutral-200/60 shadow-premium-lg">
         {/* Card header */}
-        <div className="border-b border-neutral-100 bg-neutral-50/50 px-7 py-5">
+        <div className="border-b border-neutral-100 bg-neutral-50/50 px-5 py-4 sm:px-7 sm:py-5">
           <div className="flex items-center gap-3">
             <div className="h-8 w-8 rounded-lg bg-brand/5 text-brand flex items-center justify-center border border-brand/10">
               <svg
@@ -56,9 +56,9 @@ const DashboardProfile = () => {
         </div>
 
         {/* Card body */}
-        <div className="p-8">
+        <div className="p-5 sm:p-8">
           {loading ? (
-            <div className="grid gap-8 md:grid-cols-2">
+            <div className="grid gap-6 sm:gap-8 md:grid-cols-2">
               {[0, 1, 2, 3, 4].map((i) => (
                 <div key={i}>
                   <Skeleton className="h-3 w-20 rounded" />
@@ -67,15 +67,15 @@ const DashboardProfile = () => {
               ))}
             </div>
           ) : user ? (
-            <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-6 sm:gap-8 md:grid-cols-2 lg:grid-cols-3">
               {PERSONAL_FIELDS.map((field) => {
                 const value = user[field.key];
                 return (
-                  <div key={field.key} className="group">
+                  <div key={field.key} className="group min-w-0">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 group-hover:text-neutral-500 transition-colors">
                       {field.label}
                     </p>
-                    <p className="mt-1.5 text-base font-bold text-neutral-900">
+                    <p className="mt-1.5 break-words text-base font-bold text-neutral-900 [overflow-wrap:anywhere]">
                       {value ?? "—"}
                     </p>
                   </div>
@@ -94,7 +94,7 @@ const DashboardProfile = () => {
         {/* Association section */}
         {!loading && user && (
           <>
-            <div className="border-t border-neutral-100 bg-neutral-50/50 px-7 py-5">
+            <div className="border-t border-neutral-100 bg-neutral-50/50 px-5 py-4 sm:px-7 sm:py-5">
               <div className="flex items-center gap-3">
                 <div className="h-8 w-8 rounded-lg bg-accent/10 text-accent flex items-center justify-center border border-accent/20">
                   <svg
@@ -114,13 +114,13 @@ const DashboardProfile = () => {
                 </p>
               </div>
             </div>
-            <div className="p-8">
-              <div className="grid gap-8 md:grid-cols-2">
-                <div>
+            <div className="p-5 sm:p-8">
+              <div className="grid gap-6 sm:gap-8 md:grid-cols-2">
+                <div className="min-w-0">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400">
                     Denominazione Sede
                   </p>
-                  <p className="mt-1.5 text-base font-bold text-neutral-900 group-hover:text-brand transition-colors">
+                  <p className="mt-1.5 break-words text-base font-bold text-neutral-900">
                     {user.organization?.name ?? "—"}
                   </p>
                 </div>
@@ -150,7 +150,11 @@ const DashboardProfile = () => {
 
       {/* Password section */}
       {!loading && user && <ChangePasswordSection />}
-      {!loading && user && <section className="member-profile-logout" aria-label="Sessione account"><MemberLogoutButton /></section>}
+      {!loading && user && (
+        <section className="member-profile-logout flex flex-wrap items-center gap-3" aria-label="Sessione account">
+          <MemberLogoutButton />
+        </section>
+      )}
     </div>
   );
 };
@@ -230,21 +234,21 @@ const ContactChangeSection = ({
 
   return (
     <section className="surface overflow-hidden border-neutral-200/60 shadow-premium-lg" aria-labelledby="contacts-heading">
-      <div className="border-b border-neutral-100 bg-neutral-50/50 px-7 py-5">
+      <div className="border-b border-neutral-100 bg-neutral-50/50 px-5 py-4 sm:px-7 sm:py-5">
         <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-neutral-400">Contatti verificati</p>
         <h2 id="contacts-heading" className="mt-1 text-lg font-bold text-neutral-950">Modifica email o telefono</h2>
       </div>
-      <div className="grid gap-7 p-7 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]">
+      <div className="grid gap-7 p-5 sm:p-7 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]">
         <form className="space-y-4" onSubmit={submit}>
           <p className="text-sm leading-6 text-neutral-600">Il dato attuale non cambia finché non confermi il link monouso ricevuto via email.</p>
           <fieldset className="flex gap-2" disabled={busy}>
             <legend className="sr-only">Contatto da modificare</legend>
-            <button type="button" aria-pressed={field === "email"} className={`rounded-lg border px-3 py-2 text-sm font-semibold ${field === "email" ? "border-brand bg-brand/5 text-brand" : "border-neutral-200 text-neutral-600"}`} onClick={() => { setField("email"); setValue(""); }}>Email</button>
-            <button type="button" aria-pressed={field === "phone"} className={`rounded-lg border px-3 py-2 text-sm font-semibold ${field === "phone" ? "border-brand bg-brand/5 text-brand" : "border-neutral-200 text-neutral-600"}`} onClick={() => { setField("phone"); setValue(""); }}>Telefono</button>
+            <button type="button" aria-pressed={field === "email"} className={`min-h-11 rounded-lg border px-4 py-2 text-sm font-semibold ${field === "email" ? "border-brand bg-brand/5 text-brand" : "border-neutral-200 text-neutral-600"}`} onClick={() => { setField("email"); setValue(""); }}>Email</button>
+            <button type="button" aria-pressed={field === "phone"} className={`min-h-11 rounded-lg border px-4 py-2 text-sm font-semibold ${field === "phone" ? "border-brand bg-brand/5 text-brand" : "border-neutral-200 text-neutral-600"}`} onClick={() => { setField("phone"); setValue(""); }}>Telefono</button>
           </fieldset>
           <div>
             <label className="text-sm font-semibold text-neutral-800" htmlFor="new-contact-value">Nuovo {field === "email" ? "indirizzo email" : "numero di telefono"}</label>
-            <input id="new-contact-value" className="premium-select mt-1 w-full !bg-white !px-4 !py-3" type={field === "email" ? "email" : "tel"} autoComplete={field === "email" ? "email" : "tel"} value={value} placeholder={field === "email" ? email : phone || "+39…"} onChange={(event) => setValue(event.target.value)} required />
+            <input id="new-contact-value" className="theme-input mt-1 w-full rounded-xl border px-4 py-3" type={field === "email" ? "email" : "tel"} autoComplete={field === "email" ? "email" : "tel"} value={value} placeholder={field === "email" ? email : phone || "+39…"} onChange={(event) => setValue(event.target.value)} required />
           </div>
           {message ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800" role="status">{message}</p> : null}
           {error ? <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">{error}</p> : null}
@@ -288,7 +292,7 @@ const ChangePasswordSection = () => {
 
   return (
     <div className="surface overflow-hidden border-neutral-200/60 shadow-premium-lg">
-      <div className="border-b border-neutral-100 bg-neutral-50/50 px-7 py-5">
+      <div className="border-b border-neutral-100 bg-neutral-50/50 px-5 py-4 sm:px-7 sm:py-5">
         <div className="flex items-center gap-3">
           <div className="h-8 w-8 rounded-lg bg-neutral-100 text-neutral-500 flex items-center justify-center border border-neutral-200">
             <svg
@@ -308,7 +312,7 @@ const ChangePasswordSection = () => {
           </p>
         </div>
       </div>
-      <div className="p-8">
+      <div className="p-5 sm:p-8">
         <p className="text-sm font-medium text-neutral-500 max-w-md leading-relaxed">
           Aggiorna regolarmente la tua password per garantire la massima protezione del tuo profilo digitale.
         </p>
@@ -337,7 +341,7 @@ const ChangePasswordSection = () => {
             </label>
             <input
               id="new-pw"
-              className="premium-select w-full !px-4 !py-3 !font-bold tracking-tight !bg-white focus:!ring-brand/5"
+              className="theme-input w-full rounded-xl border px-4 py-3 font-bold tracking-tight"
               type="password"
               autoComplete="new-password"
               placeholder="Minimo 8 caratteri"
@@ -351,10 +355,10 @@ const ChangePasswordSection = () => {
             </label>
             <input
               id="confirm-pw"
-              className={`premium-select w-full !px-4 !py-3 !font-bold tracking-tight focus:!ring-brand/5 ${
+              className={`theme-input w-full rounded-xl border px-4 py-3 font-bold tracking-tight ${
                 confirmPw && confirmPw !== newPw
-                  ? "!border-red-300 !bg-red-50/30 focus:!border-red-400"
-                  : "!border-neutral-200 !bg-white"
+                  ? "!border-red-400"
+                  : ""
               }`}
               type="password"
               autoComplete="new-password"
@@ -362,6 +366,9 @@ const ChangePasswordSection = () => {
               value={confirmPw}
               onChange={(e) => setConfirmPw(e.target.value)}
             />
+            {confirmPw && confirmPw !== newPw ? (
+              <p className="text-xs font-medium text-red-600" role="alert">Le password non coincidono.</p>
+            ) : null}
           </div>
           <div className="sm:col-span-2 pt-2">
             <button

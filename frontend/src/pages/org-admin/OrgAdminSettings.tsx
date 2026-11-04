@@ -659,8 +659,8 @@ const OrgAdminSettings = () => {
               />
             </div>
 
-            <div className="grid grid-cols-4 gap-3 md:col-span-4 md:gap-4">
-              <div className="col-span-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-4 md:col-span-4 md:gap-4">
+              <div className="sm:col-span-3">
                 <label htmlFor="org-city" className={labelClass}>
                   Città
                 </label>
@@ -672,7 +672,7 @@ const OrgAdminSettings = () => {
                   onChange={handleChange("city")}
                 />
               </div>
-              <div className="col-span-1">
+              <div className="sm:col-span-1">
                 <label htmlFor="org-province" className={labelClass}>
                   Provincia
                 </label>

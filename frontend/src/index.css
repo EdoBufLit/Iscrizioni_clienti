@@ -218,6 +218,8 @@
 .sa-nav__item {
   position: relative;
   display: inline-flex;
+  flex-shrink: 0;
+  white-space: nowrap;
   align-items: center;
   gap: 0.48rem;
   min-height: 3.25rem;
@@ -1208,12 +1210,12 @@
   width: 3.4rem;
   height: 1.75rem;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: flex-end;
   border: 1px solid var(--sa-line-strong);
   border-radius: 999px;
   background: color-mix(in srgb, var(--sa-line) 64%, var(--sa-panel));
   color: var(--sa-muted);
-  padding: 0 0.35rem;
+  padding: 0 0.42rem;
   font-size: 0.63rem;
   font-weight: 600;
   transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
@@ -1222,7 +1224,7 @@
 .sa-switch::after {
   content: "";
   position: absolute;
-  right: 0.22rem;
+  left: 0.22rem;
   width: 1.25rem;
   height: 1.25rem;
   border-radius: 999px;
@@ -1239,7 +1241,7 @@
 }
 
 .sa-switch.is-on::after {
-  transform: translateX(1.45rem);
+  transform: translateX(1.62rem);
 }
 
 .sa-row-action {
@@ -1454,7 +1456,7 @@
 
 .sa-lots-summary > div {
   display: grid !important;
-  grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   align-items: center;
 }
 
@@ -1466,6 +1468,11 @@
   min-height: 3.9rem;
   border-right: 1px solid var(--sa-line);
   padding-right: 1rem;
+}
+
+.sa-lots-summary__item:last-child {
+  border-right: 0;
+  padding-right: 0;
 }
 
 .sa-lots-summary__item p:first-of-type {
@@ -2453,7 +2460,7 @@ body::before {
   }
 
   .mobile-dashboard-nav__shell {
-    @apply mx-auto flex max-w-xl items-stretch gap-2 rounded-[2rem] border border-white/70 px-2 py-2 shadow-2xl;
+    @apply mx-auto flex max-w-xl items-stretch gap-1 rounded-[2rem] border border-white/70 px-1.5 py-2 shadow-2xl sm:gap-2 sm:px-2;
     pointer-events: auto;
     background:
       var(--theme-surface-solid);
@@ -2465,7 +2472,7 @@ body::before {
   }
 
   .mobile-dashboard-nav__item {
-    @apply flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-[1.4rem] px-2 py-2.5 text-center text-[11px] font-bold tracking-tight text-neutral-500 transition-all duration-200;
+    @apply flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-[1.4rem] px-1 py-2.5 text-center text-[10px] font-bold tracking-tight text-neutral-500 transition-all duration-200 sm:px-2 sm:text-[11px];
     min-height: 3.75rem;
   }
 
@@ -9078,8 +9085,12 @@ body.dashboard-perf-mode .surface-strong:hover {
   }
 
   .org-admin-v2 .booking-map-controls {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: 0.55rem;
+  }
+
+  .org-admin-v2 .booking-map-controls > :first-child {
+    grid-column: 1 / -1;
   }
 
   .org-admin-v2 .booking-map-controls label {
@@ -9787,7 +9798,9 @@ body.dashboard-perf-mode .surface-strong:hover {
   }
 
   .org-admin-v2 .comm-kpi-grid {
-    display: none;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.55rem;
   }
 
   .org-admin-v2 .org-admin-communications-page .org-section-panel {
@@ -10068,7 +10081,7 @@ body.dashboard-perf-mode .surface-strong:hover {
 }
 
 /* Mobile Agenda Snap Rail + Card improvements */
-@media (max-width: 1023px) {
+@media (max-width: 720px) {
   .org-admin-v2 .booking-mobile-day-rail {
     scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch;

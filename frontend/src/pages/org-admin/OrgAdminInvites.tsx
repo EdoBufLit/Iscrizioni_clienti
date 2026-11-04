@@ -361,13 +361,13 @@ const OrgAdminInvites = () => {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td className="px-6 py-12 text-center text-sm text-slate-500 bg-slate-50 border-dashed ring-1 ring-inset ring-slate-200/60 rounded-[1.25rem] block m-4" colSpan={4}>
+                    <td className="px-6 py-12 text-center text-sm text-slate-500 bg-slate-50" colSpan={4}>
                       Caricamento inviti...
                     </td>
                   </tr>
                 ) : items.length === 0 ? (
                   <tr>
-                    <td className="px-6 py-12 text-center text-sm text-slate-500 bg-slate-50 border-dashed ring-1 ring-inset ring-slate-200/60 rounded-[1.25rem] block m-4" colSpan={4}>
+                    <td className="px-6 py-12 text-center text-sm text-slate-500 bg-slate-50" colSpan={4}>
                       {hasFilters ? EMPTY_STATE_COPY.filteredResults.title : EMPTY_STATE_COPY.invites.title}. {hasFilters ? EMPTY_STATE_COPY.filteredResults.description : EMPTY_STATE_COPY.invites.description}
                     </td>
                   </tr>

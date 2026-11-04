@@ -61,7 +61,7 @@ const ORDER_OPTIONS = [
   { value: "status_desc", label: "Stato (Z-A)", chipLabel: "Stato Z-A", pillLabel: "Stato Z-A" },
 ];
 
-const MOBILE_ORDER_OPTIONS = ORDER_OPTIONS.slice(0, 3);
+const MOBILE_ORDER_OPTIONS = ORDER_OPTIONS;
 
 const PAGE_SIZE = 25;
 

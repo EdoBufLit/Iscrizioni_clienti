@@ -515,6 +515,31 @@ export default function OrgAdminIncassi() {
                       : "Apri incasso"}
                   </button>
                 </div>
+                {selectedId === receipt.id ? (
+                  <div className="mt-4 border-t border-[var(--theme-border)] pt-4">
+                    {detailLoading ? (
+                      <p role="status" className="text-sm">
+                        Caricamento dettaglio incasso…
+                      </p>
+                    ) : null}
+                    {detailError ? (
+                      <p role="alert" className="text-sm text-[var(--theme-danger)]">
+                        {detailError}
+                      </p>
+                    ) : null}
+                    {detail && detail.receipt.id === receipt.id ? (
+                      <ReceiptDetailPanel
+                        key={detail.receipt.id}
+                        detail={detail}
+                        defaultYear={memberYear}
+                        onClose={() => setSelectedId(null)}
+                        onChanged={changed}
+                        onReload={reloadDetail}
+                        onAuthError={authError}
+                      />
+                    ) : null}
+                  </div>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -553,26 +578,30 @@ export default function OrgAdminIncassi() {
           <div className="incassi-filters-form__actions"><button type="button" className="btn-secondary" onClick={() => setDraftState("")}>Reset</button><button type="submit" className="btn-primary">Applica filtri</button></div>
         </form>
       </ModalShell>
-      {selectedId !== null && detailLoading ? (
-        <p role="status" className="text-sm">
-          Caricamento dettaglio incasso…
-        </p>
-      ) : null}
-      {selectedId !== null && detailError ? (
-        <p role="alert" className="text-sm text-[var(--theme-danger)]">
-          {detailError}
-        </p>
-      ) : null}
-      {selectedId !== null && detail ? (
-        <ReceiptDetailPanel
-          key={detail.receipt.id}
-          detail={detail}
-          defaultYear={memberYear}
-          onClose={() => setSelectedId(null)}
-          onChanged={changed}
-          onReload={reloadDetail}
-          onAuthError={authError}
-        />
+      {selectedId !== null && !data?.items.some((item) => item.id === selectedId) ? (
+        <>
+          {detailLoading ? (
+            <p role="status" className="text-sm">
+              Caricamento dettaglio incasso…
+            </p>
+          ) : null}
+          {detailError ? (
+            <p role="alert" className="text-sm text-[var(--theme-danger)]">
+              {detailError}
+            </p>
+          ) : null}
+          {detail ? (
+            <ReceiptDetailPanel
+              key={detail.receipt.id}
+              detail={detail}
+              defaultYear={memberYear}
+              onClose={() => setSelectedId(null)}
+              onChanged={changed}
+              onReload={reloadDetail}
+              onAuthError={authError}
+            />
+          ) : null}
+        </>
       ) : null}
       {creating ? (
         <ReceiptFormModal

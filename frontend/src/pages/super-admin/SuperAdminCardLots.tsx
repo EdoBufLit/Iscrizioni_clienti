@@ -256,7 +256,7 @@ const SuperAdminCardLots = () => {
                 <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em]">Organizzazione</th>
                 <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em]">Lotto</th>
                 <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em]">Range</th>
-                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em]">Quantita</th>
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em]">Quantità</th>
                 <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em]">Stato</th>
                 <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em]">Disponibilità</th>
                 <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em]">Scope</th>

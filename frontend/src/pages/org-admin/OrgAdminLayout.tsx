@@ -234,7 +234,14 @@ function isSidebarItemActive(item: NavLeaf, location: ReturnType<typeof useLocat
   const targetParams = new URLSearchParams(itemSearch);
   const currentParams = new URLSearchParams(location.search);
   for (const [key, value] of targetParams.entries()) {
-    if (currentParams.get(key) !== value) return false;
+    const currentVal =
+      currentParams.get(key) ??
+      (itemPath === "/org-admin/comunicazioni" && key === "tab"
+        ? "panoramica"
+        : itemPath === "/org-admin/prenotazioni" && key === "section"
+          ? "agenda"
+          : null);
+    if (currentVal !== value) return false;
   }
   return true;
 }
@@ -292,8 +299,7 @@ const OrgAdminLayout = () => {
         items: [
           { to: "/org-admin/prenotazioni?section=agenda", label: "Agenda", icon: "calendar" },
           { to: "/org-admin/prenotazioni?section=events", label: "Serate", icon: "calendar" },
-          { to: "/org-admin/prenotazioni?section=rooms", label: "Sale", icon: "room" },
-          { to: "/org-admin/prenotazioni?section=tables", label: "Tavoli", icon: "table" },
+          { to: "/org-admin/prenotazioni?section=rooms", label: "Sale e tavoli", icon: "room" },
           { to: "/org-admin/prenotazioni?section=map", label: "Mappa sala", icon: "map" },
         ],
       },

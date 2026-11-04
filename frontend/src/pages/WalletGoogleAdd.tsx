@@ -77,9 +77,9 @@ const WalletGoogleAdd = () => {
 
   if (status === "checking" || status === "redirecting") {
     return (
-      <section className="py-16" data-reveal="fade-up">
+      <section className="pt-28 pb-16" data-reveal="fade-up">
         <div className="container-shell">
-          <div className="surface-strong mx-auto max-w-xl p-8 text-center md:p-10">
+          <div className="surface-strong mx-auto max-w-xl p-6 sm:p-8 text-center md:p-10">
             <p className="section-title">Google Wallet</p>
             <h1 className="section-heading">
               {status === "redirecting" ? "Reindirizzamento in corso" : "Preparazione tessera"}
@@ -99,9 +99,9 @@ const WalletGoogleAdd = () => {
   }
 
   return (
-    <section className="py-16" data-reveal="fade-up">
+    <section className="pt-28 pb-16" data-reveal="fade-up">
       <div className="container-shell">
-        <div className="surface-strong mx-auto max-w-xl p-8 md:p-10">
+        <div className="surface-strong mx-auto max-w-xl p-6 sm:p-8 md:p-10">
           <p className="section-title">Google Wallet</p>
           <h1 className="section-heading">Aggiungi la tua tessera ASSO.N.A.M.</h1>
           <p className="mt-4 text-sm leading-7 text-neutral-600">
@@ -143,7 +143,7 @@ const WalletGoogleAdd = () => {
                   autoComplete="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-900 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+                  className="theme-input w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-900 outline-none transition"
                   placeholder="nome@esempio.it"
                 />
                 <button

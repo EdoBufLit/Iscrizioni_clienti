@@ -426,7 +426,15 @@ const SuperAdminAffiliations = () => {
               ))}
             </select>
           </div>
-          <SuperAdminActionButton icon="refresh" onClick={() => void loadList()}>
+          <SuperAdminActionButton
+            icon="refresh"
+            onClick={() => {
+              setQuery("");
+              setStatusFilter("");
+              setPage(1);
+              void loadList();
+            }}
+          >
             Reset / aggiorna
           </SuperAdminActionButton>
         </div>
@@ -735,9 +743,9 @@ const SuperAdminAffiliations = () => {
                               className="flex-1 rounded-lg bg-emerald-50 py-2 text-[10px] font-bold uppercase tracking-widest text-emerald-700 hover:bg-emerald-500 hover:text-white"
                               disabled={actionLoading}
                               state={actionStates[`doc-approve-${doc.id}`] ?? "idle"}
-                              idleLabel="Approve"
+                              idleLabel="Approva"
                               loadingLabel="Invio..."
-                              successLabel="Approved"
+                              successLabel="Approvato"
                               errorLabel="Errore"
                               onClick={() => onApproveDocument(doc)}
                             />
@@ -746,7 +754,7 @@ const SuperAdminAffiliations = () => {
                               disabled={actionLoading}
                               onClick={() => onRejectDocument(doc)}
                             >
-                              Reject
+                              Rigetta
                             </button>
                           </div>
                         )}
@@ -780,7 +788,7 @@ const SuperAdminAffiliations = () => {
                         onClick={onVerifyPayment}
                       />
                     )}
-                    <div className="grid grid-cols-2 gap-3 w-full mt-2">
+                    <div className={`grid gap-3 w-full mt-2 ${detail.can_approve ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-2"}`}>
                       {detail.status !== "draft" && detail.status !== "approved" && detail.status !== "rejected" && (
                         <button
                           className="bg-neutral-900 text-white text-[10px] font-bold uppercase tracking-widest py-3 rounded-xl shadow-lg shadow-black/10 hover:bg-neutral-800 transition-all disabled:opacity-50"
@@ -799,7 +807,7 @@ const SuperAdminAffiliations = () => {
                           Approva Pratica
                         </button>
                       )}
-                      {detail.status !== "draft" && detail.status !== "approved" && detail.status !== "rejected" && !detail.can_approve && (
+                      {detail.status !== "draft" && detail.status !== "approved" && detail.status !== "rejected" && (
                         <button
                           className="bg-red-600 text-white text-[10px] font-bold uppercase tracking-widest py-3 rounded-xl shadow-lg shadow-red-200 hover:bg-red-700 transition-all disabled:opacity-50"
                           disabled={actionLoading}

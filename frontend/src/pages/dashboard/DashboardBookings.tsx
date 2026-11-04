@@ -5,6 +5,7 @@ import {
   submitMemberBookingNote,
   type MemberBookingItem,
 } from "../../lib/api";
+import ModalShell from "../../components/ui/ModalShell";
 import Skeleton from "../../components/ui/Skeleton";
 
 const STATUS_META: Record<string, { label: string; className: string }> = {
@@ -123,7 +124,7 @@ const DashboardBookings = () => {
         <div className="surface p-8 text-center">
           <h2 className="text-lg font-bold text-neutral-900">Nessuna prenotazione collegata</h2>
           <p className="mx-auto mt-2 max-w-md text-sm font-medium leading-relaxed text-neutral-500">
-            Quando compili un form con la stessa email del tuo profilo socio, la prenotazione comparira qui dopo l'invio.
+            Quando compili un form con la stessa email del tuo profilo socio, la prenotazione comparirà qui dopo l'invio.
           </p>
         </div>
       ) : (
@@ -177,51 +178,44 @@ const DashboardBookings = () => {
         </div>
       )}
 
-      {activeBooking && (
-        <div className="fixed inset-0 z-[80] flex items-end bg-black/40 px-4 py-5 sm:items-center sm:justify-center">
-          <div className="surface w-full max-w-lg p-5 shadow-2xl sm:p-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
-                  Richiesta modifica
-                </p>
-                <h2 className="mt-2 text-xl font-bold text-neutral-900">
-                  {activeBooking.source_form?.title ?? "Prenotazione"}
-                </h2>
-              </div>
-              <button
-                type="button"
-                className="btn-ghost !px-3 !py-2"
-                onClick={() => setActiveBookingId(null)}
-              >
-                Chiudi
-              </button>
-            </div>
-            <textarea
-              className="member-booking-note-textarea mt-5 min-h-36 w-full rounded-xl border px-4 py-3 text-sm font-medium outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/10"
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              maxLength={4000}
-              placeholder="Scrivi qui modifiche, ritardi, persone in piu o altre note per la segreteria."
-            />
-            <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-              <button type="button" className="btn-ghost" onClick={() => setActiveBookingId(null)}>
-                Annulla
-              </button>
-              <button
-                type="button"
-                className="btn-primary"
-                disabled={submitting}
-                onClick={() => {
-                  void handleSubmitNote();
-                }}
-              >
-                {submitting ? "Invio..." : "Invia richiesta"}
-              </button>
-            </div>
+      <ModalShell
+        open={Boolean(activeBooking)}
+        onClose={() => {
+          if (!submitting) setActiveBookingId(null);
+        }}
+        closeDisabled={submitting}
+        title={activeBooking?.source_form?.title ?? "Prenotazione"}
+        description="Richiesta modifica"
+        sizeClassName="max-w-lg"
+      >
+        {error ? (
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">
+            {error}
           </div>
+        ) : null}
+        <textarea
+          className="member-booking-note-textarea theme-input min-h-36 w-full rounded-xl border px-4 py-3 text-sm font-medium outline-none transition"
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          maxLength={4000}
+          placeholder="Scrivi qui modifiche, ritardi, persone in più o altre note per la segreteria."
+        />
+        <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button type="button" className="btn-ghost" disabled={submitting} onClick={() => setActiveBookingId(null)}>
+            Annulla
+          </button>
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={submitting}
+            onClick={() => {
+              void handleSubmitNote();
+            }}
+          >
+            {submitting ? "Invio..." : "Invia richiesta"}
+          </button>
         </div>
-      )}
+      </ModalShell>
     </div>
   );
 };

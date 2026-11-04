@@ -208,6 +208,9 @@ const SuperAdminCardCredits = () => {
     setEditNote(item.accounting_note || "");
     setError("");
     setMessage("");
+    window.requestAnimationFrame(() => {
+      document.getElementById("credit-edit-title")?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+    });
   };
 
   const saveAccounting = async (event: FormEvent) => {
@@ -304,7 +307,7 @@ const SuperAdminCardCredits = () => {
       </section>
 
       {editing ? (
-        <section className="surface p-5" aria-labelledby="credit-edit-title">
+        <section className="surface sticky top-24 z-20 p-5 shadow-xl ring-2 ring-[var(--sa-brand)]/20" aria-labelledby="credit-edit-title">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 id="credit-edit-title" className="font-semibold text-neutral-950">Aggiorna richiesta #{editing.id}</h2>

@@ -6,12 +6,14 @@ import {
   type AnnualCardDeactivationPreview,
   type AnnualCardDeactivationResult,
 } from "../../lib/api";
+import { SuperAdminPageHeader } from "./components/SuperAdminPrimitives";
 
 const SuperAdminAnnualClosure = () => {
   const [year, setYear] = useState(new Date().getFullYear());
   const [preview, setPreview] = useState<AnnualCardDeactivationPreview | null>(null);
   const [result, setResult] = useState<AnnualCardDeactivationResult | null>(null);
   const [mfaCode, setMfaCode] = useState("");
+  const [stepUpVerified, setStepUpVerified] = useState(false);
   const [confirmation, setConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -36,7 +38,10 @@ const SuperAdminAnnualClosure = () => {
     setBusy(true);
     setError("");
     try {
-      await stepUpSuperAdmin(mfaCode);
+      if (!stepUpVerified) {
+        await stepUpSuperAdmin(mfaCode);
+        setStepUpVerified(true);
+      }
       const completed = await executeAnnualCardDeactivation(
         preview.membership_year,
         preview.preview_hash,
@@ -44,6 +49,7 @@ const SuperAdminAnnualClosure = () => {
       );
       setResult(completed);
       setMfaCode("");
+      setStepUpVerified(false);
       setConfirmation("");
       setPreview(await previewAnnualCardDeactivation(preview.membership_year));
     } catch (caught) {
@@ -54,12 +60,13 @@ const SuperAdminAnnualClosure = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <header>
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-neutral-500">Operazione globale controllata</p>
-        <h1 className="mt-1 text-2xl font-semibold text-neutral-950">Chiusura annualità</h1>
-        <p className="mt-1 max-w-3xl text-sm leading-6 text-neutral-600">Disattiva le tessere annuali scadute senza eliminare soci, dati, pagamenti, documenti, numeri tessera o disponibilità dei lotti.</p>
-      </header>
+    <div className="sa-page">
+      <SuperAdminPageHeader
+        icon="calendar"
+        eyebrow="Operazione globale controllata"
+        title="Chiusura annualità"
+        subtitle="Disattiva le tessere annuali scadute senza eliminare soci, dati, pagamenti, documenti, numeri tessera o disponibilità dei lotti."
+      />
 
       {error ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{error}</div> : null}
       {result ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">Operazione registrata: {result.deactivated_count} tessere disattivate.</div> : null}
@@ -68,7 +75,7 @@ const SuperAdminAnnualClosure = () => {
         <form className="flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={loadPreview}>
           <div>
             <label className="block text-sm font-medium text-neutral-800" htmlFor="annual-year">Annualità tessera</label>
-            <input id="annual-year" className="mt-1 w-40 rounded-lg border border-neutral-300 bg-white px-3 py-2" type="number" min="1900" max="9998" value={year} onChange={(event) => { setYear(Number(event.target.value)); setPreview(null); }} />
+            <input id="annual-year" className="theme-input mt-1 w-full sm:w-40 rounded-lg border px-3 py-2" type="number" min="1900" max="9998" value={year} onChange={(event) => { setYear(Number(event.target.value)); setPreview(null); }} />
           </div>
           <button className="btn-primary px-4 py-2" disabled={busy} type="submit">Genera anteprima</button>
         </form>
@@ -97,10 +104,10 @@ const SuperAdminAnnualClosure = () => {
             <p className="text-sm font-semibold text-neutral-900">Conferma protetta</p>
             <p className="mt-1 text-sm text-neutral-600">Inserisci un codice Authenticator e digita <code>DISATTIVA {preview.membership_year}</code>. Se i dati cambiano, l’anteprima viene rifiutata.</p>
             <div className="mt-4 grid max-w-2xl gap-3 sm:grid-cols-2">
-              <div><label className="text-sm font-medium" htmlFor="annual-mfa">Codice Authenticator</label><input id="annual-mfa" className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 font-mono tracking-widest" autoComplete="one-time-code" inputMode="numeric" value={mfaCode} onChange={(event) => setMfaCode(event.target.value)} /></div>
-              <div><label className="text-sm font-medium" htmlFor="annual-confirm">Testo di conferma</label><input id="annual-confirm" className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></div>
+              <div><label className="text-sm font-medium" htmlFor="annual-mfa">Codice Authenticator</label><input id="annual-mfa" className="theme-input mt-1 w-full rounded-lg border px-3 py-2 font-mono tracking-widest" autoComplete="one-time-code" inputMode="numeric" value={mfaCode} onChange={(event) => { setMfaCode(event.target.value); setStepUpVerified(false); }} /></div>
+              <div><label className="text-sm font-medium" htmlFor="annual-confirm">Testo di conferma</label><input id="annual-confirm" className="theme-input mt-1 w-full rounded-lg border px-3 py-2" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></div>
             </div>
-            <button className="mt-4 rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50" type="button" disabled={busy || !preview.can_execute || !mfaCode.trim() || confirmation !== `DISATTIVA ${preview.membership_year}`} onClick={execute}>{busy ? "Esecuzione..." : "Disattiva tessere annuali"}</button>
+            <button className="mt-4 rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50" type="button" disabled={busy || !preview.can_execute || (!stepUpVerified && !mfaCode.trim()) || confirmation !== `DISATTIVA ${preview.membership_year}`} onClick={execute}>{busy ? "Esecuzione..." : "Disattiva tessere annuali"}</button>
           </div>
         </section>
       ) : null}

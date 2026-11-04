@@ -46,7 +46,7 @@ const MagicLinkVerify = () => {
         }
         setErrorMessage("Link non valido: ruolo non specificato.");
       } catch {
-        setErrorMessage("Il link di accesso non ? valido o ? scaduto.");
+        setErrorMessage("Il link di accesso non è valido o è scaduto.");
       }
     };
 
@@ -55,9 +55,9 @@ const MagicLinkVerify = () => {
 
   if (errorMessage) {
     return (
-      <section className="py-16" data-reveal="fade-up">
+      <section className="pt-28 pb-16" data-reveal="fade-up">
         <div className="container-shell">
-          <div className="surface-strong mx-auto max-w-xl p-8 text-center md:p-10">
+          <div className="surface-strong mx-auto max-w-xl p-6 sm:p-8 text-center md:p-10">
             <p className="section-title">Accesso</p>
             <h1 className="section-heading">Link non valido</h1>
             <p className="mt-4 text-sm leading-7 text-neutral-600" role="alert">{errorMessage}</p>
@@ -73,9 +73,9 @@ const MagicLinkVerify = () => {
   }
 
   return (
-    <section className="py-16" data-reveal="fade-up">
+    <section className="pt-28 pb-16" data-reveal="fade-up">
       <div className="container-shell">
-        <div className="surface-strong mx-auto max-w-xl p-8 text-center md:p-10">
+        <div className="surface-strong mx-auto max-w-xl p-6 sm:p-8 text-center md:p-10">
           <p className="section-title">Accesso</p>
           <h1 className="section-heading">Verifica in corso</h1>
           <p className="mt-4 text-sm leading-7 text-neutral-600" role="status">

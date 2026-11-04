@@ -131,6 +131,7 @@ const DashboardHome = () => {
   const membershipRequest = useRef(0);
   const [renewalMessage, setRenewalMessage] = useState<string | null>(null);
   const [renewalError, setRenewalError] = useState<string | null>(null);
+  const [notificationsError, setNotificationsError] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<MemberAreaNotification[]>([]);
 
   const loadMembership = async () => {
@@ -150,9 +151,10 @@ const DashboardHome = () => {
     try {
       const payload = await fetchMemberNotifications({ limit: 5 });
       setNotifications(payload.items);
+      setNotificationsError(null);
     } catch (error) {
       if (error instanceof AuthError) return;
-      setRenewalError(error instanceof Error ? error.message : "Notifiche non disponibili");
+      setNotificationsError(error instanceof Error ? error.message : "Notifiche non disponibili");
     }
   };
 
@@ -243,7 +245,7 @@ const DashboardHome = () => {
         item.id === notificationId ? { ...item, is_read: true } : item
       )));
     } catch (error) {
-      setRenewalError(error instanceof Error ? error.message : "Impossibile aggiornare la notifica");
+      setNotificationsError(error instanceof Error ? error.message : "Impossibile aggiornare la notifica");
     }
   };
 
@@ -308,6 +310,7 @@ const DashboardHome = () => {
           {notifications.length ? (
             <section className="surface member-home__notifications" aria-labelledby="member-notifications-title">
               <h2 id="member-notifications-title">Comunicazioni</h2>
+              {notificationsError ? <p className="member-home__error" role="alert">{notificationsError}</p> : null}
               {notifications.map(notification => (
                 <article key={notification.id}>
                   <div className="member-home__notification-heading">

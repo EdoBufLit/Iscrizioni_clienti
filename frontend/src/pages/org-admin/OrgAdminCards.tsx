@@ -223,7 +223,7 @@ export default function OrgAdminCards() {
   const remaining = stock?.remaining ?? 0;
   const usedPercent = total > 0 ? Math.min(100, Math.max(0, Math.round((total - remaining) / total * 100))) : 0;
   const closeSheet = useCallback(() => setSheetOpen(false), []);
-  return <div className="cards-workspace" data-tour="admin-cards">
+  return <div className="container-shell org-admin-mobile-page cards-workspace" data-tour="admin-cards">
     <header className="cards-header"><h1>Tessere</h1><details className="cards-header-menu"><summary aria-label="Azioni tessere"><span aria-hidden="true">⋮</span></summary><div><a href="/api/org-admin/members.xlsx">Esporta soci in Excel</a></div></details></header>
     <div role="tablist" aria-label="Sezioni tessere" className="cards-tabs">
       {tabs.map((tab, index) => <button type="button" role="tab" key={tab.id} id={`cards-tab-${tab.id}`} aria-label={tab.label} aria-controls={`cards-panel-${tab.id}`} aria-selected={activeTab === tab.id} tabIndex={activeTab === tab.id ? 0 : -1} ref={node => { tabRefs.current[index] = node; }} onClick={() => selectTab(tab.id)} onKeyDown={event => onTabKey(event, index)}><span className="cards-tabs-full" aria-hidden="true">{tab.label}</span><span className="cards-tabs-short" aria-hidden="true">{tab.short}</span></button>)}

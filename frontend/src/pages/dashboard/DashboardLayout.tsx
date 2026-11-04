@@ -71,19 +71,11 @@ const NAV_ITEMS = [
 
 const sidebarLinkBase =
   "flex items-center gap-3 rounded-lg px-3.5 py-2.5 text-sm font-semibold transition-all duration-200 border border-transparent";
-const sidebarLinkActive = `${sidebarLinkBase} border-neutral-200/60 bg-white/90 text-brand shadow-sm ring-1 ring-black/[0.03]`;
-const sidebarLinkIdle = `${sidebarLinkBase} text-neutral-500 hover:bg-white/50 hover:text-neutral-900`;
-
-const tabBase =
-  "whitespace-nowrap px-4 py-3 text-sm font-bold transition-all border-b-2";
-const tabActive = `${tabBase} border-brand text-brand`;
-const tabIdle = `${tabBase} border-transparent text-neutral-400 hover:text-neutral-600`;
+const sidebarLinkActive = `${sidebarLinkBase} border-[var(--theme-border)] bg-[var(--theme-brand-soft)] text-[var(--theme-brand)] shadow-sm`;
+const sidebarLinkIdle = `${sidebarLinkBase} text-neutral-500 hover:bg-[var(--theme-hover)] hover:text-neutral-900`;
 
 const linkClass = ({ isActive }: { isActive: boolean }) =>
   isActive ? sidebarLinkActive : sidebarLinkIdle;
-
-const tabClass = ({ isActive }: { isActive: boolean }) =>
-  isActive ? tabActive : tabIdle;
 
 const DashboardLayout = () => {
   const [user, setUser] = useState<MemberProfile | null>(null);
@@ -166,7 +158,7 @@ const DashboardLayout = () => {
                     </h1>
                     {statusInfo && (
                       <span
-                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-bold tracking-normalr leading-none ${statusInfo.color}`}
+                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-bold tracking-normal leading-none ${statusInfo.color}`}
                       >
                         {statusInfo.label}
                       </span>
@@ -269,23 +261,6 @@ const DashboardLayout = () => {
               </div>
             </div>
           </aside>
-
-          {/* Tabs — mobile */}
-          <nav
-            className="hidden gap-1 border-b border-neutral-200/60 md:hidden overflow-x-auto no-scrollbar"
-            aria-label="Dashboard navigation mobile"
-          >
-            {NAV_ITEMS.map((item) => (
-              <NavLink
-                key={item.label}
-                className={tabClass}
-                to={item.to}
-                end={item.end}
-              >
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
 
           <div className="member-dashboard-content mt-8 min-w-0 flex-1 md:mt-0">
             <Outlet context={{ user, loading, profileError, reloadProfile: loadProfile } satisfies DashboardContext} />

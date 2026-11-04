@@ -222,17 +222,17 @@ export const MemberCardPreview = ({ cardData, className = "", flipped, onFlipped
               </>
             )}
 
-            <span className="relative flex h-full flex-col px-5 py-4 sm:px-7 sm:py-5">
+            <span className="relative flex h-full flex-col px-4 py-3 sm:px-7 sm:py-5">
               {organizationLogoUrl !== EMPTY && (
                 <span
                   className={
                     isOasi2Card
                       ? "pointer-events-none absolute inset-x-0 top-3 flex justify-center"
-                      : "mb-1 flex justify-center sm:mb-2"
+                      : "mb-0.5 flex justify-center sm:mb-2"
                   }
                 >
                   <span
-                    className="flex items-center justify-center rounded-xl px-2 py-1"
+                    className="flex items-center justify-center rounded-xl px-2 py-0.5 sm:py-1"
                     style={{
                       background: "rgba(0,0,0,0.28)",
                       backdropFilter: "blur(4px)",
@@ -244,10 +244,10 @@ export const MemberCardPreview = ({ cardData, className = "", flipped, onFlipped
                       alt="Logo associazione"
                       className="object-contain opacity-95"
                       style={{
-                        height: isOasi2Card ? "clamp(34px, 7vw, 54px)" : "clamp(22px, 4vw, 34px)",
-                        minHeight: isOasi2Card ? 34 : 22,
-                        minWidth: isOasi2Card ? 120 : 50,
-                        maxWidth: isOasi2Card ? 260 : 160,
+                        height: isOasi2Card ? "clamp(34px, 7vw, 54px)" : "clamp(18px, 3.8vw, 34px)",
+                        minHeight: isOasi2Card ? 34 : 18,
+                        minWidth: isOasi2Card ? 120 : 44,
+                        maxWidth: isOasi2Card ? 260 : 150,
                       }}
                     />
                   </span>
@@ -257,25 +257,27 @@ export const MemberCardPreview = ({ cardData, className = "", flipped, onFlipped
               {/* Header row: year label + ASSONAM logo */}
               <span className={`flex items-start justify-between ${isOasi2Card ? "mt-14" : ""}`}>
                 <span className="flex flex-col">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#c9a8b0]/80 sm:text-[11px]">
+                  <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#c9a8b0]/80 sm:text-[11px]">
                     Tessera Socio
                   </span>
-                  <span
-                    className="mt-0.5 font-bold tracking-[0.06em] text-[#d4b45c]"
-                    style={{ fontSize: "clamp(1rem, 4vw, 1.375rem)", fontFamily: '"Source Serif 4", serif' }}
-                  >
-                    {cardYear}
-                  </span>
-                  {membershipTypeLabel === "TEMPORANEA" ? (
-                    <span className="mt-2 inline-flex w-fit items-center rounded-full border border-[#d4b45c]/40 bg-[#d4b45c]/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[#f6e7b6]">
-                      TEMPORANEA
+                  <span className="mt-0.5 flex flex-wrap items-center gap-2">
+                    <span
+                      className="font-bold tracking-[0.06em] text-[#d4b45c]"
+                      style={{ fontSize: "clamp(0.95rem, 3.8vw, 1.375rem)", fontFamily: '"Source Serif 4", serif' }}
+                    >
+                      {cardYear}
                     </span>
-                  ) : null}
+                    {membershipTypeLabel === "TEMPORANEA" ? (
+                      <span className="inline-flex w-fit items-center rounded-full border border-[#d4b45c]/40 bg-[#d4b45c]/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em] text-[#f6e7b6] sm:px-2.5 sm:py-1 sm:text-[10px]">
+                        TEMPORANEA
+                      </span>
+                    ) : null}
+                  </span>
                 </span>
 
                 {/* ASSONAM logo — always visible, with contrast plate */}
                 <span
-                  className={`flex flex-shrink-0 items-center rounded-xl px-1.5 py-1 ${isOasi2Card ? "absolute right-5 top-4" : ""}`}
+                  className={`flex flex-shrink-0 items-center rounded-xl px-1.5 py-0.5 sm:py-1 ${isOasi2Card ? "absolute right-5 top-4" : ""}`}
                   style={{ background: "rgba(0,0,0,0.22)", backdropFilter: "blur(4px)" }}
                 >
                   <LogoImg
@@ -283,10 +285,10 @@ export const MemberCardPreview = ({ cardData, className = "", flipped, onFlipped
                     alt="Logo ASSO.N.A.M."
                     className="object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]"
                     style={{
-                      height: "clamp(28px, 5.5vw, 44px)",
-                      minHeight: 28,
-                      minWidth: 50,
-                      maxWidth: 130,
+                      height: "clamp(24px, 5vw, 44px)",
+                      minHeight: 24,
+                      minWidth: 44,
+                      maxWidth: 120,
                     }}
                   />
                 </span>
@@ -294,35 +296,35 @@ export const MemberCardPreview = ({ cardData, className = "", flipped, onFlipped
 
               {/* Main content */}
               <span className="mt-auto block">
-                <span className="block text-[0.58rem] font-semibold uppercase tracking-[0.22em] text-[#c9a8b0] sm:text-[0.62rem]">
+                <span className="block text-[0.55rem] font-semibold uppercase tracking-[0.2em] text-[#c9a8b0] sm:text-[0.62rem]">
                   Nome e cognome
                 </span>
                 <span
-                  className="mt-1 block font-semibold leading-tight text-white"
-                  style={{ fontSize: "clamp(0.9rem, 3.5vw, 1.2rem)", fontFamily: '"Source Serif 4", serif' }}
+                  className="mt-0.5 block truncate font-semibold leading-tight text-white sm:mt-1"
+                  style={{ fontSize: "clamp(0.85rem, 3.3vw, 1.2rem)", fontFamily: '"Source Serif 4", serif' }}
                 >
                   {displayName}
                 </span>
 
-                <span className="mt-3 block text-[0.58rem] font-semibold uppercase tracking-[0.22em] text-[#c9a8b0] sm:text-[0.62rem]">
+                <span className="mt-1.5 block text-[0.55rem] font-semibold uppercase tracking-[0.2em] text-[#c9a8b0] sm:mt-3 sm:text-[0.62rem]">
                   Associazione
                 </span>
-                <span className="mt-0.5 block truncate text-sm font-medium text-[#fdf6e3]/85 sm:text-[0.95rem]">
+                <span className="mt-0.5 block truncate text-xs font-medium text-[#fdf6e3]/85 sm:text-[0.95rem]">
                   {organizationLabel}
                 </span>
               </span>
 
               {/* Card number footer */}
-              <span className="mt-3 flex items-end justify-between border-t border-[#c6a04f]/20 pt-2.5">
+              <span className="mt-1.5 flex items-end justify-between border-t border-[#c6a04f]/20 pt-1.5 sm:mt-3 sm:pt-2.5">
                 <span>
-                  <span className="block text-[0.58rem] font-semibold uppercase tracking-[0.22em] text-[#c9a8b0] sm:text-[0.62rem]">
+                  <span className="block text-[0.55rem] font-semibold uppercase tracking-[0.2em] text-[#c9a8b0] sm:text-[0.62rem]">
                     N. Tessera
                   </span>
-                  <span className="mt-0.5 block font-mono text-base font-bold tracking-[0.12em] text-[#d4b45c] sm:text-lg">
+                  <span className="mt-0.5 block font-mono text-sm font-bold tracking-[0.12em] text-[#d4b45c] sm:text-lg">
                     {cardNumber}
                   </span>
                   {validUntil ? (
-                    <span className="mt-1 block text-[10px] font-medium uppercase tracking-[0.12em] text-[#c9a8b0]">
+                    <span className="mt-0.5 block text-[9px] font-medium uppercase tracking-[0.1em] text-[#c9a8b0] sm:mt-1 sm:text-[10px]">
                       Scade {new Date(validUntil).toLocaleDateString("it-IT", { timeZone: "Europe/Rome" })}
                     </span>
                   ) : null}

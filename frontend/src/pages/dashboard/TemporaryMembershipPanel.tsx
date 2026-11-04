@@ -113,9 +113,11 @@ export default function TemporaryMembershipPanel({ onIssued }: { onIssued: () =>
           {purchase.status === "manual_pending" && <p>{purchase.method === "bonifico" ? "Segui le indicazioni dell'associazione per effettuare il bonifico." : "Puoi pagare presso l'associazione."} La tessera verrà emessa dopo la conferma dell'incasso.</p>}
           {purchase.status === "paid_waiting_card" && <p>La durata inizierà quando l'associazione avrà completato il rilascio. Il pagamento è conservato.</p>}
           {purchase.valid_until && <p>Valida dal {formatTemporaryDate(purchase.valid_from)} al {formatTemporaryDate(purchase.valid_until)}.</p>}
-          {purchase.hosted_checkout_url && <button type="button" className="btn-primary px-5 py-3" onClick={() => { try { openCheckout(purchase.hosted_checkout_url!); } catch (reason) { setError((reason as Error).message); } }}>Riprendi pagamento</button>}
-          {purchase.status === "payment_pending" && !purchase.hosted_checkout_url && <button type="button" className="btn-primary px-5 py-3" disabled={busy} onClick={() => void buy()}>Riprendi acquisto</button>}
-          {["payment_pending", "manual_pending"].includes(purchase.status) && <button type="button" className="btn-ghost ml-2 px-4 py-3" disabled={busy} onClick={() => setCancelOpen(true)}>Annulla richiesta</button>}
+          <div className="flex flex-col gap-2.5 pt-1 sm:flex-row sm:items-center">
+            {purchase.hosted_checkout_url && <button type="button" className="btn-primary px-5 py-3" onClick={() => { try { openCheckout(purchase.hosted_checkout_url!); } catch (reason) { setError((reason as Error).message); } }}>Riprendi pagamento</button>}
+            {purchase.status === "payment_pending" && !purchase.hosted_checkout_url && <button type="button" className="btn-primary px-5 py-3" disabled={busy} onClick={() => void buy()}>Riprendi acquisto</button>}
+            {["payment_pending", "manual_pending"].includes(purchase.status) && <button type="button" className="btn-ghost px-4 py-3" disabled={busy} onClick={() => setCancelOpen(true)}>Annulla richiesta</button>}
+          </div>
         </div>
       ) : offer?.eligible && offer.offer ? (
         <div className="mt-3 space-y-4">

@@ -181,7 +181,11 @@ const SuperAdminLogin = () => {
               <form className="mt-7 space-y-5" onSubmit={handleMfaSubmit}>
                 {step === "setup" ? (
                   <div className="rounded-2xl border border-neutral-200 bg-white p-4 text-center">
-                    {qrDataUri ? <img className="mx-auto h-44 w-44" src={qrDataUri} alt="QR per configurare l'app Authenticator" /> : null}
+                    {qrDataUri ? (
+                      <div data-card-branding="qr" className="mx-auto inline-block rounded-xl bg-white p-2">
+                        <img className="mx-auto h-44 w-44" src={qrDataUri} alt="QR per configurare l'app Authenticator" />
+                      </div>
+                    ) : null}
                     <p className="mt-3 text-xs text-neutral-600">Codice manuale</p>
                     <code className="mt-1 block break-all text-sm font-semibold tracking-wider text-neutral-900">{secret}</code>
                   </div>

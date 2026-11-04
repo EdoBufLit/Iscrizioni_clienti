@@ -135,6 +135,12 @@ const MembersTable = memo(function MembersTable({
                   <td className={tdClass}>
                     <Skeleton className="h-3.5 w-20" />
                   </td>
+                  <td className={tdClass}>
+                    <Skeleton className="h-3.5 w-16" />
+                  </td>
+                  <td className={tdClass}>
+                    <Skeleton className="ml-auto h-6 w-14 rounded-lg" />
+                  </td>
                 </tr>
               ))
             ) : members.length === 0 ? (

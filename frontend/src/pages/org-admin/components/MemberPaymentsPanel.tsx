@@ -74,7 +74,7 @@ export default function MemberPaymentsPanel({ member, paymentStatus, onRegisterP
                 <button type="button" className="btn-ghost !px-3 !py-2" onClick={() => setRetry(value => value + 1)}>Riprova saldo</button>
               </div>
             ) : balance ? (
-              <dl className="member-detail-balance grid grid-cols-3 gap-3">
+              <dl className="member-detail-balance grid grid-cols-1 gap-3 sm:grid-cols-3">
                 {[["Prevista", balance.expected_cents], ["Incassato netto", balance.paid_cents], ["Residuo", balance.outstanding_cents]].map(([label, amount]) => (
                   <div key={String(label)} className="min-w-0">
                     <dt className="text-xs text-[var(--theme-text-muted)]">{label}</dt>

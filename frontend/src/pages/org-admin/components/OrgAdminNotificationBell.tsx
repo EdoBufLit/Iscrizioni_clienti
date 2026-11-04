@@ -216,10 +216,10 @@ const OrgAdminNotificationBell = () => {
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className={`relative flex h-11 w-11 items-center justify-center rounded-2xl border bg-white/80 text-neutral-600 shadow-sm transition hover:text-brand ${
+        className={`relative flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-2xl border bg-white/10 text-white transition hover:bg-white/15 ${
           unreadCount > 0
-            ? "border-rose-200 shadow-[0_18px_35px_-24px_rgba(225,29,72,0.65)] ring-1 ring-rose-100/80 hover:border-rose-300"
-            : "border-neutral-200 hover:border-brand/30"
+            ? "border-rose-300/70 ring-1 ring-rose-300/50"
+            : "border-white/20"
         }`}
         aria-label="Apri notifiche"
         aria-expanded={open}
@@ -228,20 +228,14 @@ const OrgAdminNotificationBell = () => {
           <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 1-5.714 0M18 8.25a6 6 0 1 0-12 0v2.132a4 4 0 0 1-.924 2.54L3.75 14.5h16.5l-1.326-1.578A4 4 0 0 1 18 10.382V8.25Z" />
         </svg>
         {unreadCount > 0 && (
-          <span className="pointer-events-none absolute -right-1 -top-1 h-3.5 w-3.5">
-            <span className="absolute inset-0 animate-ping rounded-full bg-rose-400/70" />
-            <span className="absolute inset-[2px] rounded-full bg-rose-600 ring-4 ring-rose-100" />
-          </span>
-        )}
-        {unreadCount > 0 && (
-          <span className="absolute -right-2.5 top-6 inline-flex min-w-[1.35rem] items-center justify-center rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-bold text-white shadow-lg">
+          <span className="pointer-events-none absolute -right-1.5 -top-1.5 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white shadow-md ring-2 ring-[#0f3d3a]">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="org-admin-notification-popover fixed left-3 right-3 top-[calc(4rem+0.75rem)] z-[70] overflow-hidden rounded-[28px] border sm:absolute sm:left-auto sm:right-0 sm:top-[calc(100%+0.75rem)] sm:w-[min(92vw,26rem)]">
+        <div className="org-admin-notification-popover fixed left-3 right-3 top-[calc(3.4rem+0.5rem)] z-[70] overflow-hidden rounded-[24px] border sm:absolute sm:left-auto sm:right-0 sm:top-[calc(100%+0.75rem)] sm:w-[min(92vw,26rem)]">
           <div className="org-admin-notification-popover__header border-b px-5 py-5">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -265,7 +259,7 @@ const OrgAdminNotificationBell = () => {
             </div>
           )}
 
-          <div className="org-admin-notification-popover__list max-h-[min(28rem,calc(100vh-6.5rem))] overflow-auto p-3">
+          <div className="org-admin-notification-popover__list max-h-[min(26rem,calc(100dvh-10rem))] overflow-auto p-3">
             {loading ? (
               <div className="space-y-3 p-2">
                 {[0, 1, 2].map((item) => (

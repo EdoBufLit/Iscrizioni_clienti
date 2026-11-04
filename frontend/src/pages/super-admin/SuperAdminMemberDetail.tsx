@@ -58,6 +58,16 @@ function getMemberStatusTone(status: string): string {
   return "border-neutral-200 bg-neutral-100 text-neutral-700";
 }
 
+function getMemberStatusLabel(status: string): string {
+  const normalized = status.toLowerCase();
+  if (normalized === "active") return "Attivo";
+  if (normalized === "expired") return "Scaduto";
+  if (normalized === "rejected") return "Rigettato";
+  if (normalized.includes("pending")) return "In attesa";
+  if (normalized === "deleted") return "Eliminato";
+  return status;
+}
+
 function getWorkflowLabel(value: string | null | undefined): string {
   if (!value) return "—";
   const normalized = value.toLowerCase();
@@ -409,7 +419,7 @@ const SuperAdminMemberDetailPage = () => {
                                 member.status,
                               )}`}
                             >
-                              {member.status}
+                              {getMemberStatusLabel(member.status)}
                             </span>
                             <span className="text-xs text-neutral-500">{getWorkflowLabel(member.workflow_status)}</span>
                           </div>
@@ -463,7 +473,7 @@ const SuperAdminMemberDetailPage = () => {
           </div>
         </div>
 
-        <aside className="surface p-5">
+        <aside className="surface p-5 xl:sticky xl:top-28 xl:self-start">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-400">Scheda socio</p>
