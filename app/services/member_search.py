@@ -71,7 +71,7 @@ def _word_cost(term: str, word: str) -> int:
     return 1 if _allows_typo(term) and _one_typo(term, word) else 2
 
 
-def _words_match(terms: list[str], words: list[str]) -> bool:
+def _words_match(terms: list[str], words: list[str], *, max_cost: int = 1) -> bool:
     # Each query word must match a distinct name word; one typo in total.
     choices = [
         [(index, cost) for index, word in enumerate(words)
@@ -87,12 +87,37 @@ def _words_match(terms: list[str], words: list[str]) -> bool:
             return True
         return any(
             not used & (1 << index)
-            and cost + extra <= 1
+            and cost + extra <= max_cost
             and visit(position + 1, used | (1 << index), cost + extra)
             for index, extra in choices[position]
         )
 
     return visit(0, 0, 0)
+
+
+def _email_fragment_cost(term: str, local_part: str) -> int:
+    # Longer fragments only; never infer a surname from the email provider.
+    if not _allows_typo(term):
+        return 2
+    if term in local_part:
+        return 0
+    for size in (len(term) - 1, len(term), len(term) + 1):
+        if any(_one_typo(term, local_part[start:start + size])
+               for start in range(len(local_part) - size + 1)):
+            return 1
+    return 2
+
+
+def _missing_surname_match(terms: list[str], name_words: list[str], local_part: str) -> bool:
+    if not 2 <= len(terms) <= 6:
+        return False
+    # One term can supply the missing surname; all others must match the name.
+    # Share the existing one-edit budget across both sources.
+    for index, term in enumerate(terms):
+        cost = _email_fragment_cost(term, local_part)
+        if cost <= 1 and _words_match(terms[:index] + terms[index + 1:], name_words, max_cost=1 - cost):
+            return True
+    return False
 
 
 def is_similar_member(search: str, first_name: str | None, last_name: str | None, email: str | None) -> bool:
@@ -107,9 +132,12 @@ def is_similar_member(search: str, first_name: str | None, last_name: str | None
     name_words = f"{first_name or ''} {last_name or ''}".lower().split()
     if _words_match(terms, name_words):
         return True
+    local_part = email.partition("@")[0]
+    # Match SQL trim semantics used by the candidate prefilter.
+    if not (last_name or "").strip(" ") and _missing_surname_match(terms, name_words, local_part):
+        return True
     if len(terms) != 1:
         return False
-    local_part = email.partition("@")[0]
     return any(
         _word_cost(search, word) <= 1
         for word in [local_part, *re.split(r"[._+\-]", local_part)]
@@ -133,9 +161,13 @@ def _candidate_match(search: str):
         else:
             fragments = (term,)
         columns = (Member.email,) if "@" in search else (Member.first_name, Member.last_name)
-        if len(terms) == 1 and "@" not in search:
-            columns += (Member.email,)
-        clauses.append(or_(*(_contains(column, part) for column in columns for part in fragments)))
+        matches = [_contains(column, part) for column in columns for part in fragments]
+        if "@" not in search:
+            email_match = or_(*(_contains(Member.email, part) for part in fragments))
+            matches.append(email_match if len(terms) == 1 else and_(
+                func.trim(func.coalesce(Member.last_name, "")) == "", email_match,
+            ))
+        clauses.append(or_(*matches))
     return and_(*clauses)
 
 

@@ -145,3 +145,56 @@ def test_email_domain_typos_do_not_match_other_addresses_at_same_provider(search
     assert [(row["id"], row["search_match"]) for row in result["items"]] == [(members["similar"].id, "similar")]
     without_at = search("mariu.rossiexample.com")
     assert [(row["id"], row["search_match"]) for row in without_at["items"]] == [(members["similar"].id, "similar")]
+
+
+@pytest.mark.parametrize("query", ["Martina fredi", "fredi Martina", "Martina freddi"])
+def test_missing_surname_combines_name_and_email(search_registry, query):
+    db, members, search = search_registry
+    target = members["similar"]
+    target.first_name = "Martina"
+    target.last_name = ""
+    target.email = "marthafreddi@example.com"
+    db.commit()
+    result = search(query, limit=1)
+    assert result["total"] == 1
+    assert [(row["id"], row["search_match"]) for row in result["items"]] == [(target.id, "similar")]
+    assert search(query, limit=1, offset=1)["items"] == []
+    assert search(query, source="online")["total"] == 0
+    from app.services.member_search import iter_member_search_ids
+    from app.services.member_filters import build_org_member_query
+    assert list(iter_member_search_ids(build_org_member_query(db, org_id=target.org_id, status="active"), query)) == [target.id]
+
+
+@pytest.mark.parametrize("query,first,last,email", [
+    ("Martina example", "Martina", "", "marthafreddi@example.com"),
+    ("Martina fredi", "Laura", "", "martinafreddi@example.com"),
+    ("Martina fredi", "Martina", "Rossi", "marthafreddi@example.com"),
+    ("Martina fre", "Martina", "", "marthafreddi@example.com"),
+    ("Martyna fradi", "Martina", "", "marthafreddi@example.com"),
+])
+def test_combined_search_rejects_unrelated_matches(query, first, last, email):
+    assert not is_similar_member(query, first, last, email)
+
+
+@pytest.mark.parametrize("last", [None, "", "   "])
+@pytest.mark.parametrize("query", ["Martina fredi", "Martina freddi", "Martyna freddi"])
+def test_combined_search_accepts_empty_surnames_and_one_shared_typo(last, query):
+    assert is_similar_member(query, "Martina", last, "marthafreddi@example.com")
+
+
+def test_combined_search_orders_exact_first_and_preserves_scope(search_registry):
+    db, members, search = search_registry
+    for key in ("similar", "other", "expired", "deleted"):
+        members[key].first_name = "Martina"
+        members[key].last_name = "   "
+        members[key].email = f"marthafreddi+{key}@example.com"
+    members["exact"].first_name = "Martina"
+    members["exact"].last_name = "Fredi"
+    db.commit()
+    first = search("Martina fredi", limit=1)
+    assert first["total"] == 2
+    assert [(row["id"], row["search_match"]) for row in first["items"]] == [(members["exact"].id, "exact")]
+    second = search("Martina fredi", limit=1, offset=1)
+    assert [(row["id"], row["search_match"]) for row in second["items"]] == [(members["similar"].id, "similar")]
+    assert search("Martina fredi", status="expired")["items"][0]["id"] == members["expired"].id
+    assert search("Martina fredi", status="all")["total"] == 4
