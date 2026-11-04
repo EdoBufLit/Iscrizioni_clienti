@@ -16,11 +16,11 @@
 - Suite backend completa: 1164 passati, 13 saltati.
 - Suite frontend completa finale: 446 passati in 71 file.
 - Build TypeScript/Vite/PWA riuscita, nessuna nuova dipendenza o migrazione.
-- 70 screenshot delle superfici operative con browser reale a320/390/768/1280/1440px, entrambi i temi: tessera, prenotazioni, form precompilato, timeline limitata, coda documenti, segmenti Soci e Quote. Nessun overflow orizzontale o errore JavaScript nei percorsi collaudati.
-- Ricaricamento PWA realmente offline con tessera e QR visibili verificato a390px; snapshot privo dei contatti. Prefill nome/email/telefono verificato nel form reale senza invio. Passaggio segmento al compositore verificato senza inviare campagne.
+- 70 screenshot delle superfici operative con browser reale a 320/390/768/1280/1440 px, entrambi i temi: tessera, prenotazioni, form precompilato, timeline limitata, coda documenti, segmenti Soci e Quote. Nessun overflow orizzontale o errore JavaScript nei percorsi collaudati.
+- Ricaricamento PWA realmente offline con tessera e QR visibili verificato a 390 px; snapshot privo dei contatti. Prefill nome/email/telefono verificato nel form reale senza invio. Passaggio segmento al compositore verificato senza inviare campagne. Check-in, seduta con assegnazione preservata e apertura immediata del dettaglio mobile verificati; approvazione e rigetto con avanzamento reale della coda confermati.
 - Collaudo con SQLite e utenti sintetici isolati su localhost:18171. Nessuna pratica, campagna, pagamento o anagrafica reale modificata per QA. Evidenze in output/gemini-completion-20261104.
 
-- Altri12controlli browser suHome/Associazioni e loginSuperAdmin, mobile/desktop chiaro/scuro, per validare lazy layout ed estrazioneCSS.
+- Altri 12 controlli browser su Home, Associazioni e login Super Admin, mobile/desktop chiaro/scuro, per validare layout lazy ed estrazione CSS.
 
 ## Limiti
 
@@ -30,4 +30,10 @@
 
 ## Pubblicazione
 
-Richiesta esplicitamente dall'utente il5novembre2026. Deploy tramite pipeline standard suMain; risultati aggiunti al termine delle verifiche online.
+- Commit applicativo `0aa00f98d70be4fe1a3e2e7a8e9daa21df3b895e` pubblicato su `Main`.
+- [Pipeline 41932497563](https://github.com/EdoBufLit/Iscrizioni_clienti/actions/runs/41932497563) e job deploy `126933321927` riusciti. `Final canary passed` verificato nel log alle **00:23:51 del 5 novembre 2026**, Europe/Rome.
+- 74 controlli HTTPS e hash degli asset superati; altri 8 controlli browser live mobile/desktop senza overflow o errori JavaScript, inclusi login e gate socio/onboarding. Nessun invio o modifica di dati reali.
+- Sette servizi applicativi healthy sull'immagine del nuovo SHA, zero restart/OOM. Schema invariato `20261026_06_member_bulk`, manutenzione annuale riuscita, nessuna migrazione o dipendenza nuova.
+- Worker PWA aggiornato: 12 risorse di precache corrette, revisione HTML verificata sul file effettivo del server, CDN BYPASS senza Age. Le differenze di revisione locale dell'HTML derivano dai fine riga Windows; i chunk JavaScript/CSS verificati coincidono esattamente.
+- Readiness server: disco 49%, inode 12%, footprint Docker controllato; nessuna pulizia distruttiva. Server QA locale fermato e browser headless chiusi.
+- Evidenze, screenshot, log build/test, rapporti runtime/HTTPS/browser in `output/gemini-completion-20261104/`. La route `/version` non espone lo SHA: versione dimostrata da immagine dei container, repository server e hash degli asset.

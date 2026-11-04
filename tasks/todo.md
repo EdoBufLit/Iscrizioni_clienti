@@ -6456,8 +6456,11 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 
 Specifica: applicare il perimetro selezionato nell'ultimo screenshot; Apple Wallet, command palette, WhatsApp e preferenze comunicazioni non fanno parte della selezione. Riutilizzare componenti, permessi e regole economiche esistenti. Cache solo in memoria per letture operative, invalidazione dopo mutazioni e ai confini autenticazione, protezione da risposte obsolete; snapshot tessera limitato e timestamp visibile. Nessun invio reale di campagne per collaudo.
 
-- [ ] Deploy richiesto esplicitamente il5novembre: pubblicare suMain, seguire pipeline/canary e verificare asset, salute e servizi in sola lettura.
+- [x] Deploy richiesto esplicitamente il5novembre: pubblicare suMain, seguire pipeline/canary e verificare asset, salute e servizi in sola lettura.
 
 ### Review completamento Gemini
 - Backend completo1164passati/13saltati; frontend446passati/71file; build finale riuscita.70screenshot a320/390/768/1280/1440px, chiaro/scuro, zerooverflow; card eQR verificati con vero reload offline. Campagna aperta con destinatari filtrati senza invio.
 - Rilevati e corretti: cache tra sessioni/schede, PII inURL, timeline irraggiungibile per utenti pending, anteprimaPDF attachment, deep link verso prenotazione gestita, errori tecnici offline e PATCH stato che cancellava sala/tavolo. Nessun dato reale modificato perQA. Rapporto docs/gemini_performance_workflows_release_2026-11-05.md.
+
+### Pubblicazione completamento Gemini — 5 novembre 2026
+- Applicativo0aa00f9 pubblicato suMain; pipeline41932497563 e deploy126933321927 riusciti, Final canary passed alle00:23:51Europe/Rome.74controlliHTTPS/hashasset e8controllibrowserlive superati; sette servizi healthy sulnuovoSHA, zero restart/OOM, schema invariato. WorkerPWA corrente eprecacherisorse verificati, nessun dato reale modificato perQA. Rapporto docs/gemini_performance_workflows_release_2026-11-05.md; serverlocale fermato/browserheadlesschiusi.
