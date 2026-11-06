@@ -683,7 +683,7 @@ const OrgAdminAttendancePage = () => {
           if (!submitting) setShowSearchModal(false);
         }}
         closeDisabled={submitting}
-        placement="bottom"
+        zIndexClassName="z-[90] org-admin-attendance-search-overlay"
         sizeClassName="max-w-lg"
       >
         <AttendanceMemberSearch onRegistered={handleMemberRegistered} onBusyChange={setSubmitting} />

@@ -762,7 +762,7 @@ const OrgAdminMembers = () => {
       </ModalShell>
 
       <ModalShell open={showFiltersSheet} title="Filtri e ordinamento" onClose={closeFiltersSheet}
-        placement="bottom" sizeClassName="max-w-lg org-admin-members-sheet__panel" contentClassName="p-0">
+        sizeClassName="max-w-lg md:max-w-2xl org-admin-members-sheet__panel" contentClassName="p-0">
             <div className="org-admin-members-sheet__body">
               <div className="org-admin-members-filter-group">
                 <p className="org-admin-members-filter-group__label">Stato socio</p>

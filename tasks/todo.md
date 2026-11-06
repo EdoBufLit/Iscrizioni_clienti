@@ -6515,3 +6515,40 @@ Specifica: deploy autorizzato dall'utente dopo anteprime approvate. Riutilizzare
 - Suite backend completa: 1190 passati / 13 saltati, frontend: 469 passati / 74 file e build riusciti; review finale senza blocker.
 - 23 controlli HTTPS inclusi 11 asset con hash identico alla build,12smoke browser pubblici mobile/desktop chiaro/scuro e QR generato dal servizio produzione decodificato viaZXing sul link esatto di JappaClub. Endpoint QR anonimi: 401.
 - Sette servizi applicativi healthy sulla nuova immagine, zero restart/OOM, schema invariato 20261105_02_renewal_email; nessun dato reale modificato per QA. Evidenze output/enrollment-qr-20261106/; rapporto docs/enrollment_qr_2026-11-06.md.
+
+# Piano — filtri soci desktop (6 novembre 2026)
+- [x] Individuare causa e definire correzione limitata al pannello filtri.
+- [x] Condividere gli stili del pannello tra desktop e mobile; centrare la finestra desktop e preservare il bottom sheet mobile.
+- [x] Verificare filtri, reset, chiusura e layout responsive nei temi chiaro/scuro; test mirati e build.
+- [x] Documentare risultati e review.
+
+Specifica: ripristinare chip leggibili con spaziatura, selezione evidente, gruppi separati e footer accessibile. Nessun cambiamento a query o logica filtri. Verificare anche altezza ridotta e breakpoint 767/768 px. Lavorare su Main; nessun deploy incluso nella richiesta.
+
+
+### Review filtri soci desktop
+- Causa: gli stili del pannello erano confinati alla media query mobile; posizione bottom esplicita anche su desktop. Spostati gli stili condivisi nel CSS della pagina, centratura desktop con larghezza massima 672px, mobile con dimensioni e posizione inferiori preservate. Neutralizzato il margine tra elementi della pagina sugli overlay fixed.
+- 9 test mirati (OrgAdminMembers e ModalShell) superati; build TypeScript/Vite/PWA riuscita. Review indipendente senza blocker.
+- 14 layout reali sulla build produzione con database sintetico, chiaro/scuro: 320x740,390x844,767x900,768x900,1024x768,1440x900,1440x600. Verificate centratura/bottom, chip con bordi e padding, assenza di overflow, footer visibile, ultimo ordinamento raggiungibile con scroll, filtro accesso con risposta API200, reset, applicazione e Escape. Zero errori JavaScript.
+- Evidenze: output/member-filters-20261106/qa-report.json e screenshot nella stessa directory. Nessun dato reale modificato; nessun deploy eseguito. Server QA fermato al termine.
+
+# Piano — ricerca socio Presenze desktop (6 novembre 2026)
+- [x] Verificare il posizionamento della ricerca manuale e il relativo CSS.
+- [x] Centrare solo la ricerca socio su desktop, preservando il pannello mobile inferiore.
+- [x] Verificare responsive, risultati ricerca e chiusura; eseguire test mirati e build, documentare review.
+
+Specifica: modifica limitata al posizionamento del modal Cerca socio in Presenze, incluso azzeramento del margine ereditato dalla pagina. Nessun cambiamento a scansione QR o registrazione ingressi.
+
+
+### Review ricerca socio Presenze
+- Rimosso il posizionamento inferiore fisso per la sola ricerca socio. Overlay centrato da768px, inferiore sotto768px e senza margine della pagina; QR, postazioni scanner e registrazione ingressi invariati.
+- 13 test mirati superati (camera/ricerca socio/ModalShell); build TypeScript/Vite/PWA riuscita e diff senza errori.
+- 12 layout reali chiaro/scuro su database sintetico:320x740,390x844,767x900,768x900,1440x900,1440x600. Centratura e posizione mobile verificate prima e dopo ricerca reale senza risultati, nessun overflow o erroreJavaScript; chiusura conEscape e pulsante verificata.
+- Evidenze output/member-filters-20261106/attendance-qa-report.json e screenshot attendance-search-*.png. Nessun ingresso registrato, nessun dato reale modificato, nessun deploy. ServerQA fermato al termine.
+
+# Piano — deploy filtri soci e ricerca Presenze (7 novembre 2026)
+- [x] Confermare Main/origin e perimetro delle due correzioni autorizzate.
+- [x] Review finale e test frontend prima della pubblicazione.
+- [ ] Commit e push su Main; seguire build, rollout e canary.
+- [ ] Verificare asset online, salute, servizi e risorse host; documentare esito.
+
+Specifica: deploy autorizzato dall'utente; solo UI già verificata, nessuna migrazione o modifica dati reali. Preservare output locali non versionati.

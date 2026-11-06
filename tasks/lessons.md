@@ -409,3 +409,7 @@ Do not interpret "date without slots" as closed when a default booking schedule 
 - Verificare la vera gestione Documenti del Super Admin, comprese tab/filtri/upload/modali e nomi lunghi: il solo login Super Admin non valida la responsività dell'area documentale autenticata.
 - Correzione successiva: non basta eliminare l'overflow in Documenti. Sul telefono la lista deve arrivare presto: niente cinque KPI alti, form di invio sempre aperto e pannelli di configurazione prima dell'archivio. Usare conteggi compatti, operazioni su richiesta e dettaglio contestuale; misurare prima riga e comandi nel primo viewport.
 - Le email di rinnovo e modifica contatti rientrano nello stesso standard delle email di accesso: audit di tutti i messaggi transazionali, senza sovrascrivere modelli personalizzati. Il rinnovo si apre dal1gennaio2027Europe/Rome; blocco autorevole sulle nuove richieste/checkout e UI coerente, senza bloccare fulfillment già dovuti.
+
+- 6 novembre 2026: se un pannello nato mobile viene aperto anche da desktop, gli stili di gruppi, chip e footer devono essere condivisi fuori dalle media query. Limitare ai breakpoint solo posizione e adattamenti di layout; verificare apertura reale a 767/768 px, centratura desktop e footer su viewport basso.
+
+- 6 novembre 2026: controllare il posizionamento responsive anche delle ricerche manuali nelle pagine operative (es. Presenze): placement bottom fisso richiede un adattamento desktop esplicito e verifica del margine ereditato da space-y.
