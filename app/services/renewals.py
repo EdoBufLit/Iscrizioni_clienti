@@ -43,6 +43,7 @@ from app.services.system_email_layout import build_system_email_html
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
 from app.services.member_sessions import resolve_member_session
+from app.services.renewal_availability import RENEWALS_OPEN_ON, renewals_available, require_renewals_open
 from app.services.quote_reminders import quote_reminder_unavailable_reason, require_quote_reminder_available
 from app.services.membership_payments import (
     PAID_MEMBERSHIP_STATUSES,
@@ -162,7 +163,7 @@ def get_annual_term(
 def _renewal_window_opens_on(term: AnnualMembershipTerm) -> date:
     from datetime import timedelta
 
-    return term.valid_through - timedelta(days=RENEWAL_WINDOW_DAYS)
+    return max(RENEWALS_OPEN_ON, term.valid_through - timedelta(days=RENEWAL_WINDOW_DAYS))
 
 
 def _decimal_amount(value: object | None) -> Decimal:
@@ -247,6 +248,7 @@ def assert_member_renewal_window_open(
     *,
     now: datetime | None = None,
 ) -> AnnualMembershipTerm:
+    require_renewals_open(now=now)
     current = _renewal_source(db, member, now=now)
     local_today = as_rome_datetime(now).date()
     if local_today < _renewal_window_opens_on(current):
@@ -467,6 +469,7 @@ def request_renewal(
     member: Member,
     now: datetime | None = None,
 ) -> RenewalAction:
+    require_renewals_open(now=now)
     expected_auth_version = member.auth_version
     lock_card_allocation(db, member.org_id, as_rome_datetime(now).year)
     locked_member = db.query(Member).filter(Member.id == member.id).with_for_update().populate_existing().one_or_none()
@@ -626,11 +629,12 @@ def serialize_member_membership(
         None,
     )
     renewal_opens_on = _renewal_window_opens_on(current) if current else (
-        annual_membership_valid_through(int(member.card_year)) - timedelta(days=RENEWAL_WINDOW_DAYS)
+        max(RENEWALS_OPEN_ON, annual_membership_valid_through(int(member.card_year)) - timedelta(days=RENEWAL_WINDOW_DAYS))
         if member.card_no is not None and member.card_year is not None and member.membership_type != MembershipType.TEMPORARY.value else None
     )
     can_renew = bool(
-        can_access_member_account(member)
+        renewals_available(now=now)
+        and can_access_member_account(member)
         and renewal_opens_on
         and local_today >= renewal_opens_on
         and (future is None or future.status not in _RENEWED_STATUSES)
@@ -662,7 +666,9 @@ def create_renewal_checkout(
     member: Member,
     term: AnnualMembershipTerm,
     request: Request,
+    now: datetime | None = None,
 ) -> MembershipPayment:
+    require_renewals_open(now=now)
     if term.member_id != member.id or term.org_id != member.org_id:
         raise HTTPException(status_code=404, detail="Rinnovo non trovato.")
     expected_auth_version = member.auth_version
@@ -675,7 +681,7 @@ def create_renewal_checkout(
     db.refresh(term)
     if not can_access_member_account(member) or term.status in {AnnualMembershipTermStatus.CANCELLED.value, AnnualMembershipTermStatus.EXPIRED.value}:
         raise HTTPException(status_code=409, detail="Questo rinnovo non è più disponibile.")
-    if term.valid_through < as_rome_datetime().date():
+    if term.valid_through < as_rome_datetime(now).date():
         raise HTTPException(status_code=409, detail="L'annualità di rinnovo è già scaduta.")
     from app.services.member_accounting import guard_partial_manual_payment
     guard_partial_manual_payment(db, member=member, year=int(term.membership_year))
@@ -778,6 +784,7 @@ def record_manual_renewal_payment(
     notes: str | None,
     now: datetime | None = None,
 ) -> tuple[AnnualMembershipTerm, MembershipPayment, bool]:
+    require_renewals_open(now=now)
     lock_card_allocation(db, member.org_id, membership_year)
     db.query(Member).filter(Member.id == member.id).with_for_update().populate_existing().one()
     from app.services.member_accounting import guard_partial_manual_payment
@@ -829,6 +836,7 @@ def confirm_unpaid_renewal(
     membership_year: int,
     now: datetime | None = None,
 ) -> tuple[AnnualMembershipTerm, bool]:
+    require_renewals_open(now=now)
     lock_card_allocation(db, member.org_id, membership_year)
     db.query(Member).filter(Member.id == member.id).with_for_update().populate_existing().one()
     from app.services.temporary_memberships import assert_no_temporary_purchase
@@ -1287,6 +1295,8 @@ def build_quote_center(
     page = query.order_by(func.lower(func.coalesce(Member.last_name, "")),
                           func.lower(func.coalesce(Member.first_name, "")), Member.id).offset(offset).limit(limit).all()
     return {
+        "renewals_available": renewals_available(),
+        "renewal_opens_on": RENEWALS_OPEN_ON.isoformat(),
         "year": year,
         "kpis": kpis,
         "items": [_quote_row(db, member=member, source=previous, target=current, payment=payment, year=year, org=org,

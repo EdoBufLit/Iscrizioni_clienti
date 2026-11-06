@@ -522,7 +522,10 @@ def serialize_form_summary(form: Form, counts: dict[str, Any]) -> dict[str, Any]
         "id": form.id, "title": form.title, "public_slug": form.public_slug,
         "public_path": f"/forms/{form.organization.slug}/{form.public_slug}",
         "form_type": normalize_form_type(form.form_type, booking_enabled=bool(form.booking_enabled)),
-        "is_active": bool(form.is_active), "booking_enabled": bool(form.booking_enabled or form.create_booking),
+        "is_active": bool(form.is_active),
+        "member_booking_visibility": getattr(form, "member_booking_visibility", None) or "hidden",
+        "member_booking_visible_until": form.member_booking_visible_until.isoformat() if getattr(form, "member_booking_visible_until", None) else None,
+        "booking_enabled": bool(form.booking_enabled or form.create_booking),
         "created_at": form.created_at.isoformat() if form.created_at else None,
         "updated_at": form.updated_at.isoformat() if form.updated_at else None,
         "field_count": counts["fields"], "submission_count": counts["statuses"]["total"],
@@ -563,6 +566,8 @@ def serialize_form(form: Form, *, include_fields: bool = True, counts: dict[str,
         "font_preset": getattr(form, "font_preset", DEFAULT_FORM_FONT_PRESET),
         "public_slug": form.public_slug,
         "is_active": bool(form.is_active),
+        "member_booking_visibility": getattr(form, "member_booking_visibility", None) or "hidden",
+        "member_booking_visible_until": form.member_booking_visible_until.isoformat() if getattr(form, "member_booking_visible_until", None) else None,
         "visibility": form.visibility,
         "success_message": form.success_message,
         "notification_email": form.notification_email,
@@ -820,6 +825,8 @@ def apply_form_updates(
     user_confirmation_template_id: Any,
     create_internal_request: bool,
     create_booking: bool,
+    member_booking_visibility: str | None = None,
+    member_booking_visible_until: date | None = None,
 ) -> Form:
     normalized_title = _normalize_text(title)
     if normalized_title is None:
@@ -838,6 +845,14 @@ def apply_form_updates(
         base_slug=requested_slug,
         exclude_form_id=form.id,
     )
+    if member_booking_visibility is not None:
+        mode = str(member_booking_visibility).strip().lower()
+        if mode not in {"hidden", "permanent", "until"}:
+            raise HTTPException(status_code=422, detail="Visibilità nell’area socio non valida.")
+        if mode == "until" and member_booking_visible_until is None:
+            raise HTTPException(status_code=422, detail="Scegli la data di fine visibilità nell’area socio.")
+        form.member_booking_visibility = mode
+        form.member_booking_visible_until = member_booking_visible_until if mode == "until" else None
     form.is_active = bool(is_active)
     form.visibility = normalize_form_visibility(visibility)
     form.success_message = _normalize_multiline_text(success_message)

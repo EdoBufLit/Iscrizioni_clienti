@@ -126,11 +126,11 @@ def test_cancelled_renewal_cannot_be_resurrected_by_another_request(db):
     org = _build_org(db, fee=Decimal('25.00'))
     org.payment_required_before_card = True
     member, _ = _build_member_and_source(db, org=org, year=2026, card_no=97009)
-    first = request_renewal(db, member=member, now=datetime(2026, 12, 1))
+    first = request_renewal(db, member=member, now=datetime(2027, 1, 1))
     first.term.status = 'cancelled'
     db.flush()
     with pytest.raises(HTTPException) as retry:
-        request_renewal(db, member=member, now=datetime(2026, 12, 1))
+        request_renewal(db, member=member, now=datetime(2027, 1, 1))
     assert retry.value.status_code == 409
     assert first.term.status == 'cancelled'
 

@@ -11,6 +11,8 @@ from app.db import get_db
 from app.models import Booking, Form as FormModel, Member, TokenType, MemberDocument, MemberStatus, PaymentMethod, Organization, AdminUser, AdminRole, DocStatus, SignupSource, MemberContactChange
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
+from app.services.member_access_email import build_member_access_email_html
+from app.services.system_email_layout import build_system_email_html
 from app.utils import hash_token
 from app.security import MIN_MEMBER_PASSWORD_LENGTH, get_password_hash, verify_password
 from app.config import settings
@@ -198,6 +200,7 @@ def _enqueue_member_password_reset(
                 f"Il link scade tra {settings.LOGIN_TOKEN_EXPIRE_MINUTES} minuti. "
                 "Se non hai richiesto tu il recupero, puoi ignorare questa email."
             ),
+            html_body=build_member_access_email_html(member, link, purpose="reset"),
             sender=build_sender_payload(
                 mode="association",
                 association=member.organization,
@@ -386,6 +389,13 @@ def _queue_contact_change_confirmation(
                 "Il link è monouso e scade tra 24 ore. Se non hai richiesto tu la modifica, "
                 "non confermare e contatta la tua associazione."
             ),
+            html_body=build_system_email_html(
+                title=f"Conferma il nuovo {field_label}", eyebrow="Sicurezza account",
+                organization_name=resolve_club_display_name(member.organization),
+                body=f"Hai richiesto di modificare il tuo {field_label}. Usa il pulsante qui sotto per aprire la pagina di conferma. La modifica verrà applicata soltanto dopo la tua conferma.",
+                cta_url=link, cta_label="Conferma il nuovo contatto",
+                footer="Il link è personale, monouso e scade tra 24 ore. Se non hai richiesto tu la modifica, non confermare e contatta la tua associazione.",
+            ),
             sender=build_sender_payload(mode="association", association=member.organization),
             meta={"member_id": member.id, "contact_change_id": change_request.id},
         ),
@@ -411,6 +421,11 @@ def _queue_email_change_security_notice(
         subject=subject,
         payload=build_email_payload(
             text_body=body,
+            html_body=build_system_email_html(
+                title="Indirizzo email aggiornato", eyebrow="Sicurezza account",
+                organization_name=resolve_club_display_name(member.organization), body=body,
+                footer="Comunicazione di sicurezza della tua area socio. Se non riconosci la modifica, contatta subito la tua associazione.",
+            ),
             sender=build_sender_payload(mode="association", association=member.organization),
             meta={"member_id": member.id},
         ),
@@ -442,6 +457,13 @@ def _queue_email_change_authorization(
                 "La modifica sarà applicata soltanto dopo questa autorizzazione e la conferma "
                 "separata inviata al nuovo indirizzo. Il link è monouso e scade tra 24 ore. "
                 "Se non hai richiesto tu la modifica, non autorizzare e contatta la tua associazione."
+            ),
+            html_body=build_system_email_html(
+                title="Autorizza la modifica dell’email", eyebrow="Sicurezza account",
+                organization_name=resolve_club_display_name(member.organization),
+                body="È stata richiesta la modifica dell’indirizzo email della tua area riservata. Autorizzala dalla casella attuale con il pulsante qui sotto. La modifica sarà applicata soltanto dopo questa autorizzazione e la conferma separata inviata al nuovo indirizzo.",
+                cta_url=link, cta_label="Autorizza la modifica",
+                footer="Il link è personale, monouso e scade tra 24 ore. Se non hai richiesto tu la modifica, non autorizzare e contatta la tua associazione.",
             ),
             sender=build_sender_payload(mode="association", association=member.organization),
             meta={"member_id": member.id, "contact_change_id": change_request.id},
@@ -1007,14 +1029,17 @@ def list_member_bookings(
         .filter(
             FormModel.association_id == member.org_id,
             FormModel.is_active.is_(True),
+            (FormModel.member_booking_visibility == "permanent") | (
+                (FormModel.member_booking_visibility == "until") &
+                (FormModel.member_booking_visible_until >= today)
+            ),
             (FormModel.create_booking.is_(True)) | (FormModel.booking_enabled.is_(True)) | (FormModel.form_type == "booking"),
             (FormModel.booking_event_date.is_(None)) | (FormModel.booking_event_date >= today),
         )
         .order_by(FormModel.id.desc())
-        .limit(10)
         .all()
     )
-    if not org or not org.is_active or not org.communications_enabled:
+    if not org or org.deleted_at is not None or not org.is_active or not org.communications_enabled:
         available_forms = []
     org_slug = org.slug if org else None
     return {
@@ -1137,6 +1162,7 @@ def api_auth_login(request: Request, email: str = Form(...), password: str = For
                     f"Clicca qui per accedere alla tua area riservata: {link}\n\n"
                     f"Il link scade tra {settings.LOGIN_TOKEN_EXPIRE_MINUTES} minuti."
                 ),
+                html_body=build_member_access_email_html(member, link),
                 sender=build_sender_payload(
                     mode="association",
                     association=member.organization,

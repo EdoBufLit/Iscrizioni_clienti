@@ -1,3 +1,4 @@
+import { renewalLaunchAvailable } from "../lib/renewalAvailability";
 import {
   type ChangeEvent,
   type DragEvent,
@@ -1227,7 +1228,7 @@ const Iscrizione = () => {
             <p className="mx-auto mt-4 max-w-3xl text-base leading-7 text-[var(--theme-text-muted)] sm:mt-5 sm:text-lg">
               Compila i dati, aggiungi i documenti e controlla il riepilogo prima di inviare.
             </p>
-            {step === 1 ? (
+            {step === 1 && renewalLaunchAvailable() ? (
               <button type="button" className="btn-secondary mt-4" onClick={() => setRenewalMode(true)}>
                 Già socio? Rinnova la tessera
               </button>

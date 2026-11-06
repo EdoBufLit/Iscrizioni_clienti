@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import EmailTemplate
+from app.services.managed_renewal_email import MANAGED_RENEWAL_MARKER, canonical_renewal_preset_html, refresh_untouched_system_renewal_templates
 
 
 EMAIL_TEMPLATE_CHANNEL = "email"
@@ -286,6 +287,7 @@ def _system_template(
     subject: str,
     body_text: str,
 ) -> dict[str, str]:
+    markup = canonical_renewal_preset_html(subject, body_text) if template_type == EMAIL_TEMPLATE_TYPE_RENEWAL_REMINDER else plain_text_to_html(body_text)
     return {
         "name": name,
         "category": category,
@@ -293,8 +295,8 @@ def _system_template(
         "editor_status": EMAIL_EDITOR_STATUS_READY,
         "subject": subject,
         "body_text": body_text,
-        "body_html": plain_text_to_html(body_text),
-        "compiled_html": plain_text_to_html(body_text),
+        "body_html": markup,
+        "compiled_html": markup,
     }
 
 
@@ -768,6 +770,8 @@ def decorate_rendered_email(
     linked_form: Any = None,
 ) -> RenderedTemplateContent:
     resolved_design = normalize_email_design(design)
+    if MANAGED_RENEWAL_MARKER in (rendered.body_html or "") and resolved_design == normalize_email_design(None) and linked_form is None:
+        return rendered
     accent_color = resolved_design["accent_color"]
     button_color = resolved_design["button_color"] or accent_color
     logo_url = "" if resolved_design["hide_logo"] else (resolved_design["logo_url"] or _normalize_text(getattr(association, "logo_url", None)))
@@ -1032,6 +1036,7 @@ def decorate_rendered_email(
 
 
 def seed_system_email_templates(db: Session) -> int:
+    refresh_untouched_system_renewal_templates(db.connection())
     existing_names = {
         row[0]
         for row in db.query(EmailTemplate.name)

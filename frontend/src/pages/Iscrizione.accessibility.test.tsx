@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import Iscrizione from "./Iscrizione";
 
@@ -16,6 +16,7 @@ vi.mock("../lib/api", () => ({
 }));
 
 describe("Iscrizione accessibility", () => {
+  afterEach(() => vi.useRealTimers());
   beforeEach(() => {
     searchMunicipalities.mockResolvedValue([]);
     fetchOrganizationDetail.mockResolvedValue({
@@ -193,4 +194,12 @@ describe("Iscrizione accessibility", () => {
     expect(annual).toHaveAttribute("aria-checked", "false");
     expect(temporary).toHaveAttribute("aria-checked", "true");
   });
+  it("non propone l’ingresso al rinnovo prima del primo gennaio 2027", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-12-31T22:59:59Z"));
+    render(<MemoryRouter initialEntries={["/associazioni/demo/iscrizione"]}><Routes><Route path="/associazioni/:slug/iscrizione" element={<Iscrizione />} /></Routes></MemoryRouter>);
+    await screen.findByRole("heading", { name: "Diventa socio" });
+    expect(screen.queryByRole("button", { name: "Già socio? Rinnova la tessera" })).not.toBeInTheDocument();
+  });
+
 });

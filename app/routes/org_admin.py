@@ -74,6 +74,7 @@ from app.models_affiliation import (
 )
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.system_email_layout import build_system_email_html
+from app.services.member_access_email import build_member_access_email_html
 from app.services.file_deletion import enqueue_file_deletion
 from app.services.csv_safety import neutralize_csv_formula
 from app.services.member_search import normalize_member_search, search_member_page
@@ -1643,6 +1644,7 @@ def _send_member_magic_link(
                 f"Clicca qui per accedere alla tua area riservata: {link}\n\n"
                 f"Il link scade tra {settings.LOGIN_TOKEN_EXPIRE_MINUTES} minuti."
             ),
+            html_body=build_member_access_email_html(member, link, registered=True),
             sender=build_sender_payload(
                 mode="association",
                 association=member.organization,
@@ -3138,6 +3140,8 @@ class CreateAssociationFormBody(BaseModel):
     notification_email: Optional[EmailStr] = None
     allow_multiple_submissions: bool = True
     form_type: str = Field(default="generic", max_length=40)
+    member_booking_visibility: Optional[str] = Field(default="hidden", max_length=16)
+    member_booking_visible_until: Optional[date] = None
     booking_enabled: bool = False
     booking_requires_manual_confirmation: bool = True
     booking_success_message_override: Optional[str] = None
@@ -3184,6 +3188,8 @@ class UpdateAssociationFormBody(BaseModel):
     notification_email: Optional[EmailStr] = None
     allow_multiple_submissions: bool = True
     form_type: str = Field(default="generic", max_length=40)
+    member_booking_visibility: Optional[str] = Field(default=None, max_length=16)
+    member_booking_visible_until: Optional[date] = None
     booking_enabled: bool = False
     booking_requires_manual_confirmation: bool = True
     booking_success_message_override: Optional[str] = None
@@ -5672,6 +5678,12 @@ def create_referral_invite(
                 f"Apri questo link per completare la richiesta: {invite_url}\n\n"
                 "La richiesta viene verificata dal Super Admin prima dell'attivazione."
             ),
+            html_body=build_system_email_html(
+                title="Invito ad affiliare la tua associazione", eyebrow="Affiliazione ASSONAM",
+                organization_name=organization.name or "",
+                body=f"Hai ricevuto un invito ad affiliare '{organization_name}' su ASSONAM. Usa il pulsante per completare la richiesta. La richiesta viene verificata dal Super Admin prima dell’attivazione.",
+                cta_url=invite_url, cta_label="Completa la richiesta",
+            ),
             sender=build_sender_payload(
                 mode="association",
                 association=organization,
@@ -7914,6 +7926,8 @@ def create_association_form(
         notification_email=body.notification_email,
         allow_multiple_submissions=body.allow_multiple_submissions,
         form_type=body.form_type,
+        member_booking_visibility=body.member_booking_visibility,
+        member_booking_visible_until=body.member_booking_visible_until,
         booking_enabled=body.booking_enabled,
         booking_requires_manual_confirmation=body.booking_requires_manual_confirmation,
         booking_success_message_override=body.booking_success_message_override,
@@ -7993,6 +8007,8 @@ def update_association_form(
         notification_email=body.notification_email,
         allow_multiple_submissions=body.allow_multiple_submissions,
         form_type=body.form_type,
+        member_booking_visibility=body.member_booking_visibility,
+        member_booking_visible_until=body.member_booking_visible_until,
         booking_enabled=body.booking_enabled,
         booking_requires_manual_confirmation=body.booking_requires_manual_confirmation,
         booking_success_message_override=body.booking_success_message_override,

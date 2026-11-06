@@ -740,6 +740,7 @@ def _enqueue_outbound_fallback_email(
     try:
         from app.services.email_outbox import build_email_payload, enqueue_email
         from app.services.email_sender import build_sender_payload
+        from app.services.system_email_layout import build_system_email_html
 
         association = (
             db.query(Organization)
@@ -760,7 +761,7 @@ def _enqueue_outbound_fallback_email(
             subject=subject,
             payload=build_email_payload(
                 text_body=text_body,
-                html_body=f"<p>{html.escape(text_body).replace(chr(10), '<br>')}</p>",
+                html_body=build_system_email_html(title=subject, eyebrow="Comunicazione di servizio", organization_name=getattr(association, "name", "") or "", body=text_body),
                 sender=build_sender_payload(mode="association", association=association),
                 meta={
                     "whatsapp_message_id": pending_message.id,

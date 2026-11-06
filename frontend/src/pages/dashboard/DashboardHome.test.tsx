@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Outlet, Route, Routes } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../../lib/api";
 import type { DashboardContext } from "./DashboardLayout";
 import DashboardHome from "./DashboardHome";
@@ -11,7 +11,10 @@ vi.mock("../../components/cards/MemberCardPreview", () => ({ isMemberCardPreview
 const member: api.MemberProfile = { id: 1, first_name: "Anna", last_name: "Collaudo", email: "anna@example.test", phone: null, fiscal_code: null, status: "active", card_no: 123, card_status: "attiva", card_year: 2026, membership_type: "annual", joined_at: "2026-07-01", valid_until: "2027-01-01T00:00:00Z", card_verification_url: "https://assonam.it/v/fixture", organization: { id: 2, name: "Club Collaudo", slug: "club" } };
 function mount(user = member, reloadProfile = vi.fn(), offline = false) { const context: DashboardContext = { user, loading: false, profileError: null, reloadProfile, offline }; return render(<MemoryRouter><Routes><Route element={<Outlet context={context} />}><Route path="*" element={<DashboardHome />} /></Route></Routes></MemoryRouter>); }
 const term2027: api.AnnualMembershipTerm = { id: 9, membership_year: 2027, starts_on: "2027-01-01", valid_through: "2028-01-01", status: "due", fee_amount: 30, currency: "EUR", card_no: null, card_year: null, issued_at: null, payment: null };
+afterEach(() => vi.useRealTimers());
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-12-31T23:00:00Z"));
   vi.resetAllMocks();
   vi.mocked(api.fetchMemberMembership).mockResolvedValue({ current: null, renewal: null, can_renew: false } as api.MemberMembershipResponse);
   vi.mocked(api.fetchMemberNotifications).mockResolvedValue({ items: [], unread_count: 0 });
@@ -108,4 +111,21 @@ describe("Riepilogo socio", () => {
     expect(api.createMemberRenewalCheckout).toHaveBeenCalledExactlyOnceWith(9);
     expect(screen.getByRole("button", { name: "Completa rinnovo 2027" })).toBeEnabled();
   });
+  it("prima del lancio non consente nuovi rinnovi e conserva leggibili le pratiche già aperte", async () => {
+    vi.setSystemTime(new Date("2026-12-31T22:59:59Z"));
+    vi.mocked(api.fetchMemberMembership).mockResolvedValue({ current: null, renewal: { ...term2027, status: "payment_pending" }, can_renew: true, renewal_year: 2027, renewal_checkout_available: true, renewal_opens_on: "2027-01-01", is_account_only: true });
+    mount({ ...member, status: "expired" });
+    await screen.findByRole("heading", { name: "Stato del rinnovo" });
+    expect(screen.queryByRole("button", { name: /Rinnova tessera|Completa rinnovo/ })).not.toBeInTheDocument();
+    expect(api.requestMemberRenewal).not.toHaveBeenCalled();
+    expect(api.createMemberRenewalCheckout).not.toHaveBeenCalled();
+  });
+  it("comunica l'apertura ai soci scaduti senza proporre l'avvio anticipato", async () => {
+    vi.setSystemTime(new Date("2026-11-05T12:00:00Z"));
+    vi.mocked(api.fetchMemberMembership).mockResolvedValue({ current: null, renewal: null, can_renew: false, renewal_year: 2027, renewal_opens_on: "2027-01-01", is_account_only: true });
+    mount({ ...member, status: "expired" });
+    expect(await screen.findByText("I rinnovi saranno disponibili dal 1 gennaio 2027.")).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Rinnova tessera|Completa rinnovo/ })).not.toBeInTheDocument();
+  });
+
 });

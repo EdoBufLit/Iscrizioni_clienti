@@ -232,7 +232,11 @@ def test_manual_initial_payment_date_and_retry_keep_ledgers_equal(memory_db):
     assert db.query(MembershipPayment).one().confirmed_at.date() == date(2026, 1, 5)
 
 
-def test_cancel_only_unpaid_order_and_releases_annual_block(memory_db):
+def test_cancel_only_unpaid_order_and_releases_annual_block(memory_db, monkeypatch):
+    import sys
+    from tests.test_annual_renewals import freeze_renewal_clock
+    clock = freeze_renewal_clock(monkeypatch)
+    monkeypatch.setattr(sys.modules[__name__], "datetime", clock)
     from app.services.temporary_memberships import cancel_purchase
     from app.services.renewals import request_renewal
     from app.services.annual_memberships import sync_annual_membership_term

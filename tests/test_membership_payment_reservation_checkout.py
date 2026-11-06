@@ -190,6 +190,10 @@ def test_delayed_pending_webhook_does_not_regress_completed_payment(client, db, 
 
 @pytest.mark.parametrize("manually_issued_first", [False, True])
 def test_renewal_reserves_and_consumes_target_year_without_replacing_current_card(db, monkeypatch, manually_issued_first):
+    import sys
+    from tests.test_annual_renewals import freeze_renewal_clock
+    clock = freeze_renewal_clock(monkeypatch, current=datetime(2027, 12, 1, 12))
+    monkeypatch.setattr(sys.modules[__name__], "datetime", clock)
     org = _org(db, cards=0)
     year = datetime.utcnow().year
     member, _ = _build_member_and_source(db, org=org, year=year, card_no=88000)

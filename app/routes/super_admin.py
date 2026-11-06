@@ -44,6 +44,7 @@ from app.models import (
     RechargeRequest,
 )
 from app.services.email_outbox import build_email_payload, enqueue_email
+from app.services.system_email_layout import build_system_email_html
 from app.services.file_deletion import enqueue_file_deletion
 from app.security import get_password_hash, hash_api_key, verify_password
 from app.utils import generate_token, hash_token, save_upload_file
@@ -5093,7 +5094,13 @@ def test_email(
             f"del portale ASSO.N.A.M. funziona correttamente.\n\n"
             f"Server: {settings.BASE_URL}\n"
                 f"SMTP Host: {settings.SMTP_HOST or '(missing)'}"
-            )
+            ),
+            html_body=build_system_email_html(
+                title="Email di test ricevuta", eyebrow="Configurazione email",
+                body="La ricezione di questo messaggio conferma che la configurazione email del portale ASSO.N.A.M. funziona correttamente.",
+                cta_url=settings.BASE_URL, cta_label="Apri il portale",
+                details=[("SMTP Host", settings.SMTP_HOST or "(missing)")],
+            ),
         ),
         priority=9,
     )

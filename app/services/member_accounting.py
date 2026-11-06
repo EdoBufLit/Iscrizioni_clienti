@@ -502,6 +502,9 @@ def guard_open_checkout(db, target):
 
 
 def allocate(db, *, org_id, receipt_id, admin_id, version, items):
+    if any(str(item.get("target_key", "")).startswith("renewal:") for item in items):
+        from app.services.renewal_availability import require_renewals_open
+        require_renewals_open()
     # Bridge only these obligations. Importing a tenant's whole history during
     # every allocation would make a small reconciliation grow with its archive.
     sync_legacy_receipts(db, org_id=org_id, admin_id=admin_id, target_keys=[item["target_key"] for item in items], limit=None)

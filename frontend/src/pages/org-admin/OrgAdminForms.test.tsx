@@ -7,7 +7,7 @@ import { OrgAdminFormsWorkspace } from "./OrgAdminForms";
 
 const mocks = vi.hoisted(() => ({
   summaries: vi.fn(), duplicate: vi.fn(), active: vi.fn(), remove: vi.fn(),
-  detail: vi.fn(), create: vi.fn(), createField: vi.fn(), clipboard: vi.fn(),
+  detail: vi.fn(), update: vi.fn(), create: vi.fn(), createField: vi.fn(), clipboard: vi.fn(),
   admin: { id: 1, organization: { slug: "club-collaudo", name: "Club Collaudo" } },
 }));
 vi.mock("../../lib/api", async original => ({
@@ -17,6 +17,7 @@ vi.mock("../../lib/api", async original => ({
   setOrgAdminFormActive: (...args: unknown[]) => mocks.active(...args),
   deleteOrgAdminForm: (...args: unknown[]) => mocks.remove(...args),
   fetchOrgAdminForm: (...args: unknown[]) => mocks.detail(...args),
+  updateOrgAdminForm: (...args: unknown[]) => mocks.update(...args),
   createOrgAdminForm: (...args: unknown[]) => mocks.create(...args),
   createOrgAdminFormField: (...args: unknown[]) => mocks.createField(...args),
   fetchOrgAdminBookingEventSeries: async () => ({ items: [] }),
@@ -206,4 +207,27 @@ describe("Form pubblici: azioni delle schede", () => {
     expect(mocks.active).not.toHaveBeenCalled();
     expect(mocks.remove).not.toHaveBeenCalled();
   });
+});
+
+
+it("pubblica nell’area socio solo dopo scelta esplicita e richiede la data per la scadenza", async () => {
+  const form = { ...first, fields: [], booking_enabled: true, create_booking: true, visibility: "public", actions: {}, member_booking_visibility: "hidden" };
+  mocks.detail.mockResolvedValue({ form });
+  mocks.update.mockResolvedValue({ form });
+  showPage();
+  const card = (await screen.findByRole("heading", { name: first.title })).closest("article")!;
+  fireEvent.click(within(card).getByRole("button", { name: "Modifica nel Builder" }));
+  fireEvent.click(await screen.findByRole("button", { name: /Impostazioni/ }));
+  const visible = await screen.findByRole("checkbox", { name: /Mostra questa prenotazione nell’area socio/ });
+  expect(visible).not.toBeChecked();
+  expect(screen.queryByLabelText("Durata visibilità")).not.toBeInTheDocument();
+  fireEvent.click(visible);
+  expect(screen.getByLabelText("Durata visibilità")).toHaveValue("permanent");
+  fireEvent.change(screen.getByLabelText("Durata visibilità"), { target: { value: "until" } });
+  fireEvent.click(screen.getByRole("button", { name: "Salva modifiche" }));
+  expect(await screen.findByText("Data richiesta")).toBeInTheDocument();
+  expect(mocks.update).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByLabelText(/Ultimo giorno visibile/), { target: { value: "2027-01-31" } });
+  fireEvent.click(screen.getByRole("button", { name: "Salva modifiche" }));
+  await waitFor(() => expect(mocks.update).toHaveBeenCalledWith(10, expect.objectContaining({ member_booking_visibility: "until", member_booking_visible_until: "2027-01-31" })));
 });

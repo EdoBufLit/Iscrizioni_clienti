@@ -1,5 +1,6 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import AccountingDocumentPreviewModal from "../../../components/accounting/AccountingDocumentPreviewModal";
+import ModalShell from "../../../components/ui/ModalShell";
 import ConfirmModal from "../../../components/ui/ConfirmModal";
 import Skeleton from "../../../components/ui/Skeleton";
 import { useToast } from "../../../components/ui/ToastProvider";
@@ -46,28 +47,11 @@ const formatBytes = (value: number | null | undefined) => {
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-type Props = { onAuthError: () => void };
+type Props = { onAuthError: () => void; createRequest?: number };
 
 type DeleteTarget =
   | { type: "folder" | "category" | "document"; id: number; label: string }
   | null;
-
-type WorkspaceStat = {
-  label: string;
-  value: string;
-  toneClassName: string;
-};
-
-const WorkspaceStatCard = ({ stat }: { stat: WorkspaceStat }) => (
-  <div className="rounded-3xl border border-neutral-200 bg-white/90 p-5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-    <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-neutral-400">
-      {stat.label}
-    </p>
-    <p className={`mt-3 text-3xl font-extrabold tracking-tight ${stat.toneClassName}`}>
-      {stat.value}
-    </p>
-  </div>
-);
 
 const MetadataTile = ({
   label,
@@ -102,7 +86,7 @@ const StatusChip = ({
   </span>
 );
 
-const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
+const SuperAdminAccountingWorkspace = ({ onAuthError, createRequest = 0 }: Props) => {
   const { showToast } = useToast();
 
   const [targets, setTargets] = useState<SuperAdminDocumentTarget[]>([]);
@@ -117,6 +101,14 @@ const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
     "idle" | "loading" | "success" | "error"
   >("idle");
   const [loading, setLoading] = useState(true);
+  const [ready, setReady] = useState(false);
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [documentEditorOpen, setDocumentEditorOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const loadSequence = useRef(0);
+  const documentSaveLock = useRef(false);
+  const [documentSaving, setDocumentSaving] = useState(false);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [filterOrgId, setFilterOrgId] = useState<number | "">("");
@@ -156,31 +148,26 @@ const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
     [documents, selectedDocumentId],
   );
 
-  const workspaceStats = useMemo<WorkspaceStat[]>(
-    () => [
-      {
-        label: "Associazioni abilitate",
-        value: String(enabledTargets.length),
-        toneClassName: "text-emerald-600",
-      },
-      {
-        label: "Cartelle",
-        value: String(folders.length),
-        toneClassName: "text-neutral-900",
-      },
-      {
-        label: "Categorie",
-        value: String(categories.length),
-        toneClassName: "text-neutral-900",
-      },
-      {
-        label: "Documenti filtrati",
-        value: String(documents.length),
-        toneClassName: "text-brand",
-      },
-    ],
-    [categories.length, documents.length, enabledTargets.length, folders.length],
-  );
+  const previousCreateRequest = useRef(createRequest);
+  useEffect(() => {
+    if (createRequest !== previousCreateRequest.current) {
+      previousCreateRequest.current = createRequest;
+      resetDocumentForm();
+      setDocumentEditorOpen(true);
+    }
+  }, [createRequest]);
+
+  const returnToDetail = useRef(false);
+  const restoreDetail = () => {
+    if (returnToDetail.current) setDetailOpen(true);
+    returnToDetail.current = false;
+  };
+  const requestDelete = (target: DeleteTarget) => {
+    returnToDetail.current = detailOpen;
+    setSetupOpen(false);
+    setDetailOpen(false);
+    setDeleteTarget(target);
+  };
 
   const resetFolderForm = () =>
     setFolderForm({ id: null, name: "", year: "", isActive: true });
@@ -200,6 +187,9 @@ const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
     });
 
   const applyDocumentToForm = (document: SuperAdminAccountingDocument) => {
+    returnToDetail.current = detailOpen;
+    setDetailOpen(false);
+    setDocumentEditorOpen(true);
     setDocumentForm({
       id: document.id,
       orgId: document.organization?.id ? String(document.organization.id) : "",
@@ -214,6 +204,7 @@ const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
   };
 
   const loadWorkspace = async () => {
+    const sequence = ++loadSequence.current;
     try {
       setLoading(true);
       const [targetsPayload, foldersPayload, categoriesPayload, documentsPayload] =
@@ -228,6 +219,8 @@ const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
             categoryId: filterCategoryId === "" ? undefined : filterCategoryId,
           }),
         ]);
+      if (sequence !== loadSequence.current) return;
+      setReady(true);
       setTargets(targetsPayload.items);
       setFolders(foldersPayload.items);
       setCategories(categoriesPayload.items);
@@ -239,6 +232,7 @@ const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
       );
       setError("");
     } catch (err) {
+      if (sequence !== loadSequence.current) return;
       if (err instanceof AuthError) {
         onAuthError();
         return;
@@ -249,7 +243,7 @@ const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
           : "Errore nel caricamento workspace accounting.",
       );
     } finally {
-      setLoading(false);
+      if (sequence === loadSequence.current) setLoading(false);
     }
   };
 
@@ -344,6 +338,7 @@ const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
   };
 
   const saveDocument = async () => {
+    if (documentSaveLock.current) return;
     try {
       if (
         !documentForm.orgId ||
@@ -363,6 +358,8 @@ const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
         return;
       }
 
+      documentSaveLock.current = true;
+      setDocumentSaving(true);
       if (documentForm.id) {
         const payload = await updateSuperAdminAccountingDocument(documentForm.id, {
           orgId: Number(documentForm.orgId),
@@ -390,6 +387,8 @@ const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
       }
 
       resetDocumentForm();
+      setDocumentEditorOpen(false);
+      restoreDetail();
       await loadWorkspace();
       showToast({
         title: "Documenti",
@@ -398,6 +397,9 @@ const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
       });
     } catch (err) {
       handleApiError("Documenti", err);
+    } finally {
+      documentSaveLock.current = false;
+      setDocumentSaving(false);
     }
   };
 
@@ -414,6 +416,7 @@ const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
       }
       setConfirmState("success");
       setDeleteTarget(null);
+      returnToDetail.current = false;
       await loadWorkspace();
       showToast({
         title: "Eliminazione",
@@ -445,9 +448,9 @@ const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
     }
   };
 
-  if (loading) {
+  if (loading && !ready) {
     return (
-      <div className="space-y-8">
+      <div className="sa-accounting-workspace space-y-8">
         <Skeleton className="h-48 w-full rounded-3xl" />
         <Skeleton className="h-80 w-full rounded-3xl" />
         <Skeleton className="h-[32rem] w-full rounded-3xl" />
@@ -456,40 +459,156 @@ const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
   }
 
   return (
-    <div className="space-y-8">
-      {error ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50/80 px-5 py-4 text-sm font-semibold text-red-700">
-          {error}
-        </div>
-      ) : null}
-
-      <section className="surface overflow-hidden">
-        <div className="border-b border-neutral-100 bg-[linear-gradient(135deg,rgba(13,148,136,0.08),rgba(255,255,255,0.92),rgba(15,23,42,0.03))] px-7 py-7">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <div className="max-w-3xl">
-              <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-brand">
-                Workspace accounting
-              </p>
-              <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-neutral-900">
-                Archivio e distribuzione documenti contabili
-              </h2>
-              <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-neutral-500">
-                Gestisci cartelle, categorie, documenti e link condivisi da un unico
-                workspace. La preview web ora usa un flusso inline coerente con il resto
-                del pannello.
-              </p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:w-[34rem]">
-              {workspaceStats.map((stat) => (
-                <WorkspaceStatCard key={stat.label} stat={stat} />
-              ))}
-            </div>
+    <div className="sa-accounting-workspace space-y-4" aria-busy={loading}>
+      {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+      <div className="sa-accounting-filterbar">
+        <input type="search" className="sa-input" aria-label="Cerca documento, file o associazione" placeholder="Cerca documento o associazione" value={query} onChange={event => setQuery(event.target.value)} />
+        <button type="button" className="btn-ghost" onClick={() => setFiltersOpen(true)}>Filtri{[filterOrgId, filterFolderId, filterCategoryId].filter(value => value !== "").length ? " attivi" : ""}</button>
+        <button type="button" className="btn-ghost" onClick={() => setSetupOpen(true)}>Gestisci</button>
+      </div>
+      <section className="sa-accounting-archive surface overflow-hidden">
+        <div className="sa-documents-archive-header flex flex-col gap-3 border-b border-neutral-100 px-7 py-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-neutral-400">
+              Archivio
+            </p>
+            <h3 className="mt-2 text-lg font-bold tracking-tight text-neutral-900">
+              Documenti contabili
+            </h3>
           </div>
+          <span className="rounded-full bg-neutral-100 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-neutral-500">
+            {documents.length} record
+          </span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table aria-label="Archivio documenti contabili" className="sa-accounting-table w-full min-w-[980px] text-left">
+            <thead>
+              <tr className="border-b border-neutral-100 bg-neutral-50/60">
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
+                  Documento
+                </th>
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
+                  Associazione
+                </th>
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
+                  Cartella / categoria
+                </th>
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
+                  Stato
+                </th>
+                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
+                  Data
+                </th>
+                <th className="px-5 py-4 text-right text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
+                  Azioni
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-100">
+              {documents.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="px-5 py-14 text-center text-sm font-medium text-neutral-400"
+                  >
+                    Nessun documento accounting.
+                  </td>
+                </tr>
+              ) : (
+                documents.map((document) => {
+                  const isSelected = selectedDocumentId === document.id;
+                  return (
+                    <tr
+                      key={document.id}
+                      className={isSelected ? "bg-brand/5" : "hover:bg-neutral-50/50"}
+                    >
+                      <td data-label="Documento" className="px-5 py-4">
+                        <button
+                          type="button"
+                          className="sa-accounting-document-title text-left"
+                          onClick={() => { setSelectedDocumentId(document.id); setDetailOpen(true); }}
+                        >
+                          <p className="sa-document-row-title text-sm font-bold text-neutral-900">
+                            {document.title}
+                          </p>
+                          <p className="sa-document-row-file mt-1 text-xs font-medium text-neutral-500">
+                            {document.original_filename} · {formatBytes(document.file_size)}
+                          </p>
+                        </button>
+                      </td>
+                      <td data-label="Associazione" className="px-5 py-4 text-sm font-medium text-neutral-600">
+                        <span className="sa-document-row-meta">{document.organization?.name ?? "-"}</span>
+                      </td>
+                      <td data-label="Cartella / categoria" className="px-5 py-4 text-sm font-medium text-neutral-600">
+                        <span className="sa-document-row-meta">{document.folder?.name ?? "-"} · {document.category?.name ?? "-"}</span>
+                      </td>
+                      <td data-label="Stato" className="px-5 py-4">
+                        <div className="flex flex-wrap gap-2">
+                          <StatusChip
+                            label={document.preview_available ? "Preview" : "No preview"}
+                            active={document.preview_available}
+                          />
+                          <StatusChip
+                            label={document.is_share_enabled ? "Share" : "Privato"}
+                            active={document.is_share_enabled}
+                          />
+                        </div>
+                      </td>
+                      <td data-label="Data" className="px-5 py-4 text-sm font-medium text-neutral-600">
+                        {formatDateTime(document.created_at)}
+                      </td>
+                      <td data-label="Azioni" className="px-5 py-4 text-right">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            className="btn-ghost !px-3 !py-1.5 !text-[10px] font-bold uppercase tracking-widest"
+                            onClick={() => { setDetailOpen(false); setPreviewDocument(document); }}
+                            disabled={!document.preview_available}
+                          >
+                            Preview
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-ghost !px-3 !py-1.5 !text-[10px] font-bold uppercase tracking-widest"
+                            onClick={() => applyDocumentToForm(document)}
+                            data-row-secondary="true"
+                          >
+                            Modifica
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-2xl border border-red-200 bg-red-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-red-700"
+                            data-row-secondary="true"
+                            onClick={() =>
+                              requestDelete({
+                                type: "document",
+                                id: document.id,
+                                label: document.title,
+                              })
+                            }
+                          >
+                            Elimina
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
       </section>
-      <section className="grid gap-8 xl:grid-cols-[minmax(0,1.12fr)_minmax(360px,0.88fr)]">
-        <div className="space-y-8">
-          <section className="surface overflow-hidden">
+      <ModalShell open={filtersOpen} title="Filtri documenti contabili" onClose={() => setFiltersOpen(false)} contentClassName="sa-documents-dialog" footer={<button type="button" className="btn-primary" onClick={() => setFiltersOpen(false)}>Mostra risultati</button>}>
+        <div className="grid gap-4">
+          <label>Associazione<select className="sa-select w-full mt-2" aria-label="Filtra associazione" value={filterOrgId} onChange={event => setFilterOrgId(event.target.value ? Number(event.target.value) : "")}><option value="">Tutte le associazioni</option>{enabledTargets.map(target => <option key={target.id} value={target.id}>{target.name}</option>)}</select></label>
+          <label>Cartella<select className="sa-select w-full mt-2" aria-label="Filtra cartella" value={filterFolderId} onChange={event => setFilterFolderId(event.target.value ? Number(event.target.value) : "")}><option value="">Tutte le cartelle</option>{folders.map(folder => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></label>
+          <label>Categoria<select className="sa-select w-full mt-2" aria-label="Filtra categoria" value={filterCategoryId} onChange={event => setFilterCategoryId(event.target.value ? Number(event.target.value) : "")}><option value="">Tutte le categorie</option>{categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+          <button type="button" className="btn-ghost" onClick={() => { setFilterOrgId(""); setFilterFolderId(""); setFilterCategoryId(""); setQuery(""); }}>Azzera filtri</button>
+        </div>
+      </ModalShell>
+      <ModalShell open={setupOpen} title="Cartelle e categorie" onClose={() => setSetupOpen(false)} sizeClassName="max-w-4xl" contentClassName="sa-documents-dialog"><div className="sa-accounting-editor"><section className="surface overflow-hidden">
             <div className="border-b border-neutral-100 px-7 py-6">
               <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-neutral-400">
                 Setup accounting
@@ -628,7 +747,7 @@ const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
                     {folders.length}
                   </span>
                 </div>
-                <div className="space-y-3">
+                <div className="sa-accounting-taxonomy-list space-y-3">
                   {folders.length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-neutral-300 bg-neutral-50 px-4 py-8 text-center text-sm font-medium text-neutral-500">
                       Nessuna cartella disponibile.
@@ -680,7 +799,7 @@ const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
                               type="button"
                               className="rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold uppercase tracking-widest text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
                               onClick={() =>
-                                setDeleteTarget({ type: "folder", id: folder.id, label: folder.name })
+                                requestDelete({ type: "folder", id: folder.id, label: folder.name })
                               }
                               disabled={folder.is_default}
                             >
@@ -706,7 +825,7 @@ const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
                     {categories.length}
                   </span>
                 </div>
-                <div className="space-y-3">
+                <div className="sa-accounting-taxonomy-list space-y-3">
                   {categories.length === 0 ? (
                     <div className="rounded-2xl border border-dashed border-neutral-300 bg-neutral-50 px-4 py-8 text-center text-sm font-medium text-neutral-500">
                       Nessuna categoria disponibile.
@@ -756,7 +875,7 @@ const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
                               type="button"
                               className="rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold uppercase tracking-widest text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
                               onClick={() =>
-                                setDeleteTarget({
+                                requestDelete({
                                   type: "category",
                                   id: category.id,
                                   label: category.name,
@@ -774,8 +893,8 @@ const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
                 </div>
               </div>
             </div>
-          </section>
-          <section className="surface overflow-hidden">
+          </section></div></ModalShell>
+      <ModalShell open={documentEditorOpen} title={documentForm.id ? "Modifica documento contabile" : "Nuovo documento contabile"} onClose={() => { if (!documentSaving) { setDocumentEditorOpen(false); restoreDetail(); } }} closeDisabled={documentSaving} closeOnEscape={!documentSaving} closeOnOverlay={!documentSaving} sizeClassName="max-w-3xl" contentClassName="sa-documents-dialog"><div className="sa-accounting-editor"><section className="surface overflow-hidden">
             <div className="border-b border-neutral-100 px-7 py-6">
               <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-neutral-400">
                 Documento accounting
@@ -793,6 +912,7 @@ const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
               <div className="grid gap-4 lg:grid-cols-3">
                 <select
                   className="premium-select w-full"
+                  aria-label="Associazione del documento contabile"
                   value={documentForm.orgId}
                   onChange={(event) =>
                     setDocumentForm((current) => ({ ...current, orgId: event.target.value }))
@@ -807,6 +927,7 @@ const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
                 </select>
                 <select
                   className="premium-select w-full"
+                  aria-label="Cartella del documento contabile"
                   value={documentForm.folderId}
                   onChange={(event) =>
                     setDocumentForm((current) => ({ ...current, folderId: event.target.value }))
@@ -821,6 +942,7 @@ const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
                 </select>
                 <select
                   className="premium-select w-full"
+                  aria-label="Categoria del documento contabile"
                   value={documentForm.categoryId}
                   onChange={(event) =>
                     setDocumentForm((current) => ({
@@ -932,96 +1054,13 @@ const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
                     Annulla
                   </button>
                 ) : null}
-                <button type="button" className="btn-primary" onClick={() => void saveDocument()}>
-                  {documentForm.id ? "Aggiorna documento" : "Carica documento"}
+                <button type="button" className="btn-primary" disabled={documentSaving} onClick={() => void saveDocument()}>
+                  {documentSaving ? "Salvataggio…" : documentForm.id ? "Aggiorna documento" : "Carica documento"}
                 </button>
               </div>
             </div>
-          </section>
-        </div>
-
-        <aside className="space-y-8">
-          <section className="surface overflow-hidden">
-            <div className="border-b border-neutral-100 px-6 py-5">
-              <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-neutral-400">
-                Filtri
-              </p>
-              <h3 className="mt-2 text-lg font-bold tracking-tight text-neutral-900">
-                Archivio accounting
-              </h3>
-            </div>
-            <div className="grid gap-4 px-6 py-6">
-              <input
-                className="w-full rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm font-medium text-neutral-800"
-                placeholder="Cerca documento, file o associazione..."
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-              <select
-                className="premium-select w-full"
-                value={filterOrgId}
-                onChange={(event) =>
-                  setFilterOrgId(event.target.value ? Number(event.target.value) : "")
-                }
-              >
-                <option value="">Tutte le associazioni</option>
-                {enabledTargets.map((target) => (
-                  <option key={target.id} value={target.id}>
-                    {target.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="premium-select w-full"
-                value={filterFolderId}
-                onChange={(event) =>
-                  setFilterFolderId(event.target.value ? Number(event.target.value) : "")
-                }
-              >
-                <option value="">Tutte le cartelle</option>
-                {folders.map((folder) => (
-                  <option key={folder.id} value={folder.id}>
-                    {folder.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="premium-select w-full"
-                value={filterCategoryId}
-                onChange={(event) =>
-                  setFilterCategoryId(event.target.value ? Number(event.target.value) : "")
-                }
-              >
-                <option value="">Tutte le categorie</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-neutral-200 bg-neutral-50/70 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-400">
-                  Risultati
-                </p>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-bold text-neutral-900">{documents.length}</span>
-                  <button
-                    type="button"
-                    className="text-xs font-bold uppercase tracking-[0.2em] text-brand"
-                    onClick={() => {
-                      setQuery("");
-                      setFilterOrgId("");
-                      setFilterFolderId("");
-                      setFilterCategoryId("");
-                    }}
-                  >
-                    Reset
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
-          <section className="surface overflow-hidden">
+          </section></div></ModalShell>
+      <ModalShell open={detailOpen} title="Dettaglio documento contabile" onClose={() => setDetailOpen(false)} sizeClassName="max-w-2xl" contentClassName="sa-documents-dialog"><div className="sa-accounting-sidebar"><section className="surface overflow-hidden">
             <div className="border-b border-neutral-100 px-6 py-5">
               <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-neutral-400">
                 Dettaglio
@@ -1106,7 +1145,7 @@ const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
                     <button
                       type="button"
                       className="btn-ghost"
-                      onClick={() => setPreviewDocument(selectedDocument)}
+                      onClick={() => { returnToDetail.current = true; setDetailOpen(false); setPreviewDocument(selectedDocument); }}
                       disabled={!selectedDocument.preview_available}
                     >
                       Preview
@@ -1118,6 +1157,7 @@ const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
                     >
                       Modifica
                     </button>
+                    <button type="button" className="btn-ghost text-red-700" onClick={() => requestDelete({ type: "document", id: selectedDocument.id, label: selectedDocument.title })}>Elimina</button>
                   </div>
 
                   <div className="space-y-3">
@@ -1188,146 +1228,12 @@ const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
                 </div>
               )}
             </div>
-          </section>
-        </aside>
-      </section>
-      <section className="surface overflow-hidden">
-        <div className="flex flex-col gap-3 border-b border-neutral-100 px-7 py-5 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-neutral-400">
-              Archivio
-            </p>
-            <h3 className="mt-2 text-lg font-bold tracking-tight text-neutral-900">
-              Documenti contabili registrati
-            </h3>
-          </div>
-          <span className="rounded-full bg-neutral-100 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-            {documents.length} record
-          </span>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] text-left">
-            <thead>
-              <tr className="border-b border-neutral-100 bg-neutral-50/60">
-                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
-                  Documento
-                </th>
-                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
-                  Associazione
-                </th>
-                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
-                  Cartella / categoria
-                </th>
-                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
-                  Stato
-                </th>
-                <th className="px-5 py-4 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
-                  Data
-                </th>
-                <th className="px-5 py-4 text-right text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
-                  Azioni
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-neutral-100">
-              {documents.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="px-5 py-14 text-center text-sm font-medium text-neutral-400"
-                  >
-                    Nessun documento accounting.
-                  </td>
-                </tr>
-              ) : (
-                documents.map((document) => {
-                  const isSelected = selectedDocumentId === document.id;
-                  return (
-                    <tr
-                      key={document.id}
-                      className={isSelected ? "bg-brand/5" : "hover:bg-neutral-50/50"}
-                    >
-                      <td className="px-5 py-4">
-                        <button
-                          type="button"
-                          className="text-left"
-                          onClick={() => setSelectedDocumentId(document.id)}
-                        >
-                          <p className="text-sm font-bold text-neutral-900">
-                            {document.title}
-                          </p>
-                          <p className="mt-1 text-xs font-medium text-neutral-500">
-                            {document.original_filename} · {formatBytes(document.file_size)}
-                          </p>
-                        </button>
-                      </td>
-                      <td className="px-5 py-4 text-sm font-medium text-neutral-600">
-                        {document.organization?.name ?? "-"}
-                      </td>
-                      <td className="px-5 py-4 text-sm font-medium text-neutral-600">
-                        {document.folder?.name ?? "-"} · {document.category?.name ?? "-"}
-                      </td>
-                      <td className="px-5 py-4">
-                        <div className="flex flex-wrap gap-2">
-                          <StatusChip
-                            label={document.preview_available ? "Preview" : "No preview"}
-                            active={document.preview_available}
-                          />
-                          <StatusChip
-                            label={document.is_share_enabled ? "Share" : "Privato"}
-                            active={document.is_share_enabled}
-                          />
-                        </div>
-                      </td>
-                      <td className="px-5 py-4 text-sm font-medium text-neutral-600">
-                        {formatDateTime(document.created_at)}
-                      </td>
-                      <td className="px-5 py-4 text-right">
-                        <div className="flex justify-end gap-2">
-                          <button
-                            type="button"
-                            className="btn-ghost !px-3 !py-1.5 !text-[10px] font-bold uppercase tracking-widest"
-                            onClick={() => setPreviewDocument(document)}
-                            disabled={!document.preview_available}
-                          >
-                            Preview
-                          </button>
-                          <button
-                            type="button"
-                            className="btn-ghost !px-3 !py-1.5 !text-[10px] font-bold uppercase tracking-widest"
-                            onClick={() => applyDocumentToForm(document)}
-                          >
-                            Modifica
-                          </button>
-                          <button
-                            type="button"
-                            className="rounded-2xl border border-red-200 bg-red-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-red-700"
-                            onClick={() =>
-                              setDeleteTarget({
-                                type: "document",
-                                id: document.id,
-                                label: document.title,
-                              })
-                            }
-                          >
-                            Elimina
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+          </section></div></ModalShell>
 
       <AccountingDocumentPreviewModal
         document={previewDocument}
         open={previewDocument !== null}
-        onClose={() => setPreviewDocument(null)}
+        onClose={() => { setPreviewDocument(null); restoreDetail(); }}
         onDownload={(document) => downloadSuperAdminSharedDocument(document)}
         onOpenInNewTab={(document) => {
           window.open(document.open_url, "_blank", "noopener,noreferrer");
@@ -1346,6 +1252,7 @@ const SuperAdminAccountingWorkspace = ({ onAuthError }: Props) => {
         onClose={() => {
           setDeleteTarget(null);
           setConfirmState("idle");
+          restoreDetail();
         }}
         onConfirm={() => void confirmDelete()}
       />

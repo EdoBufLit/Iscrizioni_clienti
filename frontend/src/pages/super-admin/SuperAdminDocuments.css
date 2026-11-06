@@ -1,0 +1,149 @@
+/* Document management is contained by its available workspace, including tablets. */
+.sa-documents-page { grid-template-columns: minmax(0, 1fr); max-width: 100%; }
+.sa-documents-page > .sa-page-header { min-width: 0; max-width: 100%; }
+.sa-documents-counts { display: flex; flex-wrap: wrap; gap: .3rem 1rem; color: var(--sa-muted); font-size: .8rem; line-height: 1.5; }
+.sa-documents-counts strong { color: var(--sa-text); }
+.sa-documents-general { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+.sa-documents-archive-tools, .sa-accounting-filterbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem; padding: .75rem 1rem; }
+.sa-documents-archive-tools select { width: clamp(7rem, 25vw, 11rem); }
+.sa-accounting-filterbar { padding: 0; }
+.sa-document-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.sa-accounting-topbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem; }
+.sa-documents-dialog .sa-documents-compose, .sa-documents-dialog .sa-documents-detail { border: 0; box-shadow: none; border-radius: 0; background: transparent; }
+.sa-documents-dialog .sa-documents-detail > div:first-child { display: none; }
+.sa-documents-archive-header, .sa-accounting-archive .sa-documents-archive-header { padding: .875rem 1rem; flex-direction: row; align-items: center; }
+.sa-accounting-archive .sa-documents-archive-header > div > p { display: none; }
+.sa-accounting-archive .sa-documents-archive-header h3 { margin: 0; font-size: 1rem; }
+.sa-documents-page,
+.sa-documents-page :is(div, section, aside, form, label, button, input, select, textarea, table, td, th) {
+  min-width: 0;
+}
+.sa-documents-page :is(input, select, textarea) { max-width: 100%; }
+.sa-documents-page :is(p, h2, h3, h4, label, button, td) { overflow-wrap: anywhere; }
+.sa-documents-page :is(input[type="radio"], input[type="checkbox"]) { flex-shrink: 0; }
+.sa-documents-page input[type="file"] { width: 100%; }
+.sa-documents-page .truncate { white-space: normal; overflow: visible; text-overflow: clip; }
+.sa-documents-page .sa-kpi-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); }
+.sa-documents-page .sa-kpi { min-height: 5.5rem; padding: 1rem; gap: .65rem; }
+.sa-documents-layout { grid-template-columns: minmax(0, 1fr); align-items: start; }
+.sa-accounting-layout { grid-template-columns: minmax(0, 1fr); align-items: start; }
+.sa-documents-compose, .sa-documents-detail, .sa-accounting-editor, .sa-accounting-sidebar { container-type: inline-size; }
+.sa-documents-submit, .sa-documents-archive-header { flex-wrap: wrap; gap: 1rem; }
+.sa-documents-title { max-width: 100%; min-height: 2.75rem; }
+.sa-documents-detail h3[id] { scroll-margin-top: 6rem; }
+.sa-documents-page :is(.sa-documents-table, .sa-accounting-table) { min-width: 0; table-layout: fixed; }
+.sa-documents-table :is(th, td), .sa-accounting-table :is(th, td) { padding: 1rem; vertical-align: top; }
+.sa-documents-table th:first-child { width: 38%; }
+.sa-accounting-table th:first-child { width: 25%; }
+.sa-accounting-table th:last-child { width: 24%; }
+.sa-accounting-table td:last-child > div { flex-wrap: wrap; }
+.sa-accounting-taxonomy-list { max-height: 25rem; overflow-y: auto; overscroll-behavior: contain; padding-right: .25rem; }
+.sa-documents-page .sa-accounting-workspace > section:first-of-type > div {
+  background: var(--sa-panel);
+}
+.sa-documents-page .sa-accounting-workspace .bg-white\/90 { background: var(--sa-panel); }
+.sa-documents-page .modal-panel :is(.modal-shell-header, .modal-shell-header > div) { min-width: 0; }
+.sa-documents-page .modal-panel :is(h3, p) { overflow-wrap: anywhere; }
+.sa-documents-page .modal-panel iframe { min-height: 0; height: clamp(16rem, 58dvh, 44rem); }
+.sa-documents-page .modal-panel .modal-shell-body [class*="min-h-"] { min-height: 0; }
+.sa-documents-page .modal-panel img { max-height: 58dvh; }
+
+@media (min-width: 1280px) {
+  .sa-documents-layout { grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr); }
+  .sa-accounting-layout { grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr); }
+}
+@container (max-width: 620px) {
+  .sa-documents-compose .grid, .sa-accounting-editor .grid { grid-template-columns: minmax(0, 1fr); }
+  .sa-documents-compose .grid > [class*="col-span"] { grid-column: auto; }
+  .sa-accounting-editor [class*="lg:flex-row"] { flex-direction: column; align-items: stretch; }
+}
+@container (max-width: 420px) {
+  .sa-documents-detail .grid, .sa-accounting-sidebar .grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 1023px) {
+  .sa-documents-page :is(.sa-documents-table, .sa-accounting-table),
+  .sa-documents-page :is(.sa-documents-table, .sa-accounting-table) :is(tbody, tr, td) { display: block; width: 100%; }
+  .sa-documents-page :is(.sa-documents-table, .sa-accounting-table) thead { display: none; }
+  .sa-documents-page :is(.sa-documents-table, .sa-accounting-table) tbody tr { padding: .875rem 1rem; border-bottom: 1px solid var(--sa-line); }
+  .sa-documents-page :is(.sa-documents-table, .sa-accounting-table) td { padding: .35rem 0; text-align: left; }
+  .sa-documents-page :is(.sa-documents-table, .sa-accounting-table) td[data-label]:not(:first-child)::before {
+    content: attr(data-label); display: block; color: var(--sa-muted); font-size: .7rem; font-weight: 600; margin-bottom: .25rem;
+  }
+  .sa-documents-page :is(.sa-documents-table, .sa-accounting-table) td:last-child > div { justify-content: flex-start; gap: .5rem; }
+  .sa-documents-page :is(.sa-documents-table, .sa-accounting-table) td:last-child button { min-height: 2.75rem; }
+}
+@media (max-width: 639px) {
+  .sa-documents-page > .sa-page-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .5rem; }
+  .sa-documents-page .sa-page-header__icon, .sa-documents-page .sa-page-header__subtitle { display: none; }
+  .sa-documents-page .sa-page-header__title { font-size: 1.5rem; }
+  .sa-documents-page .sa-page-header__actions .sa-btn { padding: .625rem .75rem; font-size: .8rem; }
+  .sa-documents-page .sa-document-actions > button { padding: .625rem .75rem; font-size: .8rem; }
+  .sa-documents-page .sa-document-actions { gap: .375rem; }
+  .sa-documents-archive-header h3 { font-size: 1rem; }
+  .sa-documents-page { gap: 1rem; }
+  .sa-documents-page .sa-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .625rem; }
+  .sa-documents-page .sa-kpi { padding: .75rem; min-height: 5rem; }
+  .sa-documents-page .sa-kpi__icon { display: none; }
+  .sa-documents-page :is(.sa-documents-compose, .sa-documents-detail, .sa-documents-archive, .sa-accounting-workspace) [class*="px-8"],
+  .sa-documents-page .sa-accounting-workspace [class*="px-7"],
+  .sa-documents-page .sa-accounting-workspace [class*="px-6"],
+  .sa-documents-page .sa-documents-detail [class*="px-6"] { padding-left: 1rem; padding-right: 1rem; }
+  .sa-documents-page .sa-documents-compose .p-8 { padding: 1rem; }
+  .sa-documents-page .sa-documents-detail .p-6 { padding: 1rem; }
+  .sa-documents-page .sa-accounting-workspace .p-5 { padding: 1rem; }
+  .sa-documents-page .sa-accounting-workspace [class*="py-7"] { padding-top: 1rem; padding-bottom: 1rem; }
+  .sa-documents-page .sa-accounting-workspace [class*="text-3xl"] { font-size: 1.4rem; line-height: 1.25; }
+  .sa-documents-submit { flex-direction: column; align-items: stretch; }
+  .sa-documents-submit button { justify-content: center; padding-left: 1rem; padding-right: 1rem; }
+  .sa-documents-page .modal-panel { padding: 1rem; }
+  .sa-documents-page .modal-panel .modal-shell-body > .space-y-4 > .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem;
+  }
+  .sa-documents-page .modal-panel .modal-shell-body > .space-y-4 > .grid > div { padding: .625rem; }
+}
+
+/* Keep the archive useful in the first viewport. Full metadata lives in its detail dialog. */
+.super-admin-v2 main.dashboard-mobile-safe.container-shell:has(.sa-documents-page) { padding-top: 1rem !important; }
+.sa-documents-page { gap: .375rem; }
+.sa-documents-page > .sa-page-header { align-items: center; gap: .75rem; min-height: 2.75rem; }
+.sa-documents-page .sa-page-header__icon,
+.sa-documents-page .sa-page-header__subtitle,
+.sa-documents-page .sa-page-header .sa-eyebrow { display: none; }
+.sa-documents-page .sa-page-header__title { font-size: 1.5rem; line-height: 1.2; }
+.sa-documents-page .sa-page-header__main { gap: 0; }
+.sa-documents-page .sa-tabs__item { min-height: 2.75rem; padding-top: .5rem; padding-bottom: .5rem; }
+.sa-documents-page .sa-accounting-workspace > * + * { margin-top: .5rem; }
+.sa-documents-page .sa-documents-archive-header { padding: .5rem 1rem; min-height: 2.25rem; gap: .5rem; }
+.sa-documents-page .sa-documents-archive-header h3 { font-size: 1rem; line-height: 1.25; }
+.sa-documents-page .sa-documents-archive-tools { padding: .25rem .75rem; }
+.sa-documents-page .sa-accounting-filterbar { grid-template-columns: minmax(0, 1fr) auto auto; gap: .375rem; }
+.sa-documents-page .sa-accounting-filterbar > button { padding-left: .625rem; padding-right: .625rem; font-size: .8rem; }
+.sa-documents-page :is(.sa-documents-table, .sa-accounting-table) th { padding: .5rem .75rem; }
+.sa-documents-page :is(.sa-documents-table, .sa-accounting-table) td { padding: .625rem .75rem; font-size: .8rem; line-height: 1.35; }
+.sa-documents-title, .sa-document-row-title, .sa-document-row-meta { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.sa-documents-title { min-height: 2.5rem; }
+.sa-documents-page .sa-document-row-file { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sa-documents-page .sa-accounting-document-title { display: block; width: 100%; max-width: 100%; overflow: hidden; }
+.sa-document-recipient-label { display: none; }
+.sa-documents-page .sa-accounting-table td:last-child > div { gap: .375rem; }
+@media (max-width: 1023px) {
+  .sa-documents-page :is(.sa-documents-table, .sa-accounting-table) tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .25rem .625rem; padding: .625rem .75rem; }
+  .sa-documents-page :is(.sa-documents-table, .sa-accounting-table) td { padding: 0; width: auto; }
+  .sa-documents-page :is(.sa-documents-table, .sa-accounting-table) td[data-label]:not(:first-child)::before { display: none; }
+  .sa-documents-page :is(.sa-documents-table, .sa-accounting-table) td:first-child { grid-column: 1 / -1; }
+  .sa-documents-page .sa-document-row-file { display: none; }
+  .sa-documents-page .sa-documents-table td[data-label="Tipo"] { display: none; }
+  .sa-documents-page .sa-documents-table td[data-label="Data invio"] { font-size: .75rem; }
+  .sa-documents-page .sa-documents-table td[data-label="Destinatari"] { grid-column: 1; font-size: .75rem; }
+  .sa-documents-page .sa-documents-table td[data-label="Azioni"] { grid-column: 2; grid-row: 2 / 4; justify-self: end; }
+  .sa-document-recipient-label { display: inline; margin-left: .25rem; }
+  .sa-documents-page .sa-documents-table td[data-label="Destinatari"] span { height: auto; padding: 0; border-radius: 0; background: transparent; }
+  .sa-documents-page .sa-accounting-table td[data-label="Associazione"] { grid-column: 1; font-size: .75rem; }
+  .sa-documents-page .sa-accounting-table td[data-label="Associazione"] .sa-document-row-meta { -webkit-line-clamp: 1; }
+  .sa-documents-page .sa-accounting-table td[data-label="Cartella / categoria"],
+  .sa-documents-page .sa-accounting-table td[data-label="Stato"],
+  .sa-documents-page .sa-accounting-table td[data-label="Data"] { display: none; }
+  .sa-documents-page .sa-accounting-table td[data-label="Azioni"] { grid-column: 2; grid-row: 2; justify-self: end; }
+  .sa-documents-page .sa-accounting-table [data-row-secondary="true"] { display: none; }
+  .sa-documents-page :is(.sa-documents-title, .sa-accounting-document-title) { width: 100%; min-height: 2.75rem; }
+}

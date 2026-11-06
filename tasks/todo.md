@@ -6464,3 +6464,17 @@ Specifica: applicare il perimetro selezionato nell'ultimo screenshot; Apple Wall
 
 ### Pubblicazione completamento Gemini — 5 novembre 2026
 - Applicativo0aa00f9 pubblicato suMain; pipeline41932497563 e deploy126933321927 riusciti, Final canary passed alle00:23:51Europe/Rome.74controlliHTTPS/hashasset e8controllibrowserlive superati; sette servizi healthy sulnuovoSHA, zero restart/OOM, schema invariato. WorkerPWA corrente eprecacherisorse verificati, nessun dato reale modificato perQA. Rapporto docs/gemini_performance_workflows_release_2026-11-05.md; serverlocale fermato/browserheadlesschiusi.
+
+# Piano — correzioni accesso email, prenotazioni socio e Documenti Super Admin (5 novembre 2026)
+- [x] Ricostruire email di accesso soci e uniformare HTML/CTA a uno standard curato, mobile-safe, senza URL lungo visibile; preservare testo semplice e sicurezza token.
+- [x] Rendere esplicita la pubblicazione delle prenotazioni nell'area socio, con visibilità nascosta, perenne o fino a scadenza italiana; tenere distinti storico prenotazioni e inviti prenotabili, nessuna pubblicazione automatica di contenuti legacy.
+- [x] Correggere Documenti Super Admin su telefono/tablet/desktop, inclusi archivio, filtri, nomi lunghi e pannelli/modali, nei temi chiaro/scuro.
+- [x] Test funzionali e di sicurezza, build e screenshot reali a320/390/768/1024/1280/1440px; preview email senza invii reali.
+- [ ] Deploy suMain nel seguito autorizzato, migration eventuale, monitoraggio pipeline/canary e verifiche online in sola lettura; rapporto finale.
+
+Specifica: seguire le tre correzioni del cliente, senza confondere form attivo pubblico con contenuto esplicitamente pubblicato per i soci. Confermare il livello di configurazione form/serata durante l'analisi. Non modificare consensi, credenziali, accessi o dati reali per collaudo.
+
+### Estensioni e correzioni durante il collaudo
+- [x] Uniformare anche rinnovo e altre email di servizio, inclusi cambi cellulare/email, con CTA leggibile e testo semplice di riserva.
+- [x] Aprire i rinnovi solo dal1gennaio2027Europe/Rome, con guardie server e UI su tutti i percorsi di avvio; preservare fulfillment/tracciamento già avviati e scadenza annualeJan2.
+- [x] Rivedere la densità di Documenti: archivio prioritario, riepiloghi compatti, upload/configurazione su richiesta, dettaglio contestuale, prima riga misurata nei viewport reali. Il cliente ha respinto la prima soluzione ancora troppo lunga.

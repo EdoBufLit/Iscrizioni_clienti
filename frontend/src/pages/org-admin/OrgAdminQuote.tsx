@@ -1,3 +1,4 @@
+import { renewalLaunchAvailable, renewalOpeningMessage } from "../../lib/renewalAvailability";
 import { useApiCache } from "../../hooks/useApiCache";
 import { readCachedApi } from "../../lib/swrCache";
 import { quotesCacheKey } from "../../lib/dashboardCacheKeys";
@@ -73,6 +74,7 @@ const OrgAdminQuote = () => {
   const cachedQuotes = useApiCache<QuoteCenterResponse>(cacheKey);
   const [data, setData] = useState<QuoteCenterResponse | null>(() => cachedQuotes ?? null);
   const [loading, setLoading] = useState(!cachedQuotes);
+  const renewalsAvailable = renewalLaunchAvailable(data?.renewals_available);
   useEffect(() => { if (cachedQuotes) { setData(cachedQuotes); setLoading(false); } }, [cachedQuotes]);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -133,7 +135,7 @@ const OrgAdminQuote = () => {
 
   const handlePayment = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!paymentRow || financialActionLock.current) return;
+    if (!paymentRow || financialActionLock.current || !renewalsAvailable) return;
     financialActionLock.current = true;
     const form = new FormData(event.currentTarget);
     setSaving(true);
@@ -158,7 +160,7 @@ const OrgAdminQuote = () => {
   };
 
   const handleConfirm = async (row: QuoteCenterRow) => {
-    if (financialActionLock.current) return;
+    if (financialActionLock.current || !renewalsAvailable) return;
     if (!window.confirm(`Confermare il rinnovo ${year} di ${row.first_name ?? ""} ${row.last_name ?? ""} senza registrare un incasso?`)) return;
     financialActionLock.current = true;
     setSaving(true);
@@ -180,8 +182,8 @@ const OrgAdminQuote = () => {
   });
   const rowActionsDisabled = saving || loading || data?.year !== year || Boolean(memberId && data?.items.some(item => item.member_id !== memberId));
   const rowActions = (row: QuoteCenterRow) => <div className="quotes-row-actions">
-    {row.payment_state === "pending" ? <Link className="btn-secondary" to={`/org-admin/incassi?member_id=${row.member_id}&year=${data?.year ?? year}`}>Verifica pagamento</Link> : row.payment_state === "partial" ? <Link className="btn-secondary" to={`/org-admin/incassi?member_id=${row.member_id}&year=${data?.year ?? year}`}>Completa saldo</Link> : row.payment_state !== "paid" && row.fee_amount > 0 ? <button type="button" className="btn-secondary" disabled={rowActionsDisabled} onClick={() => { setPaymentYear(data?.year ?? year); setPaymentRow(row); }}>Registra pagamento</button> : null}
-    {!row.renewed && row.can_confirm_without_payment && !["paid", "pending"].includes(row.payment_state) && row.renewal_status !== "approved_waiting_card" ? <button type="button" className="btn-ghost" disabled={rowActionsDisabled} onClick={() => void handleConfirm(row)}>Conferma rinnovo</button> : null}
+    {row.payment_state === "pending" ? <Link className="btn-secondary" to={`/org-admin/incassi?member_id=${row.member_id}&year=${data?.year ?? year}`}>Verifica pagamento</Link> : row.payment_state === "partial" ? <Link className="btn-secondary" to={`/org-admin/incassi?member_id=${row.member_id}&year=${data?.year ?? year}`}>Completa saldo</Link> : renewalsAvailable && row.payment_state !== "paid" && row.fee_amount > 0 ? <button type="button" className="btn-secondary" disabled={rowActionsDisabled} onClick={() => { setPaymentYear(data?.year ?? year); setPaymentRow(row); }}>Registra pagamento</button> : null}
+    {renewalsAvailable && !row.renewed && row.can_confirm_without_payment && !["paid", "pending"].includes(row.payment_state) && row.renewal_status !== "approved_waiting_card" ? <button type="button" className="btn-ghost" disabled={rowActionsDisabled} onClick={() => void handleConfirm(row)}>Conferma rinnovo</button> : null}
     {canRemind && row.payment_state !== "paid" && row.fee_amount > 0 ? <button type="button" className="btn-ghost" disabled={rowActionsDisabled} onClick={() => toggleMember(row.member_id, true)}>Seleziona per sollecito</button> : null}
   </div>;
   const paymentStatus = (row: QuoteCenterRow) => <>
@@ -209,6 +211,7 @@ const OrgAdminQuote = () => {
       />
 
       <CampaignSegmentActions source="quote" query={new URLSearchParams({ year: String(year), status, q: search, ...(memberId ? { member_id: String(memberId) } : {}) }).toString()} loadPage={async offset => { const result = await fetchOrgAdminQuotes({ year, status, q: search, memberId, offset, limit: 100 }); return { ids: result.items.map(item => item.member_id), total: result.total }; }} />
+      {!renewalsAvailable && <p role="status" className="text-sm text-[var(--theme-text-muted)]">{renewalOpeningMessage(data?.renewal_opens_on)}</p>}
       {notice ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-semibold text-emerald-800" role="status">{notice}</div> : null}
       {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm font-semibold text-rose-800" role="alert">{error}</div> : null}
 

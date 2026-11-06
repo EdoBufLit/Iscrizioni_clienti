@@ -276,6 +276,8 @@ function emptyFormDraft() {
     notification_email: "",
     allow_multiple_submissions: true,
     form_type: "generic" as AssociationFormType,
+    member_booking_visibility: "hidden" as "hidden" | "permanent" | "until",
+    member_booking_visible_until: "",
     booking_enabled: false,
     booking_requires_manual_confirmation: true,
     booking_success_message_override: "",
@@ -337,6 +339,8 @@ function draftFromAssociationForm(form: AssociationForm) {
     notification_email: form.notification_email || "",
     allow_multiple_submissions: Boolean(form.allow_multiple_submissions),
     form_type: form.form_type || "generic",
+    member_booking_visibility: form.member_booking_visibility || "hidden",
+    member_booking_visible_until: form.member_booking_visible_until || "",
     booking_enabled: Boolean(form.booking_enabled || form.create_booking),
     booking_requires_manual_confirmation: Boolean(form.booking_requires_manual_confirmation),
     booking_success_message_override: form.booking_success_message_override || "",
@@ -1237,6 +1241,11 @@ export function OrgAdminFormsWorkspace({
     setSavingForm(true);
     try {
       const bookingEnabled = Boolean(formDraft.booking_enabled || formDraft.create_booking);
+      if (bookingEnabled && formDraft.member_booking_visibility === "until" && !formDraft.member_booking_visible_until) {
+        setActiveTab("settings");
+        showToast({ tone: "error", title: "Data richiesta", message: "Scegli fino a quando mostrare la prenotazione nell’area socio." });
+        return;
+      }
       const bookingFieldMapping = { ...(formDraft.booking_field_mapping || {}) };
       const usesBookingBlockMapping =
         bookingFieldMapping.booking_date === BOOKING_BLOCK_MAPPING_VALUE
@@ -1267,6 +1276,8 @@ export function OrgAdminFormsWorkspace({
         public_slug: formDraft.public_slug || null,
         success_message: formDraft.success_message || null,
         notification_email: formDraft.notification_email || null,
+        member_booking_visibility: formDraft.member_booking_visibility,
+        member_booking_visible_until: formDraft.member_booking_visibility === "until" ? formDraft.member_booking_visible_until || null : null,
         booking_enabled: bookingEnabled,
         booking_success_message_override: formDraft.booking_success_message_override || null,
         booking_admin_confirmation_email_enabled: formDraft.booking_admin_confirmation_email_enabled,
@@ -2271,6 +2282,22 @@ export function OrgAdminFormsWorkspace({
         </div>
         {formDraft.booking_enabled ? (
           <div className="mt-4 space-y-4">
+            <section className="rounded-xl border border-neutral-200 p-3 space-y-3" aria-label="Visibilità prenotazione nell’area socio">
+              <label className="flex items-start gap-3 text-sm font-semibold text-neutral-800">
+                <input type="checkbox" className="mt-1 h-4 w-4 shrink-0 rounded border-neutral-300 text-brand" disabled={locked} checked={formDraft.member_booking_visibility !== "hidden"} onChange={event => syncFormDraft("member_booking_visibility", event.target.checked ? "permanent" : "hidden")} />
+                <span>Mostra questa prenotazione nell’area socio<span className="mt-1 block text-xs font-normal leading-5 text-neutral-500">I soci vedranno il link in Prenotazioni solo se il form è attivo. I form non selezionati restano nascosti.</span></span>
+              </label>
+              {formDraft.member_booking_visibility !== "hidden" && <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+                <label className="min-w-0 text-xs font-semibold text-neutral-600">Durata visibilità
+                  <select className={`${inputClass} mt-1 w-full min-w-0`} disabled={locked} value={formDraft.member_booking_visibility} onChange={event => syncFormDraft("member_booking_visibility", event.target.value as "permanent" | "until")}><option value="permanent">Permanente</option><option value="until">Fino a una data</option></select>
+                </label>
+                {formDraft.member_booking_visibility === "until" && <label className="min-w-0 text-xs font-semibold text-neutral-600">Ultimo giorno visibile
+                  <input type="date" className={`${inputClass} mt-1 w-full min-w-0`} disabled={locked} required value={formDraft.member_booking_visible_until} onChange={event => syncFormDraft("member_booking_visible_until", event.target.value)} />
+                  <span className="mt-1 block font-normal leading-5">Incluso fino alle 23:59, ora italiana.</span>
+                </label>}
+              </div>}
+              <p className="text-xs leading-5 text-neutral-500">Nascondere il link non elimina lo storico delle prenotazioni.</p>
+            </section>
             <div className="grid gap-2 text-sm text-neutral-700">
               <label className="inline-flex items-center gap-2">
                 <input type="checkbox" disabled={locked} checked={formDraft.booking_requires_manual_confirmation} onChange={(event) => syncFormDraft("booking_requires_manual_confirmation", event.target.checked)} className="rounded border-neutral-300 text-brand" />

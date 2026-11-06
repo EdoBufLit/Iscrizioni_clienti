@@ -320,6 +320,18 @@ def test_quote_reminders_use_real_balance_and_skip_new_payments(client, tenant, 
     message = db.query(EmailOutbox).one()
     assert message.to_email == due.email and "18,00 EUR" in message.payload_json["text_body"]
     assert message.email_type == "membership_fee_reminder"
+    from html.parser import HTMLParser
+    class VisibleText(HTMLParser):
+        def __init__(self, markup):
+            super().__init__(); self.text = []; self.links = []; self.feed(markup)
+        def handle_data(self, data): self.text.append(data)
+        def handle_starttag(self, tag, attrs):
+            if tag == "a": self.links.append(dict(attrs).get("href"))
+    rendered = VisibleText(message.payload_json["html_body"])
+    assert len(rendered.links) == 2
+    assert rendered.links[0] in message.payload_json["text_body"]
+    assert rendered.links[0] not in "".join(rendered.text)
+    assert "18,00 EUR" in "".join(rendered.text)
     assert db.query(MemberNotification).filter(MemberNotification.member_id == due.id).count() == 1
     repeated = preview(client, [due], action="quote_reminder", year=year)
     assert repeated["reason_counts"] == {"reminder_recently_queued": 1}

@@ -1,3 +1,4 @@
+import { renewalLaunchAvailable, renewalOpeningMessage } from "../lib/renewalAvailability";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { createMemberRenewalCheckout, type MemberMembershipResponse } from "../lib/api";
@@ -13,6 +14,7 @@ function renewalStatusMessage(membership: MemberMembershipResponse): string {
   if (renewal && ["paid_waiting_card", "approved_waiting_card"].includes(renewal.status)) return "Il rinnovo è confermato e la nuova tessera è in attesa di assegnazione.";
   if (renewal?.status === "payment_pending") return "Il rinnovo è in attesa del pagamento. Contatta l'associazione per completarlo.";
   if (renewal) return "La richiesta di rinnovo è stata presa in carico dall'associazione.";
+  if (!renewalLaunchAvailable()) return renewalOpeningMessage(membership.renewal_opens_on);
   if (membership.renewal_opens_on) return `Il rinnovo sarà disponibile dal ${dateLabel(membership.renewal_opens_on)}.`;
   return "Puoi verificare lo stato del rinnovo nella tua area riservata.";
 }
@@ -53,7 +55,7 @@ export default function PublicRenewal({ slug, associationName, email: initialEma
 
   const requestLink = async (event: FormEvent) => {
     event.preventDefault();
-    if (submitting.current) return;
+    if (submitting.current || !renewalLaunchAvailable(context?.renewal_available)) return;
     submitting.current = true;
     const currentGeneration = generation.current;
     setBusy(true);
@@ -74,7 +76,7 @@ export default function PublicRenewal({ slug, associationName, email: initialEma
   };
 
   const renew = async () => {
-    if (submitting.current) return;
+    if (submitting.current || !renewalLaunchAvailable(context?.renewal_available) || !context?.membership?.can_renew) return;
     submitting.current = true;
     const currentGeneration = generation.current;
     setBusy(true);
@@ -104,7 +106,8 @@ export default function PublicRenewal({ slug, associationName, email: initialEma
   const targetYear = membership?.renewal?.membership_year ?? membership?.renewal_year;
   const previousYear = membership?.current?.membership_year ?? context?.card_year;
   const initials = `${context?.first_name?.trim().charAt(0) ?? ""}${context?.last_name?.trim().charAt(0) ?? ""}`.toLocaleUpperCase("it-IT");
-  const canSubmitRenewal = membership?.can_renew && (!membership.renewal || membership.renewal_checkout_available !== false);
+  const launchAvailable = renewalLaunchAvailable(context?.renewal_available);
+  const canSubmitRenewal = launchAvailable && membership?.can_renew && (!membership.renewal || membership.renewal_checkout_available !== false);
   return (
     <section className="public-renewal" aria-labelledby="public-renewal-title">
         <article className="public-renewal__card">
@@ -138,6 +141,8 @@ export default function PublicRenewal({ slug, associationName, email: initialEma
                 <Link className="btn-primary public-renewal__submit" to="/dashboard">Vai alla tua area</Link>
               </>}
             </>
+          ) : !launchAvailable ? (
+            <p role="status" className="public-renewal__notice">{renewalOpeningMessage(context?.renewal_opens_on)}</p>
           ) : (
             <>
               {sent ? <p role="status" className="public-renewal__notice">Se sei già socio di questa associazione, riceverai un link sicuro via email per confermare il rinnovo.</p> : null}

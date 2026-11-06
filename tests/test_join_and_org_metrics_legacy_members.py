@@ -65,7 +65,12 @@ def _login_org_admin(client, db, org_id: int, suffix: str) -> AdminUser:
 def test_join_submit_renews_legacy_inactive_cardholder_without_overwriting_profile(
     client,
     db,
+    monkeypatch,
 ):
+    import sys
+    from tests.test_annual_renewals import freeze_renewal_clock
+    clock = freeze_renewal_clock(monkeypatch)
+    monkeypatch.setattr(sys.modules[__name__], "datetime", clock)
     suffix = uuid.uuid4().hex[:8]
     client.post("/api/auth/logout")
     client.post("/api/org-admin/auth/logout")

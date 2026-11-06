@@ -3,11 +3,13 @@ import type { MemberMembershipResponse, MemberRenewalResponse } from "./api";
 export type PublicRenewalContext = {
   first_name: string;
   last_name: string;
-  card_year: number;
-  valid_through: string;
+  card_year: number | null;
+  valid_through: string | null;
   fee_amount: number;
   currency: string;
-  membership: MemberMembershipResponse;
+  membership: MemberMembershipResponse | null;
+  renewal_available?: boolean;
+  renewal_opens_on?: string | null;
 };
 
 async function errorDetail(response: Response, fallback: string): Promise<string> {

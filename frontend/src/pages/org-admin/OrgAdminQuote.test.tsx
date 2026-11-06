@@ -11,7 +11,7 @@ vi.mock("../../hooks/useMediaQuery", () => ({ useMediaQuery: () => mocks.mobile 
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
-  vi.setSystemTime(new Date("2026-10-27T12:00:00Z"));
+  vi.setSystemTime(new Date("2027-01-02T12:00:00Z"));
   mocks.mobile = false;
   mocks.payment.mockReset().mockResolvedValue({ ok: true });
   mocks.quotes.mockReset().mockResolvedValue({ year: 2027, total: 26,
@@ -33,13 +33,16 @@ it("paginates by 25 and still allows payment registration after card issuance", 
   await waitFor(() => expect(mocks.quotes).toHaveBeenCalledWith(expect.objectContaining({ limit: 25, offset: 25 })));
 });
 
-it("does not offer future-year reminders or reminder selection while still in 2026", async () => {
+it("does not offer renewals, payments or reminders while still in 2026", async () => {
+  vi.setSystemTime(new Date("2026-12-31T22:59:59Z"));
   render(<MemoryRouter><OrgAdminQuote /></MemoryRouter>);
   await screen.findByText("Anna Rossi");
   expect(screen.getByText(/I solleciti per il 2027 saranno disponibili a partire da gennaio 2027/)).toBeVisible();
   expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /Sollecita quote|Seleziona per sollecito/ })).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Registra pagamento" })).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Registra pagamento" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Conferma rinnovo" })).not.toBeInTheDocument();
+  expect(screen.getByText("I rinnovi saranno disponibili dal 1 gennaio 2027.")).toBeVisible();
 });
 
 it("defaults to the current year in 2027 and keeps the next year non-actionable", async () => {

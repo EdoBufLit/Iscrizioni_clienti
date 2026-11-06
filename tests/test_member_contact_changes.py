@@ -1,4 +1,5 @@
 import uuid
+from html.parser import HTMLParser
 from datetime import datetime
 
 import pytest
@@ -6,6 +7,15 @@ import pytest
 from app.db import SessionLocal
 from app.models import EmailOutbox, Member, MemberContactChange, MemberStatus, Organization
 from app.security import get_password_hash
+
+
+class _VisibleEmail(HTMLParser):
+    def __init__(self, markup):
+        super().__init__(); self.text = []; self.links = []; self.tags = []; self.feed(markup)
+    def handle_data(self, data): self.text.append(data)
+    def handle_starttag(self, tag, attrs):
+        self.tags.append(tag)
+        if tag == "a": self.links.append(dict(attrs).get("href"))
 
 
 @pytest.fixture
@@ -81,6 +91,14 @@ def test_email_change_requires_one_use_confirmation_and_notifies_old_address(
         }
         assert new_email in recipients
         assert contact_member["email"] in recipients
+        messages = db.query(EmailOutbox).filter(EmailOutbox.email_type.in_(["member_contact_change_confirmation", "member_email_change_authorization"])).all()
+        assert len(messages) == 2
+        for message in messages:
+            parsed = _VisibleEmail(message.payload_json["html_body"])
+            assert "table" in parsed.tags and len(parsed.links) == 2
+            assert parsed.links[0] in message.payload_json["text_body"]
+            assert "token=" not in "".join(parsed.text)
+            assert "24 ore" in "".join(parsed.text)
     finally:
         db.close()
 
@@ -115,6 +133,9 @@ def test_email_change_requires_one_use_confirmation_and_notifies_old_address(
     db = SessionLocal()
     try:
         assert db.query(Member).filter(Member.id == contact_member["id"]).one().email == new_email
+        security_notice = db.query(EmailOutbox).filter(EmailOutbox.email_type == "member_email_change_security_notice").one()
+        assert security_notice.to_email == contact_member["email"]
+        assert "table" in _VisibleEmail(security_notice.payload_json["html_body"]).tags
     finally:
         db.close()
 
@@ -138,6 +159,12 @@ def test_phone_change_is_confirmed_via_current_email(client, contact_member, mon
         )
         assert confirmation is not None
         assert confirmation.to_email == contact_member["email"]
+        parsed = _VisibleEmail(confirmation.payload_json["html_body"])
+        assert "Conferma il nuovo numero di telefono" in "".join(parsed.text)
+        assert "token=" not in "".join(parsed.text)
+        assert token in parsed.links[0]
+        assert parsed.links[0] in confirmation.payload_json["text_body"]
+        assert "table" in parsed.tags
         assert db.query(Member).filter(Member.id == contact_member["id"]).one().phone == "+393331112222"
     finally:
         db.close()

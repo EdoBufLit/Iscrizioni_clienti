@@ -1570,6 +1570,8 @@ export type AssociationForm = {
   allow_multiple_submissions: boolean;
   form_type: AssociationFormType;
   booking_enabled: boolean;
+  member_booking_visibility?: "hidden" | "permanent" | "until";
+  member_booking_visible_until?: string | null;
   booking_requires_manual_confirmation: boolean;
   booking_success_message_override: string | null;
   booking_notification_enabled: boolean;
@@ -1635,6 +1637,8 @@ export type AssociationForm = {
     create_internal_request: boolean;
     create_booking: boolean;
     booking_enabled: boolean;
+    member_booking_visibility?: "hidden" | "permanent" | "until";
+    member_booking_visible_until?: string | null;
     booking_requires_manual_confirmation: boolean;
     booking_notification_enabled: boolean;
     booking_admin_confirmation_email_enabled: boolean;
@@ -1680,7 +1684,7 @@ export type OrgAdminWhatsAppAutomation = {
 };
 
 export type AssociationFormSummary = Pick<AssociationForm,
-  "id" | "title" | "public_slug" | "public_path" | "form_type" | "is_active" | "booking_enabled" |
+  "id" | "title" | "public_slug" | "public_path" | "form_type" | "is_active" | "booking_enabled" | "member_booking_visibility" | "member_booking_visible_until" |
   "created_at" | "updated_at" | "field_count" | "submission_count" | "submission_status_counts" | "booking_count">;
 
 export type FormSubmissionSummary = AssociationForm["submission_status_counts"] & { booking: number };
@@ -2717,6 +2721,8 @@ export async function createOrgAdminForm(data: {
   allow_multiple_submissions?: boolean;
   form_type?: AssociationFormType;
   booking_enabled?: boolean;
+  member_booking_visibility?: "hidden" | "permanent" | "until";
+  member_booking_visible_until?: string | null;
   booking_requires_manual_confirmation?: boolean;
   booking_success_message_override?: string | null;
   booking_notification_enabled?: boolean;
@@ -2781,6 +2787,8 @@ export async function updateOrgAdminForm(
   allow_multiple_submissions?: boolean;
   form_type?: AssociationFormType;
   booking_enabled?: boolean;
+  member_booking_visibility?: "hidden" | "permanent" | "until";
+  member_booking_visible_until?: string | null;
   booking_requires_manual_confirmation?: boolean;
   booking_success_message_override?: string | null;
   booking_notification_enabled?: boolean;
@@ -7279,6 +7287,8 @@ export type QuoteCenterRow = {
 
 export type QuoteCenterResponse = {
   year: number;
+  renewals_available?: boolean;
+  renewal_opens_on?: string | null;
   kpis: {
     due: number;
     renewed: number;

@@ -37,6 +37,28 @@ from app.services.renewals import (
 from app.utils import hash_token
 
 
+def freeze_renewal_clock(monkeypatch, current=None):
+    """Exercise post-launch flows on a coherent Italian2027 business clock."""
+    import importlib
+    current = current or datetime(2027, 1, 2, 12)
+    fixed = current.replace(tzinfo=timezone.utc) if current.tzinfo is None else current.astimezone(timezone.utc)
+    class LaunchedDateTime(datetime):
+        @classmethod
+        def utcnow(cls):
+            return fixed.replace(tzinfo=None)
+        @classmethod
+        def now(cls, tz=None):
+            return fixed.astimezone(tz) if tz is not None else fixed.replace(tzinfo=None)
+    for name in ("app.services.annual_memberships", "app.services.renewals", "app.services.public_renewals",
+                 "app.services.member_sessions", "app.services.member_membership", "app.services.member_activity",
+                 "app.services.membership_payments", "app.services.temporary_memberships", "app.routes.member", "app.routes.public",
+                 "app.routes.membership_payments", "app.routes.join", "app.routes.renewals"):
+        module = importlib.import_module(name)
+        if hasattr(module, "datetime"):
+            monkeypatch.setattr(module, "datetime", LaunchedDateTime)
+    return LaunchedDateTime
+
+
 @pytest.fixture
 def db():
     session = SessionLocal()
@@ -136,10 +158,10 @@ def _login_org_admin(client, db, *, org: Organization) -> AdminUser:
 
 def test_manual_renewal_is_term_scoped_and_does_not_replace_current_card_early(db):
     org = _build_org(db, fee=Decimal("25.00"))
-    member, _source = _build_member_and_source(db, org=org, year=2026, card_no=41001)
+    member, _source = _build_member_and_source(db, org=org, year=2027, card_no=41001)
     batch = CardBatch(
         org_id=org.id,
-        year=2027,
+        year=2028,
         start_no=42001,
         end_no=42010,
         next_no=42001,
@@ -150,49 +172,50 @@ def test_manual_renewal_is_term_scoped_and_does_not_replace_current_card_early(d
     term, payment, issued = record_manual_renewal_payment(
         db,
         member=member,
-        membership_year=2027,
+        membership_year=2028,
         admin_id=1,
         amount=Decimal("25.00"),
         method="bonifico",
-        paid_at=datetime(2026, 12, 1),
+        paid_at=datetime(2027, 12, 1),
         notes="Ricevuto",
-        now=datetime(2026, 12, 1),
+        now=datetime(2027, 12, 1),
     )
     db.flush()
 
     assert issued is True
-    assert term.membership_year == 2027
+    assert term.membership_year == 2028
     assert term.status == AnnualMembershipTermStatus.SCHEDULED.value
     assert term.card_no == 42001
     assert payment.annual_term_id == term.id
-    assert payment.membership_year == 2027
+    assert payment.membership_year == 2028
     assert payment.payment_kind == "renewal"
     assert member.card_no == 41001
-    assert member.card_year == 2026
+    assert member.card_year == 2027
 
     duplicate_term, duplicate_payment, duplicate_issued = record_manual_renewal_payment(
         db,
         member=member,
-        membership_year=2027,
+        membership_year=2028,
         admin_id=1,
         amount=Decimal("25.00"),
         method="bonifico",
-        paid_at=datetime(2026, 12, 1),
+        paid_at=datetime(2027, 12, 1),
         notes=None,
-        now=datetime(2026, 12, 1),
+        now=datetime(2027, 12, 1),
     )
     assert duplicate_term.id == term.id
     assert duplicate_payment.id == payment.id
     assert duplicate_issued is False
     assert db.query(MembershipPayment).filter_by(annual_term_id=term.id).count() == 1
 
-    quote = build_quote_center(db, org=org, year=2027)
+    quote = build_quote_center(db, org=org, year=2028)
     assert quote["kpis"]["renewed"] == 1
     assert quote["kpis"]["collected_total"] == 25.0
     assert quote["items"][0]["new_card_no"] == 42001
 
 
-def test_org_admin_quote_api_records_term_payment_and_exports_csv(client, db):
+def test_org_admin_quote_api_records_term_payment_and_exports_csv(client, db, monkeypatch):
+    freeze_renewal_clock(monkeypatch)
     org = _build_org(db, auto_approve=False, fee=Decimal("20.00"))
     member, _source = _build_member_and_source(db, org=org, year=2026, card_no=42501)
     db.add(
@@ -258,6 +281,18 @@ def test_renewal_reminders_are_service_messages_and_deduplicated(db):
     outbox = db.query(EmailOutbox).filter_by(to_email=member.email).all()
     assert len(outbox) == 1
     assert {item.email_type for item in outbox} == {"renewal_reminder"}
+    from html.parser import HTMLParser
+    class VisibleText(HTMLParser):
+        def __init__(self, markup):
+            super().__init__(); self.text = []; self.links = []; self.feed(markup)
+        def handle_data(self, data): self.text.append(data)
+        def handle_starttag(self, tag, attrs):
+            if tag == "a": self.links.append(dict(attrs).get("href"))
+    rendered = VisibleText(outbox[0].payload_json["html_body"])
+    assert len(rendered.links) == 2
+    assert rendered.links[0] in outbox[0].payload_json["text_body"]
+    assert rendered.links[0] not in "".join(rendered.text)
+    assert "Apri area riservata" in "".join(rendered.text)
     assert {item.payload_json["meta"]["reminder_marker"] for item in outbox} == {
         "expired",
     }
@@ -320,15 +355,15 @@ def test_quotes_reminder_api_rejects_early_year_without_queueing(client, db, mon
 
 def test_repeated_renewal_request_reuses_same_target_year(db):
     org = _build_org(db, auto_approve=False, fee=Decimal("0.00"))
-    member, _source = _build_member_and_source(db, org=org, year=2026, card_no=43501)
+    member, _source = _build_member_and_source(db, org=org, year=2027, card_no=43501)
 
-    first = request_renewal(db, member=member, now=datetime(2026, 12, 1))
+    first = request_renewal(db, member=member, now=datetime(2027, 12, 1))
     db.flush()
-    second = request_renewal(db, member=member, now=datetime(2026, 12, 1))
+    second = request_renewal(db, member=member, now=datetime(2027, 12, 1))
     db.flush()
 
     assert first.term.id == second.term.id
-    assert first.term.membership_year == 2027
+    assert first.term.membership_year == 2028
     assert second.action == "org_confirmation"
     assert (
         db.query(AnnualMembershipTerm)
@@ -338,7 +373,8 @@ def test_repeated_renewal_request_reuses_same_target_year(db):
     )
 
 
-def test_required_payment_cannot_be_bypassed_with_unpaid_confirmation(client, db):
+def test_required_payment_cannot_be_bypassed_with_unpaid_confirmation(client, db, monkeypatch):
+    freeze_renewal_clock(monkeypatch)
     org = _build_org(db, auto_approve=False, fee=Decimal("25.00"))
     org.payment_required_before_card = True
     member, _source = _build_member_and_source(
@@ -377,18 +413,18 @@ def test_required_payment_cannot_be_bypassed_with_unpaid_confirmation(client, db
     )
 
 
-def test_worker_retries_only_approved_or_paid_waiting_2027_renewals(db):
+def test_worker_retries_only_approved_or_paid_waiting_2028_renewals(db):
     free_org = _build_org(db, auto_approve=True, fee=Decimal("0.00"))
     free_member, _free_source = _build_member_and_source(
         db,
         org=free_org,
-        year=2026,
+        year=2027,
         card_no=43801,
     )
     free_result = request_renewal(
         db,
         member=free_member,
-        now=datetime(2026, 11, 15),
+        now=datetime(2027, 11, 15),
     )
     assert free_result.action == "waiting_card"
     assert (
@@ -400,19 +436,19 @@ def test_worker_retries_only_approved_or_paid_waiting_2027_renewals(db):
     paid_member, _paid_source = _build_member_and_source(
         db,
         org=paid_org,
-        year=2026,
+        year=2027,
         card_no=43901,
     )
     paid_term, _payment, paid_issued = record_manual_renewal_payment(
         db,
         member=paid_member,
-        membership_year=2027,
+        membership_year=2028,
         admin_id=1,
         amount=Decimal("30.00"),
         method="bonifico",
-        paid_at=datetime(2026, 12, 10),
+        paid_at=datetime(2027, 12, 10),
         notes=None,
-        now=datetime(2026, 12, 10),
+        now=datetime(2027, 12, 10),
     )
     assert paid_issued is False
     assert paid_term.status == AnnualMembershipTermStatus.PAID_WAITING_CARD.value
@@ -421,13 +457,13 @@ def test_worker_retries_only_approved_or_paid_waiting_2027_renewals(db):
     due_member, _due_source = _build_member_and_source(
         db,
         org=due_org,
-        year=2026,
+        year=2027,
         card_no=44001,
     )
     due_result = request_renewal(
         db,
         member=due_member,
-        now=datetime(2026, 12, 15),
+        now=datetime(2027, 12, 15),
     )
     assert due_result.term.status == AnnualMembershipTermStatus.DUE.value
 
@@ -435,21 +471,21 @@ def test_worker_retries_only_approved_or_paid_waiting_2027_renewals(db):
         [
             CardBatch(
                 org_id=free_org.id,
-                year=2027,
+                year=2028,
                 start_no=44101,
                 end_no=44110,
                 next_no=44101,
             ),
             CardBatch(
                 org_id=paid_org.id,
-                year=2027,
+                year=2028,
                 start_no=44201,
                 end_no=44210,
                 next_no=44201,
             ),
             CardBatch(
                 org_id=due_org.id,
-                year=2027,
+                year=2028,
                 start_no=44301,
                 end_no=44310,
                 next_no=44301,
@@ -460,7 +496,7 @@ def test_worker_retries_only_approved_or_paid_waiting_2027_renewals(db):
 
     worker_result = dispatch_due_renewal_reminders(
         db,
-        now=datetime(2026, 12, 15),
+        now=datetime(2027, 12, 15),
     )
     db.flush()
 
@@ -471,11 +507,12 @@ def test_worker_retries_only_approved_or_paid_waiting_2027_renewals(db):
     assert paid_term.status == AnnualMembershipTermStatus.SCHEDULED.value
     assert due_result.term.card_no is None
     assert due_result.term.status == AnnualMembershipTermStatus.DUE.value
-    assert free_member.card_year == 2026
-    assert paid_member.card_year == 2026
+    assert free_member.card_year == 2027
+    assert paid_member.card_year == 2027
 
 
-def test_member_expired_account_can_renew_without_re_registration(client, db):
+def test_member_expired_account_can_renew_without_re_registration(client, db, monkeypatch):
+    freeze_renewal_clock(monkeypatch)
     org = _build_org(db, auto_approve=True, fee=Decimal("0.00"))
     member, _source = _build_member_and_source(
         db,
@@ -487,7 +524,7 @@ def test_member_expired_account_can_renew_without_re_registration(client, db):
     db.add(
         CardBatch(
             org_id=org.id,
-            year=2026,
+            year=2027,
             start_no=45001,
             end_no=45010,
             next_no=45001,
@@ -505,7 +542,7 @@ def test_member_expired_account_can_renew_without_re_registration(client, db):
     response = client.post("/api/member/renewals")
     assert response.status_code == 200, response.text
     payload = response.json()
-    assert payload["term"]["membership_year"] == 2026
+    assert payload["term"]["membership_year"] == 2027
     assert payload["term"]["card_no"] == 45001
 
     notifications = client.get("/api/member/notifications")
@@ -517,9 +554,9 @@ def test_member_expired_account_can_renew_without_re_registration(client, db):
 
     db.refresh(member)
     assert member.status == MemberStatus.ACTIVE
-    assert member.card_year == 2026
+    assert member.card_year == 2027
     assert member.card_no == 45001
-    quote = build_quote_center(db, org=org, year=2026)
+    quote = build_quote_center(db, org=org, year=2027)
     assert quote["items"][0]["payment_state"] == "not_required"
 
 

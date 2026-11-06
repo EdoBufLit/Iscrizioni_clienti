@@ -1738,6 +1738,8 @@ class Form(Base):
     booking_enabled = Column(
         Boolean, nullable=False, default=False, server_default="false", index=True
     )
+    member_booking_visibility = Column(String(16), nullable=False, default="hidden", server_default="hidden")
+    member_booking_visible_until = Column(Date, nullable=True)
     booking_requires_manual_confirmation = Column(
         Boolean, nullable=False, default=True, server_default="true"
     )

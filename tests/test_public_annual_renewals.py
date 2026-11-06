@@ -14,6 +14,24 @@ from app.services.membership_payments import encrypt_sumup_api_key
 from tests.signup_payloads import build_join_submit_data
 
 
+@pytest.fixture(autouse=True)
+def launched_business_clock(monkeypatch):
+    import sys
+    from tests.test_annual_renewals import freeze_renewal_clock
+    clock = freeze_renewal_clock(monkeypatch)
+    monkeypatch.setattr(sys.modules[__name__], "datetime", clock)
+    # SQLAlchemy captured model defaults before the test clock; queued timestamps
+    # must follow that same clock for retry/cooldown behavior to stay meaningful.
+    from sqlalchemy import event
+    def timestamp_mail(_mapper, _connection, mail):
+        mail.created_at = clock.utcnow()
+    for model in (EmailOutbox, Token):
+        event.listen(model, "before_insert", timestamp_mail)
+    yield
+    for model in (EmailOutbox, Token):
+        event.remove(model, "before_insert", timestamp_mail)
+
+
 @pytest.fixture
 def db():
     session = SessionLocal()

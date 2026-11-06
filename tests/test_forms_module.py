@@ -2177,6 +2177,10 @@ def test_booking_form_links_existing_member_and_member_area_can_send_note(client
     )
     assert confirmation_email is not None
     assert "/dashboard/prenotazioni" in confirmation_email.payload_json["text_body"]
+    import re
+    booking_html = confirmation_email.payload_json["html_body"]
+    assert "Apri le tue prenotazioni" in booking_html
+    assert "/dashboard/prenotazioni" not in re.sub(r"<[^>]+>", "", booking_html)
 
     token_str = f"member-bookings-{member.id}"
     db.add(
@@ -2846,25 +2850,96 @@ def test_member_quick_booking_lists_only_current_tenant_available_forms(client, 
     db.flush()
     today = datetime.now(ZoneInfo("Europe/Rome")).date()
     def form(title, **kwargs):
-        values = dict(association_id=org.id, title=title, public_slug=f"quick-{uuid.uuid4().hex}", is_active=True, booking_enabled=True)
+        values = dict(association_id=org.id, title=title, public_slug=f"quick-{uuid.uuid4().hex}", is_active=True, booking_enabled=True, member_booking_visibility="permanent")
         values.update(kwargs)
         result = Form(**values)
         db.add(result)
         return result
     available = form("Prenota", visibility="members_only")
     upcoming = form("Serata", booking_event_date=today + timedelta(days=1))
+    form("Legacy nascosta", member_booking_visibility="hidden")
+    form("Scaduta area socio", member_booking_visibility="until", member_booking_visible_until=today - timedelta(days=1))
+    until_today = form("Visibile oggi", member_booking_visibility="until", member_booking_visible_until=today)
     form("Passata", booking_event_date=today - timedelta(days=1))
     form("Bozza", is_active=False)
     form("Generico", booking_enabled=False)
     form("Altro circolo", association_id=other_org.id)
+    additional = [form(f"Serata selezionata {index}") for index in range(12)]
     token_str = f"quick-member-{uuid.uuid4().hex}"
     db.add(Token(member_id=member.id, purpose=TokenType.LOGIN_MAGIC_LINK, auth_version=member.auth_version, token_hash=hash_token(token_str), expires_at=datetime.utcnow() + timedelta(minutes=15)))
     db.commit()
     client.get(f"/member/auth?token={token_str}", follow_redirects=False)
     response = client.get("/api/member/bookings")
     assert response.status_code == 200, response.text
-    assert {item["id"] for item in response.json()["available_forms"]} == {available.id, upcoming.id}
+    assert {item["id"] for item in response.json()["available_forms"]} == {available.id, upcoming.id, until_today.id, *(item.id for item in additional)}
     assert all(item["org_slug"] == org.slug for item in response.json()["available_forms"])
     org.communications_enabled = False
     db.commit()
     assert client.get("/api/member/bookings").json()["available_forms"] == []
+    org.communications_enabled = True
+    org.deleted_at = datetime.utcnow()
+    db.commit()
+    assert client.get("/api/member/bookings").json()["available_forms"] == []
+
+
+def test_org_admin_explicit_member_booking_visibility_persists_and_copies_hidden(client, db):
+    org, admin = _create_org_admin(db)
+    _login_org_admin(client, db, admin.id)
+    payload = {"title": "Serata soci", "booking_enabled": True, "is_active": True}
+    created = client.post("/api/org-admin/forms", json=payload)
+    assert created.status_code == 201, created.text
+    form = created.json()["form"]
+    assert form["member_booking_visibility"] == "hidden"
+    assert form["member_booking_visible_until"] is None
+    assert client.get(f"/api/forms/{org.slug}/{form['public_slug']}").status_code == 200
+    invalid = client.put(f"/api/org-admin/forms/{form['id']}", json={**payload, "member_booking_visibility": "until"})
+    assert invalid.status_code == 422
+    invalid_mode = client.put(f"/api/org-admin/forms/{form['id']}", json={**payload, "member_booking_visibility": "anything"})
+    assert invalid_mode.status_code == 422
+    updated = client.put(f"/api/org-admin/forms/{form['id']}", json={**payload, "member_booking_visibility": "until", "member_booking_visible_until": "2027-01-31"})
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["form"]["member_booking_visible_until"] == "2027-01-31"
+    legacy_edit = client.put(f"/api/org-admin/forms/{form['id']}", json=payload)
+    assert legacy_edit.json()["form"]["member_booking_visibility"] == "until"
+    assert legacy_edit.json()["form"]["member_booking_visible_until"] == "2027-01-31"
+    summary = client.get("/api/org-admin/forms/summary").json()["items"][0]
+    assert summary["member_booking_visibility"] == "until"
+    copied = client.post(f"/api/org-admin/forms/{form['id']}/duplicate", json={})
+    assert copied.status_code == 201, copied.text
+    assert copied.json()["form"]["member_booking_visibility"] == "hidden"
+    assert copied.json()["form"]["member_booking_visible_until"] is None
+    permanent = client.put(f"/api/org-admin/forms/{form['id']}", json={**payload, "member_booking_visibility": "permanent"})
+    assert permanent.json()["form"]["member_booking_visible_until"] is None
+
+
+@pytest.mark.parametrize("last_day,before_midnight,after_midnight", [
+    ("2026-10-24", "2026-10-24T21:59:59+00:00", "2026-10-24T22:00:00+00:00"),
+    ("2026-11-04", "2026-11-04T22:59:59+00:00", "2026-11-04T23:00:00+00:00"),
+])
+def test_member_booking_visibility_expires_at_italian_midnight_preserving_history(client, db, monkeypatch, last_day, before_midnight, after_midnight):
+    from datetime import date, timezone
+    import app.routes.member as route
+    org, _ = _create_org_admin(db)
+    member = Member(org_id=org.id, first_name="Date", last_name="QA", email=f"date-{uuid.uuid4().hex}@example.test", status=MemberStatus.ACTIVE, card_no=99123, card_year=datetime.utcnow().year)
+    db.add(member); db.flush()
+    form = Form(association_id=org.id, title="Visible until", public_slug=f"date-{uuid.uuid4().hex}", is_active=True, booking_enabled=True, member_booking_visibility="until", member_booking_visible_until=date.fromisoformat(last_day))
+    db.add(form); db.flush()
+    booking = Booking(association_id=org.id, form_id=form.id, member_id=member.id, customer_name="Date QA", status="completed", booking_date=date(2026, 10, 1))
+    db.add(booking)
+    raw = f"date-token-{uuid.uuid4().hex}"
+    db.add(Token(member_id=member.id, purpose=TokenType.LOGIN_MAGIC_LINK, auth_version=member.auth_version, token_hash=hash_token(raw), expires_at=datetime.utcnow()+timedelta(minutes=15)))
+    db.commit()
+    client.get(f"/member/auth?token={raw}", follow_redirects=False)
+    class Clock(datetime):
+        instant = datetime.fromisoformat(before_midnight)
+        @classmethod
+        def now(cls, tz=None):
+            return cls.instant.astimezone(tz) if tz else cls.instant.replace(tzinfo=None)
+    monkeypatch.setattr(route, "datetime", Clock)
+    before = client.get("/api/member/bookings")
+    assert before.status_code == 200, before.text
+    assert [item["id"] for item in before.json()["available_forms"]] == [form.id]
+    Clock.instant = datetime.fromisoformat(after_midnight)
+    after = client.get("/api/member/bookings").json()
+    assert after["available_forms"] == []
+    assert [item["id"] for item in after["items"]] == [booking.id]

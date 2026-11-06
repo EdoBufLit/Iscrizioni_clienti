@@ -354,6 +354,8 @@ def test_partial_initial_quota_cannot_open_full_online_checkout(client, accounti
 
 
 def test_partial_renewal_cannot_open_full_online_checkout(client, accounting, monkeypatch):
+    from tests.test_annual_renewals import freeze_renewal_clock
+    freeze_renewal_clock(monkeypatch)
     from app.services import renewals
 
     db, org, _ = accounting

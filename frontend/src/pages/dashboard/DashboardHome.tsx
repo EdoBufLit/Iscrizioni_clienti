@@ -1,3 +1,4 @@
+import { renewalLaunchAvailable, renewalOpeningMessage } from "../../lib/renewalAvailability";
 import { useEffect, useRef, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 import {
@@ -113,6 +114,8 @@ const buildMemberCardDataFromProfile = (
 function renewalDescription(membership: MemberMembershipResponse) {
   const term = membership.renewal;
   if (term?.card_no != null) return `Validità dal ${formatMemberDate(term.starts_on)}.`;
+  if (!term && !renewalLaunchAvailable()) return renewalOpeningMessage(membership.renewal_opens_on);
+  if (term?.status === "payment_pending" && !renewalLaunchAvailable()) return "Richiesta già presente, in attesa di pagamento. " + renewalOpeningMessage(membership.renewal_opens_on);
   if (term?.status === "payment_pending") return membership.renewal_checkout_available === false
     ? "Richiesta ricevuta. Concorda il pagamento della quota con l'associazione."
     : "Completa il pagamento online per confermare il rinnovo.";
@@ -222,7 +225,7 @@ const DashboardHome = () => {
   };
 
   const handleRenewal = async () => {
-    if (offline || renewalLock.current) return;
+    if (offline || renewalLock.current || !renewalLaunchAvailable() || !membership?.can_renew) return;
     renewalLock.current = true;
     setRenewalBusy(true);
     setRenewalError(null);
@@ -272,9 +275,9 @@ const DashboardHome = () => {
 
   const validCard = Boolean(user && memberAccountStatus(user) === "active" && cardData.cardNumber != null && ["attiva", "active"].includes(String(cardData.cardStatus ?? "").toLowerCase()));
   const expiry = user?.membership_type === "temporary" ? user.valid_until : membership?.current?.valid_through ?? user?.valid_until;
-  const renewalNeeded = Boolean(membership?.can_renew || membership?.renewal);
+  const renewalNeeded = Boolean(membership?.can_renew || membership?.renewal || (!renewalLaunchAvailable() && membership?.is_account_only));
   const renewalYear = membership?.renewal_year ?? membership?.renewal?.membership_year;
-  const canSubmitRenewal = Boolean(membership?.can_renew && (
+  const canSubmitRenewal = Boolean(renewalLaunchAvailable() && membership?.can_renew && (
     !membership.renewal || membership.renewal_checkout_available !== false
   ));
 
@@ -316,7 +319,7 @@ const DashboardHome = () => {
           {!offline && renewalNeeded && membership ? (
             <section className="surface member-home__renewal" aria-labelledby="membership-renewal-title">
               <div>
-                <h2 id="membership-renewal-title">{membership.renewal?.card_no != null ? `Rinnovo ${membership.renewal.membership_year} completato` : "Rinnova la tessera"}</h2>
+                <h2 id="membership-renewal-title">{membership.renewal?.card_no != null ? `Rinnovo ${membership.renewal.membership_year} completato` : !renewalLaunchAvailable() ? "Stato del rinnovo" : "Rinnova la tessera"}</h2>
                 <p>{renewalDescription(membership)}</p>
               </div>
               {canSubmitRenewal ? <button type="button" className="btn-primary" onClick={() => void handleRenewal()} disabled={renewalBusy}>

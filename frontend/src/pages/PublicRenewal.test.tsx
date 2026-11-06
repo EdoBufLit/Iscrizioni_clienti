@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import PublicRenewal from "./PublicRenewal";
 
 const mocks = vi.hoisted(() => ({ fetch: vi.fn(), request: vi.fn(), confirm: vi.fn(), checkout: vi.fn(), navigate: vi.fn() }));
@@ -9,12 +9,15 @@ vi.mock("../lib/api", () => ({ createMemberRenewalCheckout: mocks.checkout }));
 vi.mock("react-router-dom", async importOriginal => ({ ...await importOriginal<typeof import("react-router-dom")>(), useNavigate: () => mocks.navigate }));
 
 const term = { id: 27, membership_year: 2027, starts_on: "2027-01-01", valid_through: "2028-01-01", status: "due", fee_amount: 25, currency: "EUR", card_no: null, card_year: null, issued_at: null, payment: null };
-const context = { first_name: "Anna", last_name: "Socio", fee_amount: 25, currency: "EUR", membership: { current: { ...term, id: 26, membership_year: 2026, valid_through: "2027-01-01", status: "expired", card_no: 10, card_year: 2026 }, renewal: null, renewal_year: 2027, renewal_opens_on: "2026-11-02", can_renew: true, is_account_only: true } };
+const context = { first_name: "Anna", last_name: "Socio", fee_amount: 25, currency: "EUR", membership: { current: { ...term, id: 26, membership_year: 2026, valid_through: "2027-01-01", status: "expired", card_no: 10, card_year: 2026 }, renewal: null, renewal_year: 2027, renewal_opens_on: "2027-01-01", can_renew: true, is_account_only: true } };
 const props = { slug: "demo", associationName: "Club Demo", onNewSignup: vi.fn() };
 const ui = (slug = "demo") => <MemoryRouter><PublicRenewal {...props} slug={slug} /></MemoryRouter>;
 
 describe("Rinnovo dal wizard pubblico", () => {
+  afterEach(() => vi.useRealTimers());
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2027-01-01T00:00:00Z"));
     vi.clearAllMocks();
     mocks.fetch.mockResolvedValue(null);
     mocks.request.mockResolvedValue(undefined);
@@ -93,4 +96,34 @@ describe("Rinnovo dal wizard pubblico", () => {
     await waitFor(() => expect(mocks.request).toHaveBeenCalledTimes(2));
     expect(await screen.findByRole("status")).toHaveTextContent("link sicuro via email");
   });
+  it("prima della mezzanotte italiana non propone email o conferma, anche con una vecchia risposta permissiva", async () => {
+    vi.setSystemTime(new Date("2026-12-31T22:59:59.999Z"));
+    mocks.fetch.mockResolvedValue(context);
+    render(ui());
+    await waitFor(() => expect(screen.queryByText("Verifica dell'accesso…")).not.toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /Conferma rinnovo|Completa rinnovo|Ricevi link/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("1 gennaio 2027");
+    expect(mocks.request).not.toHaveBeenCalled(); expect(mocks.confirm).not.toHaveBeenCalled();
+  });
+  it("mostra la data pubblica prima dell'apertura senza chiedere l'email", async () => {
+    vi.setSystemTime(new Date("2026-11-05T12:00:00Z"));
+    mocks.fetch.mockResolvedValue({ renewal_available: false, renewal_opens_on: "2027-01-01", membership: null });
+    render(ui());
+    expect(await screen.findByRole("status")).toHaveTextContent("1 gennaio 2027");
+    expect(screen.queryByRole("textbox", { name: "Email del tuo account" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Ricevi link/ })).not.toBeInTheDocument();
+  });
+  it("apre il rinnovo alla mezzanotte italiana del primo gennaio", async () => {
+    vi.setSystemTime(new Date("2026-12-31T23:00:00Z"));
+    mocks.fetch.mockResolvedValue(context);
+    render(ui());
+    expect(await screen.findByRole("button", { name: "Conferma rinnovo 2027" })).toBeVisible();
+  });
+  it("rispetta il blocco del server anche dopo il primo gennaio", async () => {
+    mocks.fetch.mockResolvedValue({ renewal_available: false, renewal_opens_on: "2027-01-01", membership: null });
+    render(ui());
+    expect(await screen.findByRole("status")).toHaveTextContent("1 gennaio 2027");
+    expect(screen.queryByRole("button", { name: /Ricevi link/ })).not.toBeInTheDocument();
+  });
+
 });

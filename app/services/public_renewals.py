@@ -18,6 +18,7 @@ from app.security import verify_password
 from app.services.annual_memberships import as_rome_datetime
 from app.services.card_allocation import lock_card_allocation
 from app.services.email_outbox import build_email_payload, enqueue_email
+from app.services.member_access_email import build_member_access_email_html
 from app.services.email_sender import build_sender_payload
 from app.services.member_sessions import (
     consume_member_auth_token,
@@ -27,6 +28,7 @@ from app.services.member_sessions import (
 )
 from app.utils import hash_token
 from app.services.member_activity import is_member_active
+from app.services.renewal_availability import require_renewals_open
 from app.services.renewals import can_access_member_account, request_renewal, serialize_annual_term
 
 
@@ -80,6 +82,7 @@ def guard_existing_cardholder_signup_type(db: Session, *, org_id: int, email: st
 
 def queue_public_renewal_link(db: Session, *, member: Member) -> None:
     """Keep rapid retries and requests from different IPs from spamming a member."""
+    require_renewals_open()
     member = db.query(Member).filter(Member.id == member.id).populate_existing().with_for_update().one_or_none()
     if not is_annual_cardholder(member):
         return
@@ -122,6 +125,7 @@ def queue_public_renewal_link(db: Session, *, member: Member) -> None:
                 "La tua anagrafica e il tuo account saranno conservati. "
                 "Il rinnovo richiederà la tua conferma e seguirà le condizioni dell'associazione."
             ),
+            html_body=build_member_access_email_html(member, link, purpose="renewal"),
             sender=build_sender_payload(mode="association", association=member.organization),
             meta={"member_id": member.id, "token_purpose": TokenType.LOGIN_MAGIC_LINK.value},
         ),
@@ -130,6 +134,7 @@ def queue_public_renewal_link(db: Session, *, member: Member) -> None:
 
 
 def consume_public_renewal_proof(db: Session, *, org: Organization, raw_token: str) -> Member | None:
+    require_renewals_open()
     # Resolve tenant scope before consuming a proof. A URL edited to another
     # association must neither authenticate nor invalidate the original link.
     scoped_proof = (
@@ -177,6 +182,7 @@ def submit_existing_cardholder_renewal(
     candidate = find_annual_cardholder(db, org_id=org.id, email=email)
     if candidate is None or is_member_active(candidate, now=datetime.utcnow()):
         return None
+    require_renewals_open()
     # Match renewal's lock order before refreshing credentials or card pointers.
     lock_card_allocation(db, org.id, as_rome_datetime().year)
     candidate = (

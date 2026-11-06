@@ -1,6 +1,8 @@
-import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import "./SuperAdminDocuments.css";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import Skeleton from "../../components/ui/Skeleton";
+import ModalShell from "../../components/ui/ModalShell";
 import SuperAdminAccountingWorkspace from "./components/SuperAdminAccountingWorkspace";
 import {
   AuthError,
@@ -15,7 +17,6 @@ import {
 } from "../../lib/api";
 import {
   SuperAdminActionButton,
-  SuperAdminKpiCard,
   SuperAdminPageHeader,
   SuperAdminTabs,
 } from "./components/SuperAdminPrimitives";
@@ -55,6 +56,12 @@ const SuperAdminDocuments = () => {
   const [selectedDocument, setSelectedDocument] = useState<SuperAdminSharedDocument | null>(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
+  const detailRequest = useRef(0);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [accountingCreateRequest, setAccountingCreateRequest] = useState(0);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [archiveQuery, setArchiveQuery] = useState("");
+  const [archiveKind, setArchiveKind] = useState("all");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -95,22 +102,27 @@ const SuperAdminDocuments = () => {
 
   const loadDetail = useCallback(
     async (documentId: number) => {
+      const request = ++detailRequest.current;
+      setSelectedDocument(null);
       try {
         setDetailLoading(true);
         const payload = await fetchSuperAdminSharedDocumentDetail(documentId);
-        setSelectedDocument(payload);
+        if (request === detailRequest.current) setSelectedDocument(payload);
       } catch (err) {
+        if (request !== detailRequest.current) return;
         if (err instanceof AuthError) {
           navigate("/super-admin/login", { replace: true });
           return;
         }
         setError(err instanceof Error ? err.message : "Errore nel caricamento dettaglio.");
       } finally {
-        setDetailLoading(false);
+        if (request === detailRequest.current) setDetailLoading(false);
       }
     },
     [navigate],
   );
+
+  useEffect(() => () => { detailRequest.current += 1; }, []);
 
   useEffect(() => {
     if (!profile) return;
@@ -118,12 +130,13 @@ const SuperAdminDocuments = () => {
   }, [profile, loadAll]);
 
   useEffect(() => {
-    if (!selectedDocumentId) {
+    if (!selectedDocumentId || !detailOpen) {
+      detailRequest.current += 1;
       setSelectedDocument(null);
       return;
     }
     void loadDetail(selectedDocumentId);
-  }, [loadDetail, selectedDocumentId]);
+  }, [loadDetail, selectedDocumentId, detailOpen]);
 
   useEffect(() => {
     if (kind !== "accounting") {
@@ -162,6 +175,8 @@ const SuperAdminDocuments = () => {
     }),
     [documents],
   );
+
+  const visibleDocuments = useMemo(() => documents.filter(item => (archiveKind === "all" || item.kind === archiveKind) && `${item.title} ${item.original_filename} ${item.description ?? ""}`.toLocaleLowerCase("it-IT").includes(archiveQuery.trim().toLocaleLowerCase("it-IT"))), [documents, archiveQuery, archiveKind]);
 
   const selectedAssociationId = selectedAssociationIds[0] ?? filteredTargets[0]?.id ?? null;
 
@@ -225,9 +240,11 @@ const SuperAdminDocuments = () => {
       });
       setSuccess("Documento inviato correttamente.");
       resetForm();
+      setComposeOpen(false);
+      setArchiveQuery(""); setArchiveKind("all");
       await loadAll();
       setSelectedDocumentId(response.document.id);
-      
+
       // Auto dismiss success
       setTimeout(() => setSuccess(""), 5000);
     } catch (err) {
@@ -265,18 +282,22 @@ const SuperAdminDocuments = () => {
   }
 
   return (
-    <div className="sa-page">
+    <div className="sa-page sa-documents-page">
       <SuperAdminPageHeader
         icon="documents"
         eyebrow="Governance"
         title="Documenti"
-        subtitle="Centro documentale per inviare, archiviare e consultare file contabili e amministrativi per le associazioni."
+        subtitle="Invia e consulta i documenti delle associazioni."
         actions={
           workspace === "general" ? (
-            <SuperAdminActionButton tone="primary" icon="upload" onClick={() => document.getElementById("super-admin-document-title")?.focus()}>
+            <SuperAdminActionButton tone="primary" icon="upload" onClick={() => setComposeOpen(true)}>
               Nuovo invio
             </SuperAdminActionButton>
-          ) : null
+          ) : (
+            <SuperAdminActionButton tone="primary" icon="upload" onClick={() => setAccountingCreateRequest(current => current + 1)}>
+              Nuovo documento
+            </SuperAdminActionButton>
+          )
         }
       />
 
@@ -289,66 +310,14 @@ const SuperAdminDocuments = () => {
         ]}
       />
 
-      <section className="sa-kpi-grid">
-        <SuperAdminKpiCard label="Documenti totali" value={docStats.total} hint="Archivio invii" icon="document" tone="success" />
-        <SuperAdminKpiCard label="Documenti generali" value={docStats.general} hint="Comunicazioni non contabili" icon="documents" tone="info" />
-        <SuperAdminKpiCard label="Categorie contabili" value={docStats.accounting} hint="Invii accounting" icon="wallet" tone="warning" />
-        <SuperAdminKpiCard label="Invii cumulati" value={docStats.recipients} hint="Destinatari documenti" icon="send" tone="success" />
-        <SuperAdminKpiCard label="Associazioni coperte" value={docStats.covered || totals.total} hint={`${totals.accounting} con contabilità attiva`} icon="users" tone="purple" />
-      </section>
-
-      {/* Header & Workspace Switcher */}
-      <div className="hidden">
-        <div className="max-w-xl">
-          <h2 className="text-3xl font-bold tracking-tight text-neutral-900">Documenti e Contabilità</h2>
-          <p className="mt-2 text-sm font-medium text-neutral-500">
-            Gestisci la distribuzione dei documenti verso le associazioni e l'archivio contabile.
-          </p>
-          
-          <div className="mt-6 inline-flex rounded-xl border border-neutral-200 bg-neutral-100/50 p-1">
-            <button
-              type="button"
-              className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold transition-all duration-200 ${
-                workspace === "general" ? "bg-white text-neutral-900 shadow-sm ring-1 ring-neutral-200" : "text-neutral-500 hover:text-neutral-700"
-              }`}
-              onClick={() => setWorkspace("general")}
-            >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-              </svg>
-              Documenti generali
-            </button>
-            <button
-              type="button"
-              className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold transition-all duration-200 ${
-                workspace === "accounting" ? "bg-white text-neutral-900 shadow-sm ring-1 ring-neutral-200" : "text-neutral-500 hover:text-neutral-700"
-              }`}
-              onClick={() => setWorkspace("accounting")}
-            >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2zM10 8.5a.5.5 0 11-1 0 .5.5 0 011 0zm5 5a.5.5 0 11-1 0 .5.5 0 011 0z" />
-              </svg>
-              Contabilità
-            </button>
-          </div>
-        </div>
-        
-        <div className="flex gap-4">
-          <div className="rounded-2xl border border-neutral-200 bg-white px-5 py-4 min-w-[140px] shadow-sm">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">Associazioni Attive</p>
-            <p className="mt-1 text-2xl font-black text-neutral-900">{totals.total}</p>
-          </div>
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 min-w-[140px] shadow-sm">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-600">Contabilità Attiva</p>
-            <p className="mt-1 text-2xl font-black text-amber-900">{totals.accounting}</p>
-          </div>
-        </div>
-      </div>
+      {workspace === "general" && <div className="sa-documents-counts" role="region" aria-label="Riepilogo invii documenti">
+        <span><strong>{documents.length}</strong> invii</span><span><strong>{docStats.recipients}</strong> destinatari</span><span><strong>{docStats.covered || totals.total}</strong> associazioni</span>
+      </div>}
 
       {workspace === "accounting" ? (
-        <SuperAdminAccountingWorkspace onAuthError={() => navigate("/super-admin/login", { replace: true })} />
+        <SuperAdminAccountingWorkspace createRequest={accountingCreateRequest} onAuthError={() => navigate("/super-admin/login", { replace: true })} />
       ) : (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="sa-documents-general">
           {error && (
             <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm font-medium text-red-800 flex items-center gap-3">
               <svg className="h-5 w-5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
@@ -366,26 +335,95 @@ const SuperAdminDocuments = () => {
             </div>
           )}
 
-          <div className="grid gap-8 xl:grid-cols-[1.2fr_0.8fr]">
-            {/* New Document Form */}
-            <form className="rounded-3xl border border-neutral-200 bg-white shadow-sm overflow-hidden flex flex-col" onSubmit={handleSubmit}>
-              <div className="border-b border-neutral-100 px-8 py-6 bg-neutral-50/50">
-                <div className="flex items-center gap-3">
-                  <div className="h-8 w-8 rounded-full bg-brand/10 text-brand flex items-center justify-center">
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                  </div>
-                  <h3 className="text-xl font-bold tracking-tight text-neutral-900">Nuovo invio</h3>
-                </div>
-              </div>
+<section className="sa-documents-archive rounded-3xl border border-neutral-200 bg-white shadow-sm overflow-hidden">
+            <div className="sa-documents-archive-header flex items-center justify-between border-b border-neutral-100 px-8 py-6 bg-neutral-50/50">
+              <h3 className="text-xl font-bold tracking-tight text-neutral-900">Archivio Invii</h3>
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-neutral-600 shadow-sm ring-1 ring-neutral-200">
+                {visibleDocuments.length} documenti
+              </span>
+            </div>
 
+            <div className="sa-documents-archive-tools">
+              <input type="search" aria-label="Cerca negli invii" placeholder="Cerca titolo o file" className="sa-input" value={archiveQuery} onChange={event => setArchiveQuery(event.target.value)} />
+              <select aria-label="Filtra tipo documento" className="sa-select" value={archiveKind} onChange={event => setArchiveKind(event.target.value)}><option value="all">Tutti i tipi</option><option value="general">Generali</option><option value="accounting">Contabili</option></select>
+            </div>
+            <div className="overflow-x-auto">
+              <table aria-label="Archivio invii" className="sa-documents-table w-full min-w-[800px] text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-neutral-200 bg-white">
+                    <th className="px-8 py-4 text-[10px] font-bold uppercase tracking-widest text-neutral-400">Documento</th>
+                    <th className="px-8 py-4 text-[10px] font-bold uppercase tracking-widest text-neutral-400 w-32">Tipo</th>
+                    <th className="px-8 py-4 text-[10px] font-bold uppercase tracking-widest text-neutral-400 w-40">Data invio</th>
+                    <th className="px-8 py-4 text-[10px] font-bold uppercase tracking-widest text-neutral-400 w-32 text-center">Destinatari</th>
+                    <th className="px-8 py-4 text-[10px] font-bold uppercase tracking-widest text-neutral-400 w-24 text-right">Azioni</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100">
+                  {visibleDocuments.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-8 py-16 text-center text-sm font-medium text-neutral-400">
+                        Nessun documento corrisponde alla ricerca.
+                      </td>
+                    </tr>
+                  ) : (
+                    visibleDocuments.map((document) => (
+                      <tr
+                        key={document.id}
+                        className={`transition-colors group cursor-pointer ${
+                          selectedDocumentId === document.id ? "bg-brand/5" : "hover:bg-neutral-50/80"
+                        }`}
+                      >
+                        <td data-label="Documento" className="px-8 py-4">
+                          <button type="button" aria-controls="sa-document-detail" aria-pressed={selectedDocumentId === document.id} className={`sa-documents-title text-sm font-bold text-left transition-colors ${selectedDocumentId === document.id ? "text-brand" : "text-neutral-900 group-hover:text-brand"}`} onClick={() => { setSelectedDocumentId(document.id); setDetailOpen(true); }}>
+                            {document.title}
+                          </button>
+                          <p className="sa-document-row-file mt-1 text-xs text-neutral-500 truncate max-w-md">{document.original_filename}</p>
+                        </td>
+                        <td data-label="Tipo" className="sa-document-row-type px-8 py-4" data-kind={document.kind}>
+                          <span className={`inline-flex rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-widest ring-1 ring-inset ${kindBadgeClass(document.kind)}`}>
+                            {document.kind}
+                          </span>
+                        </td>
+                        <td data-label="Data invio" className="px-8 py-4 text-sm font-medium text-neutral-600">
+                          {formatDateTime(document.created_at)}
+                        </td>
+                        <td data-label="Destinatari" className="px-8 py-4 text-center">
+                          <span className="inline-flex h-6 min-w-[24px] items-center justify-center rounded-full bg-neutral-100 px-2 text-xs font-bold text-neutral-700">
+                            {document.recipient_count}<span className="sa-document-recipient-label"> destinatari</span>
+                          </span>
+                        </td>
+                        <td data-label="Azioni" className="px-8 py-4 text-right">
+                          <button
+                            type="button"
+                            className="p-2 text-neutral-400 hover:text-brand hover:bg-brand/5 rounded-lg transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleDownload(document);
+                            }}
+                            title="Scarica documento"
+                            aria-label={`Scarica ${document.title}`}
+                          >
+                            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+          <ModalShell open={composeOpen} title="Nuovo invio" description="Scegli file e associazioni destinatarie." onClose={() => { if (!submitting) setComposeOpen(false); }} closeDisabled={submitting} closeOnEscape={!submitting} closeOnOverlay={!submitting} sizeClassName="max-w-3xl" contentClassName="sa-documents-dialog">
+            <form className="sa-documents-compose rounded-3xl border border-neutral-200 bg-white shadow-sm overflow-hidden flex flex-col" onSubmit={handleSubmit}>
               <div className="p-8 space-y-8 flex-1">
                 {/* File Upload Area */}
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-widest text-neutral-500 mb-3">File Documento</label>
+                  <label htmlFor="sa-general-document-file" className="block text-xs font-bold uppercase tracking-widest text-neutral-500 mb-3">File Documento</label>
                   <div className={`relative flex flex-col items-center justify-center w-full rounded-2xl border-2 border-dashed transition-colors ${file ? 'border-brand bg-brand/5' : 'border-neutral-300 bg-neutral-50 hover:bg-neutral-100'} p-8 text-center`}>
                     <input
+                      id="sa-general-document-file"
                       type="file"
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                       onChange={(event: ChangeEvent<HTMLInputElement>) => setFile(event.target.files?.[0] ?? null)}
@@ -411,7 +449,7 @@ const SuperAdminDocuments = () => {
 
                 <div className="grid gap-6 sm:grid-cols-2">
                   <div className="sm:col-span-2">
-                    <label className="block text-xs font-bold uppercase tracking-widest text-neutral-500 mb-2">Titolo</label>
+                    <label htmlFor="super-admin-document-title" className="block text-xs font-bold uppercase tracking-widest text-neutral-500 mb-2">Titolo</label>
                     <input
                       id="super-admin-document-title"
                       type="text"
@@ -422,8 +460,8 @@ const SuperAdminDocuments = () => {
                     />
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="block text-xs font-bold uppercase tracking-widest text-neutral-500 mb-2">Descrizione (Opzionale)</label>
-                    <textarea
+                    <label htmlFor="sa-general-document-description" className="block text-xs font-bold uppercase tracking-widest text-neutral-500 mb-2">Descrizione (Opzionale)</label>
+                    <textarea id="sa-general-document-description"
                       className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-medium text-neutral-900 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20 min-h-[100px] resize-none"
                       value={description}
                       onChange={(event) => setDescription(event.target.value)}
@@ -434,7 +472,7 @@ const SuperAdminDocuments = () => {
 
                 <div className="border-t border-neutral-100 pt-8">
                   <h4 className="text-sm font-bold text-neutral-900 mb-4">Configurazione invio</h4>
-                  
+
                   <div className="grid gap-6 sm:grid-cols-2">
                     {/* Category Selection */}
                     <div>
@@ -462,6 +500,7 @@ const SuperAdminDocuments = () => {
                       <label className="block text-xs font-bold uppercase tracking-widest text-neutral-500 mb-3">Destinatari</label>
                       <select
                         className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-medium text-neutral-900 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20 appearance-none"
+                        aria-label="Destinatari documento"
                         value={targetMode}
                         onChange={(event) => setTargetMode(event.target.value as any)}
                       >
@@ -475,6 +514,7 @@ const SuperAdminDocuments = () => {
                         <div className="mt-4">
                           <select
                             className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-medium text-neutral-900 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20 appearance-none"
+                            aria-label="Associazione destinataria"
                             value={selectedAssociationId ?? ""}
                             onChange={(event) => setSelectedAssociationIds(event.target.value ? [Number(event.target.value)] : [])}
                           >
@@ -513,7 +553,7 @@ const SuperAdminDocuments = () => {
                 </div>
               </div>
 
-              <div className="border-t border-neutral-100 px-8 py-5 bg-neutral-50/50 flex items-center justify-between">
+              <div className="sa-documents-submit border-t border-neutral-100 px-8 py-5 bg-neutral-50/50 flex items-center justify-between">
                 <span className="text-xs text-neutral-500 font-medium">Controlla i dati prima di inviare.</span>
                 <button
                   type="submit"
@@ -539,13 +579,13 @@ const SuperAdminDocuments = () => {
                 </button>
               </div>
             </form>
-
-            {/* Document Detail Aside */}
-            <aside className="rounded-3xl border border-neutral-200 bg-white shadow-sm overflow-hidden flex flex-col">
+          </ModalShell>
+          <ModalShell open={detailOpen} title="Dettaglio invio" onClose={() => setDetailOpen(false)} sizeClassName="max-w-2xl" contentClassName="sa-documents-dialog">
+            <aside className="sa-documents-detail rounded-3xl border border-neutral-200 bg-white shadow-sm overflow-hidden flex flex-col">
               <div className="border-b border-neutral-100 px-6 py-6 bg-neutral-50/50">
-                <h3 className="text-sm font-bold uppercase tracking-widest text-neutral-900">Dettaglio Invio</h3>
+                <h3 id="sa-document-detail" tabIndex={-1} className="text-sm font-bold uppercase tracking-widest text-neutral-900">Dettaglio Invio</h3>
               </div>
-              
+
               <div className="p-6 flex-1">
                 {detailLoading ? (
                   <div className="space-y-6">
@@ -560,6 +600,7 @@ const SuperAdminDocuments = () => {
                         {selectedDocument.kind === "accounting" ? "Accounting" : "Generale"}
                       </div>
                       <h4 className="mt-4 text-xl font-bold text-neutral-900">{selectedDocument.title}</h4>
+                      <p className="mt-2 text-sm text-neutral-500"><span className="block text-xs font-semibold">File originale</span>{selectedDocument.original_filename}</p>
                       <p className="mt-2 text-sm text-neutral-500 leading-relaxed">
                         {selectedDocument.description || "Nessuna descrizione."}
                       </p>
@@ -620,85 +661,7 @@ const SuperAdminDocuments = () => {
                 )}
               </div>
             </aside>
-          </div>
-
-          {/* Archive Table */}
-          <section className="rounded-3xl border border-neutral-200 bg-white shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between border-b border-neutral-100 px-8 py-6 bg-neutral-50/50">
-              <h3 className="text-xl font-bold tracking-tight text-neutral-900">Archivio Invii</h3>
-              <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-neutral-600 shadow-sm ring-1 ring-neutral-200">
-                {documents.length} documenti
-              </span>
-            </div>
-            
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[800px] text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-neutral-200 bg-white">
-                    <th className="px-8 py-4 text-[10px] font-bold uppercase tracking-widest text-neutral-400">Documento</th>
-                    <th className="px-8 py-4 text-[10px] font-bold uppercase tracking-widest text-neutral-400 w-32">Tipo</th>
-                    <th className="px-8 py-4 text-[10px] font-bold uppercase tracking-widest text-neutral-400 w-40">Data invio</th>
-                    <th className="px-8 py-4 text-[10px] font-bold uppercase tracking-widest text-neutral-400 w-32 text-center">Destinatari</th>
-                    <th className="px-8 py-4 text-[10px] font-bold uppercase tracking-widest text-neutral-400 w-24 text-right">Azioni</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-100">
-                  {documents.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="px-8 py-16 text-center text-sm font-medium text-neutral-400">
-                        Nessun documento inviato finora.
-                      </td>
-                    </tr>
-                  ) : (
-                    documents.map((document) => (
-                      <tr
-                        key={document.id}
-                        className={`transition-colors group cursor-pointer ${
-                          selectedDocumentId === document.id ? "bg-brand/5" : "hover:bg-neutral-50/80"
-                        }`}
-                        onClick={() => setSelectedDocumentId(document.id)}
-                      >
-                        <td className="px-8 py-4">
-                          <p className={`text-sm font-bold transition-colors ${selectedDocumentId === document.id ? "text-brand" : "text-neutral-900 group-hover:text-brand"}`}>
-                            {document.title}
-                          </p>
-                          <p className="mt-1 text-xs text-neutral-500 truncate max-w-md">{document.original_filename}</p>
-                        </td>
-                        <td className="px-8 py-4">
-                          <span className={`inline-flex rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-widest ring-1 ring-inset ${kindBadgeClass(document.kind)}`}>
-                            {document.kind}
-                          </span>
-                        </td>
-                        <td className="px-8 py-4 text-sm font-medium text-neutral-600">
-                          {formatDateTime(document.created_at)}
-                        </td>
-                        <td className="px-8 py-4 text-center">
-                          <span className="inline-flex h-6 min-w-[24px] items-center justify-center rounded-full bg-neutral-100 px-2 text-xs font-bold text-neutral-700">
-                            {document.recipient_count}
-                          </span>
-                        </td>
-                        <td className="px-8 py-4 text-right">
-                          <button
-                            type="button"
-                            className="p-2 text-neutral-400 hover:text-brand hover:bg-brand/5 rounded-lg transition-colors"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void handleDownload(document);
-                            }}
-                            title="Scarica documento"
-                          >
-                            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                            </svg>
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
+          </ModalShell>
         </div>
       )}
     </div>

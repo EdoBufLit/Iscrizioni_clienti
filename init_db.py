@@ -645,6 +645,8 @@ def _run_legacy_column_migrations() -> None:
             _add_column_if_missing(conn, "forms", "page_style", "TEXT DEFAULT 'editorial'")
             _add_column_if_missing(conn, "forms", "form_type", "TEXT DEFAULT 'generic'")
             _add_column_if_missing(conn, "forms", "booking_enabled", "INTEGER DEFAULT 0")
+            _add_column_if_missing(conn, "forms", "member_booking_visibility", "VARCHAR(16) NOT NULL DEFAULT 'hidden'")
+            _add_column_if_missing(conn, "forms", "member_booking_visible_until", "DATE")
             _add_column_if_missing(conn, "forms", "booking_requires_manual_confirmation", "INTEGER DEFAULT 1")
             _add_column_if_missing(conn, "forms", "booking_success_message_override", "TEXT")
             _add_column_if_missing(conn, "forms", "booking_notification_enabled", "INTEGER DEFAULT 1")

@@ -33,6 +33,7 @@ from app.services.member_sessions import issue_member_auth_token
 from app.services.org_admin_sessions import resolve_org_admin_session
 from app.services.quote_reminders import quote_reminder_unavailable_reason, require_quote_reminder_available
 from app.services.system_email_layout import build_system_email_html
+from app.services.member_access_email import build_member_access_email_html
 
 
 logger = logging.getLogger(__name__)
@@ -339,6 +340,7 @@ def _queue_access(db: Session, *, member: Member, run: MemberBulkRun, request: R
         db, email_type="member_magic_link", to_email=member.email.strip(), subject="Accesso Area Riservata - ASSO.N.A.M.",
         payload=build_email_payload(
             text_body=f"Sei stato registrato come socio. Clicca qui per accedere alla tua area riservata: {link}\n\nIl link scade tra {settings.LOGIN_TOKEN_EXPIRE_MINUTES} minuti.",
+            html_body=build_member_access_email_html(member, link, registered=True),
             sender=build_sender_payload(mode="association", association=member.organization),
             meta={"member_id": member.id, "org_id": member.org_id, "token_purpose": TokenType.LOGIN_MAGIC_LINK.value, "bulk_run_id": run.id, "service_message": True},
         ), priority=1, dedupe_key=f"member-bulk-access:{run.id}:{member.id}",

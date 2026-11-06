@@ -47,6 +47,7 @@ from app.services.municipalities import (
     normalize_municipality_text,
 )
 from app.services.org_branding import resolve_club_display_name
+from app.services.system_email_layout import build_system_email_html
 from app.security import verify_password
 from app.config import settings
 from app.log_redaction import hash_identifier, redact_for_log
@@ -61,6 +62,7 @@ from app.services.public_renewals import (
     require_public_renewal_member,
     submit_existing_cardholder_renewal,
 )
+from app.services.renewal_availability import RENEWALS_OPEN_ON, renewals_available, require_renewals_open
 from app.services.renewals import request_renewal, serialize_annual_term, serialize_member_membership
 from app.services.sqlite_card_allocation_guard import (
     sqlite_card_allocation_request_guard,
@@ -515,8 +517,14 @@ def _public_renewal_org(db: Session, org_slug: str) -> Organization:
 @router.get("/api/join/{org_slug}/renewal")
 def get_public_renewal_context(request: Request, org_slug: str, db: Session = Depends(get_db)):
     org = _public_renewal_org(db, org_slug)
+    if not renewals_available():
+        return {"renewal_available": False, "renewal_opens_on": RENEWALS_OPEN_ON.isoformat(), "membership": None,
+                "first_name": "", "last_name": "", "card_year": None, "valid_through": None,
+                "fee_amount": float(org.membership_fee_amount or 0), "currency": str(org.membership_fee_currency or "EUR")}
     member = require_public_renewal_member(request, db, org=org)
     return {
+        "renewal_available": True,
+        "renewal_opens_on": RENEWALS_OPEN_ON.isoformat(),
         "first_name": member.first_name,
         "last_name": member.last_name,
         "card_year": member.card_year,
@@ -534,6 +542,7 @@ def request_public_renewal_access(
     email: str = Form(..., max_length=320),
     db: Session = Depends(get_db),
 ):
+    require_renewals_open()
     enforce_join_rate_limit(db, client_ip=get_client_ip(request))
     org = _public_renewal_org(db, org_slug)
     member = find_annual_cardholder(db, org_id=org.id, email=email)
@@ -705,6 +714,12 @@ def api_join_start(
         subject=f"Complete your registration for {display_name}",
         payload=build_email_payload(
             text_body=f"Click here to upload documents and complete registration: {link}",
+            html_body=build_system_email_html(
+                title="Completa la tua iscrizione", eyebrow="Iscrizione socio", organization_name=display_name,
+                body="La tua richiesta è stata registrata. Carica i documenti richiesti per completare l’iscrizione.",
+                cta_url=link, cta_label="Completa l’iscrizione",
+                footer=f"Il link è personale e scade tra {settings.JOIN_TOKEN_EXPIRE_MINUTES} minuti.",
+            ),
             sender=build_sender_payload(mode="association", association=org),
             meta={
                 "member_id": member.id,
@@ -871,6 +886,11 @@ def api_join_continue(
                 text_body=(
                     "Your registration is complete. "
                     f"You can now login at {settings.BASE_URL}/member/login"
+                ),
+                html_body=build_system_email_html(
+                    title="Iscrizione completata", eyebrow="Iscrizione socio", organization_name=display_name,
+                    body="I tuoi dati sono stati ricevuti. Accedi all’area socio per consultare lo stato dell’iscrizione.",
+                    cta_url=f"{settings.BASE_URL}/member/login", cta_label="Apri l’area socio",
                 ),
                 sender=build_sender_payload(mode="association", association=org),
                 meta={"member_id": member.id},
@@ -1331,6 +1351,10 @@ def api_join_submit_multipart(
                     text_body=(
                         "Abbiamo ricevuto la tua richiesta e i documenti. "
                         "Un amministratore li verifichera a breve."
+                    ),
+                    html_body=build_system_email_html(
+                        title="Richiesta di iscrizione ricevuta", eyebrow="Iscrizione socio", organization_name=display_name,
+                        body="Abbiamo ricevuto la tua richiesta e i documenti. Un amministratore li verificherà a breve. Riceverai una comunicazione sull’esito della verifica.",
                     ),
                     sender=build_sender_payload(mode="association", association=org),
                     meta={"member_id": member.id},

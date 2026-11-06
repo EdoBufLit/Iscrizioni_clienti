@@ -641,9 +641,17 @@ def _enqueue_booking_email(
         return
     date_line = format_booking_date_it(booking.booking_date, fallback="da definire")
     time_line = booking.booking_time or "da definire"
+    member_area_url = ""
+    html_action_message = action_message
+    html_body_override = body_text_override
     if _booking_email_should_mention_member_area(booking=booking, email_type=email_type):
         member_area_message = _booking_member_area_message()
         action_message = f"{action_message}\n\n{member_area_message}"
+        base = (settings.FRONTEND_URL or settings.BASE_URL or "").strip().rstrip("/")
+        member_area_url = f"{base}/dashboard/prenotazioni" if base else "/dashboard/prenotazioni"
+        html_action_message += "\n\nTrovi questa prenotazione anche nella tua area socio, dove puoi consultarla e inviare eventuali richieste di modifica."
+        if html_body_override and html_body_override.endswith(member_area_message):
+            html_body_override = html_body_override[:-len(member_area_message)] + "Trovi questa prenotazione anche nella tua area socio, dove puoi consultarla e inviare eventuali richieste di modifica."
     text_body = body_text_override or (
         f"{intro}\n\n"
         f"Nome: {booking.customer_name}\n"
@@ -658,7 +666,9 @@ def _enqueue_booking_email(
         eyebrow="Prenotazioni",
         organization_name=getattr(organization, "name", "") or "",
         preheader=intro,
-        body=body_text_override or f"{intro}\n\n{action_message}",
+        body=html_body_override or f"{intro}\n\n{html_action_message}",
+        cta_url=member_area_url,
+        cta_label="Apri le tue prenotazioni" if member_area_url else "",
         details=[] if body_text_override else [
             ("Nome", booking.customer_name),
             ("Data", date_line),
