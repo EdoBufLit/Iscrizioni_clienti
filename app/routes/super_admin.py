@@ -17,6 +17,7 @@ from sqlalchemy import and_, case, cast, func, or_, text, String
 from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 
 from app.db import get_db
+from app.services.enrollment_qr import build_enrollment_qr
 from app.models import (
     AdminUser,
     AdminRole,
@@ -2730,6 +2731,20 @@ def list_organizations(
         numbering=numbering,
         db=db,
     )
+
+
+@router.get("/organizations/{org_id}/enrollment-qr")
+@associations_router.get("/organizations/{org_id}/enrollment-qr")
+def get_organization_enrollment_qr(
+    request: Request,
+    org_id: int,
+    db: Session = Depends(get_db),
+):
+    _require_super_admin(request, db)
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    return build_enrollment_qr(org, request)
 
 
 @router.get("/organizations/{org_id}")

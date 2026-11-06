@@ -6484,3 +6484,27 @@ Specifica: seguire le tre correzioni del cliente, senza confondere form attivo p
 - Email transazionali uniformate, rinnovi disponibili dal1gennaio2027 italiano, pubblicazione esplicita per form e Documenti compatti verificati anche nelle operazioni su richiesta. Modelli personalizzati, storico prenotazioni e fulfillment dei pagamenti preservati.
 - Backend1186passati/13saltati; frontend462passati/73file; build e review riusciti.108controlli browser Documenti,48email,14prenotazioni e8rinnovo; entrambe le migrazioni provate suPostgreSQL isolato con rollback. Nessun dato reale modificato perQA.
 - Applicativo5cba569 pubblicato suMain; pipeline42216220609/deploy127887683789 riusciti. Final canary passed alle13:22:17Europe/Rome.76controlliHTTPS/hashasset e10browserlive, sette servizi healthy senza restart/OOM, schema20261105_02_renewal_email e tre preset gestiti aggiornati. ServerQA fermati. Rapporto docs/service_emails_booking_visibility_documents_release_2026-11-06.md.
+
+# Piano — QR iscrizione associazioni (6 novembre 2026)
+- [x] Ricostruire impostazioni Org Admin, Setup Super Admin e link pubblico canonico.
+- [x] Aggiungere generazione QR autenticata e componente condiviso con anteprima curata, copia link e download locandina/QR.
+- [x] Integrare nelle impostazioni della propria associazione e nel Setup delle Associazioni Super Admin.
+- [x] Verificare autorizzazioni, link decodificato, download e layout responsive chiaro/scuro; eseguire test e build.
+- [x] Documentare risultati e limiti nella review.
+
+Specifica: il QR punta al percorso pubblico /associazioni/{slug}/iscrizione sull'origine configurata; nessun servizio QR esterno. Locandina con invito Iscriviti ora e nome associazione, fondo chiaro e zona di rispetto del codice conservati anche nel tema scuro. Nessun cambiamento ai dati reali e nessun deploy richiesto.
+
+
+### Review QR iscrizione
+- Aggiunti QR iscrizione in Associazione/Impostazioni Org Admin e Associazioni/Setup Super Admin: anteprima, copia link, locandina PNG con nome pubblico del club e download solo QR. Autorizzazioni isolate per organizzazione; generazione locale, nessuna migrazione o dipendenza.
+- Frontend469test/74file e backend7test mirati superati, build produzione e PWA riuscite. Review indipendente senza blocker; encoding e diff verificati.
+- Collaudo reale su database sintetico:16layout a320/390/768/1440px nei due temi e ruoli, ripetuti dopo la rifinitura finale. Quattro PNG scaricati e decodificati viaZXing con URL corretto; nessun overflow o errore browser. Anteprima adattata allo spazio effettivo del pannello, QR sempre su fondo bianco.
+- Nessun dato reale modificato e nessun deploy eseguito. ServerQA fermato. Rapporto docs/enrollment_qr_2026-11-06.md; evidenze output/enrollment-qr-20261106/.
+
+# Piano — deploy QR iscrizione (6 novembre 2026)
+- [x] Confermare allineamento Main/origin, review finale e verifiche prima della pubblicazione.
+- [ ] Commit delle sole modifiche QR autorizzate e push su Main per attivare il workflow Hetzner.
+- [ ] Seguire build, rollout e canary fino a conclusione.
+- [ ] Verificare salute, asset e QR nell'ambiente online in sola lettura; documentare esito.
+
+Specifica: deploy autorizzato dall'utente dopo anteprime approvate. Riutilizzare pipeline esistente senza introdurre migrazioni, dipendenze o cambiamenti infrastrutturali; conservare output locali e dati reali.

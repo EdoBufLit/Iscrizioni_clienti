@@ -29,6 +29,10 @@ vi.mock("../../components/ui/UnsavedChangesProvider", () => ({
   useUnsavedChangesGuard: () => {},
 }));
 
+vi.mock("../../components/EnrollmentQrPanel", () => ({
+  default: ({ endpoint }: { endpoint: string }) => <div data-testid="enrollment-qr-panel">{endpoint}</div>,
+}));
+
 const baseOrg = {
   id: 10,
   name: "Golden Age Club",
@@ -76,6 +80,14 @@ describe("OrgAdminSettings tabbed architecture", () => {
       wallet_logo_url: "/uploads/new-logo.png",
       wallet_hero_image_url: null,
     });
+  });
+
+  it("offers enrollment QR in settings for the authenticated organization without saving", async () => {
+    render(<MemoryRouter initialEntries={["/org-admin/associazione"]}><OrgAdminSettings /></MemoryRouter>);
+    await screen.findByLabelText("Nome");
+    fireEvent.click(screen.getByRole("tab", { name: "QR iscrizione" }));
+    expect(screen.getByTestId("enrollment-qr-panel")).toHaveTextContent("/api/org-admin/organization/enrollment-qr");
+    expect(mocks.patchOrg).not.toHaveBeenCalled();
   });
 
   it("renders Profilo tab by default and saves profile changes", async () => {

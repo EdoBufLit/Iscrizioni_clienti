@@ -10,13 +10,15 @@ import {
   type OrgAdminOrganizationDetail,
 } from "../../lib/api";
 import Skeleton from "../../components/ui/Skeleton";
+import EnrollmentQrPanel from "../../components/EnrollmentQrPanel";
 import { useToast } from "../../components/ui/ToastProvider";
 import { useUnsavedChangesGuard } from "../../components/ui/UnsavedChangesProvider";
 
-type SettingsTabKey = "profilo" | "documenti" | "email" | "wallet";
+type SettingsTabKey = "profilo" | "documenti" | "email" | "wallet" | "qr";
 
 const SETTINGS_TABS: Array<{ key: SettingsTabKey; label: string }> = [
   { key: "profilo", label: "Profilo" },
+  { key: "qr", label: "QR iscrizione" },
   { key: "documenti", label: "Documenti" },
   { key: "email", label: "Email" },
   { key: "wallet", label: "Google Wallet" },
@@ -39,7 +41,7 @@ type EmailPreview = {
 };
 
 function resolveTab(raw: string | null): SettingsTabKey {
-  if (raw === "documenti" || raw === "email" || raw === "wallet") return raw;
+  if (raw === "documenti" || raw === "email" || raw === "wallet" || raw === "qr") return raw;
   return "profilo";
 }
 
@@ -598,7 +600,7 @@ const OrgAdminSettings = () => {
           <p className="org-eyebrow hidden md:block">Impostazioni</p>
           <h1 className="org-page-header__title">Associazione</h1>
           <p className="org-page-header__subtitle hidden md:block">
-            Gestisci profilo pubblico, statuto PDF, mittente email e branding Google Wallet.
+            Gestisci profilo pubblico, QR iscrizione, statuto PDF, mittente email e Google Wallet.
           </p>
         </div>
       </header>
@@ -634,6 +636,12 @@ const OrgAdminSettings = () => {
           );
         })}
       </div>
+
+      {activeTab === "qr" && (
+        <div className="org-section-panel p-5 md:p-7">
+          <EnrollmentQrPanel endpoint="/api/org-admin/organization/enrollment-qr" />
+        </div>
+      )}
 
       {/* TAB 1: PROFILO */}
       {activeTab === "profilo" && (

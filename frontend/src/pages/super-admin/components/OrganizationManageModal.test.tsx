@@ -6,6 +6,14 @@ import OrganizationManageModal from "./OrganizationManageModal";
 vi.mock("../../../lib/api", async original => ({
   ...await original<typeof import("../../../lib/api")>(),
   fetchOrgBatches: vi.fn(), patchOrgCardLot: vi.fn(), deleteOrgCardLot: vi.fn(),
+  fetchOrganizationNumberingConfig: vi.fn().mockResolvedValue({}),
+  fetchSuperAdminMembershipPaymentSettings: vi.fn().mockResolvedValue({}),
+  fetchSuperAdminWhatsAppProviderSettings: vi.fn().mockResolvedValue({}),
+  patchSuperAdminOrganization: vi.fn(),
+}));
+
+vi.mock("../../../components/EnrollmentQrPanel", () => ({
+  default: ({ endpoint }: { endpoint: string }) => <div data-testid="enrollment-qr-panel">{endpoint}</div>,
 }));
 
 const closed: api.OrgBatch = {
@@ -66,5 +74,31 @@ describe("Lotti annuali dell'associazione", () => {
     fireEvent.change(status, { target: { value: "inactive" } });
     fireEvent.click(screen.getByRole("button", { name: "Salva modifiche" }));
     await waitFor(() => expect(api.patchOrgCardLot).toHaveBeenCalledExactlyOnceWith(1, 11, { status: "inactive" }));
+  });
+});
+
+describe("QR iscrizione nel Setup associazione", () => {
+  it("genera il QR solo su richiesta per l'associazione selezionata senza salvare impostazioni", async () => {
+    vi.clearAllMocks();
+    const scroll = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: scroll });
+    const props = {
+      open: true,
+      modalType: "branding" as const,
+      onClose: vi.fn(), onSaved: vi.fn(), onSwitchToAddBatch: vi.fn(),
+    };
+    const { rerender } = render(<OrganizationManageModal {...props}
+      selectedOrg={{ id: 41, name: "Jappa Club", slug: "jappa-club" } as api.SuperAdminOrganization} />);
+    expect(screen.queryByTestId("enrollment-qr-panel")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "QR iscrizione" }));
+    expect(screen.getByTestId("enrollment-qr-panel")).toHaveTextContent("/api/super-admin/organizations/41/enrollment-qr");
+    expect(scroll).toHaveBeenCalled();
+    expect(api.patchSuperAdminOrganization).not.toHaveBeenCalled();
+    rerender(<OrganizationManageModal {...props}
+      selectedOrg={{ id: 42, name: "Altro Club", slug: "altro-club" } as api.SuperAdminOrganization} />);
+    await waitFor(() => expect(screen.queryByTestId("enrollment-qr-panel")).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Crea QR iscrizione" }));
+    expect(screen.getByTestId("enrollment-qr-panel")).toHaveTextContent("/api/super-admin/organizations/42/enrollment-qr");
+    expect(api.patchSuperAdminOrganization).not.toHaveBeenCalled();
   });
 });

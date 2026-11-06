@@ -26,6 +26,7 @@ import {
   type WhatsAppProviderName,
 } from "../../../lib/api";
 import ConfirmModal from "../../../components/ui/ConfirmModal";
+import EnrollmentQrPanel from "../../../components/EnrollmentQrPanel";
 import { SuperAdminIcon, type SuperAdminIconName } from "./SuperAdminPrimitives";
 
 export type OrganizationModalType = "create" | "range" | "add-batch" | "view-batches" | "branding";
@@ -253,7 +254,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
   const [loadingWhatsAppProvider, setLoadingWhatsAppProvider] = useState(false);
   const [whatsAppProviderMessage, setWhatsAppProviderMessage] = useState("");
   const [whatsAppProviderActionLoading, setWhatsAppProviderActionLoading] = useState<"state" | "qr" | null>(null);
-  const [setupTab, setSetupTab] = useState<"general" | "numbering" | "signup" | "branding" | "communications">("general");
+  const [setupTab, setSetupTab] = useState<"general" | "numbering" | "signup" | "qr" | "branding" | "communications">("general");
   const currentBrandingNumberingMode =
     numberingConfig?.numbering_mode === "dedicated" ? "dedicated" : "shared_assonam";
   const numberingModeChanged =
@@ -1386,6 +1387,7 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                   { key: "general", label: "Generale", icon: "document" },
                   { key: "numbering", label: "Numerazione tessere", icon: "cards" },
                   { key: "signup", label: "Iscrizioni", icon: "user" },
+                  { key: "qr", label: "QR iscrizione", icon: "link" },
                   { key: "branding", label: "Branding", icon: "send" },
                   { key: "communications", label: "Comunicazioni", icon: "mail" },
                 ] satisfies Array<{ key: typeof setupTab; label: string; icon: SuperAdminIconName }>).map((item) => (
@@ -1630,6 +1632,23 @@ const OrganizationManageModal = memo(function OrganizationManageModal({
                   </div>
                 </div>
               </div>
+              <section id="sa-setup-sec-qr" className="sa-setup-section">
+                <div className="sa-setup-section__heading">
+                  <h4>QR iscrizione</h4>
+                  <p>Condividi il link di iscrizione con un QR o una locandina pronta da scaricare.</p>
+                </div>
+                {setupTab === "qr" && selectedOrg ? (
+                  <EnrollmentQrPanel endpoint={`/api/super-admin/organizations/${selectedOrg.id}/enrollment-qr`} />
+                ) : (
+                  <button
+                    type="button"
+                    className="sa-btn mt-3"
+                    onClick={() => setSetupTab("qr")}
+                  >
+                    Crea QR iscrizione
+                  </button>
+                )}
+              </section>
               <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-neutral-600">
                   Iscrizione e documenti

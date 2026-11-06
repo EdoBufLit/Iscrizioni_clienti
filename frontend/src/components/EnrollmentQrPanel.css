@@ -1,0 +1,24 @@
+.enrollment-qr { min-width: 0; color: var(--theme-text); }
+.enrollment-qr__intro { margin-bottom: 1.5rem; }
+.enrollment-qr__eyebrow { color: var(--theme-brand); font-size: .7rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.enrollment-qr h2 { margin: .4rem 0; font-size: 1.3rem; font-weight: 700; line-height: 1.25; }
+.enrollment-qr h3 { font-weight: 700; font-size: 1rem; }
+.enrollment-qr p { color: var(--theme-text-muted); font-size: .875rem; line-height: 1.6; }
+.enrollment-qr__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: 1.5rem; align-items: center; }
+.enrollment-qr__preview { min-width: 0; border: 1px solid var(--theme-border); border-radius: 1rem; padding: 1rem; background: var(--theme-surface-muted); }
+.enrollment-qr__preview img { display: block; width: 100%; max-width: 24rem; height: auto; margin: auto; border-radius: .6rem; box-shadow: 0 8px 24px #00000012; }
+.enrollment-qr__controls { display: grid; gap: .85rem; min-width: 0; }
+.enrollment-qr label { font-size: .75rem; font-weight: 600; }
+.enrollment-qr input { width: 100%; min-width: 0; border: 1px solid var(--theme-border); border-radius: .6rem; background: var(--theme-surface-solid); color: var(--theme-text); padding: .75rem; font-size: .8rem; }
+.enrollment-qr button { min-height: 44px; border: 1px solid var(--theme-border); border-radius: .65rem; background: var(--theme-surface-solid); color: var(--theme-text); padding: .65rem 1rem; font-size: .8rem; font-weight: 600; cursor: pointer; }
+.enrollment-qr button:hover { border-color: var(--theme-brand); }
+.enrollment-qr button:focus-visible, .enrollment-qr input:focus-visible { outline: 2px solid var(--theme-brand); outline-offset: 3px; }
+.enrollment-qr button:disabled { opacity: .65; cursor: wait; }
+.enrollment-qr button.enrollment-qr__primary { background: var(--theme-brand); color: var(--theme-on-brand); border-color: var(--theme-brand); }
+.enrollment-qr__downloads { display: grid; gap: .65rem; }
+.enrollment-qr p.enrollment-qr__hint { font-size: .75rem; }
+@media (max-width: 639px) {
+  .enrollment-qr__grid { grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
+  .enrollment-qr__preview { padding: .6rem; }
+  .enrollment-qr__preview img { max-width: 18rem; }
+}

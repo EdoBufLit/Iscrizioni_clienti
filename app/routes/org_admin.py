@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, TypeAdapter, field_
 
 from fastapi import UploadFile, File
 from app.db import get_db
+from app.services.enrollment_qr import build_enrollment_qr
 from app.models import (
     AdminUser,
     AdminRole,
@@ -3374,6 +3375,17 @@ def get_organization_detail(
 
     org = admin.organization
     return _serialize_org_admin_organization(request, org)
+
+
+@router.get("/organization/enrollment-qr")
+def get_org_enrollment_qr(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return build_enrollment_qr(admin.organization, request)
 
 
 @router.get("/organization/membership-settings")
