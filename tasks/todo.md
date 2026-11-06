@@ -6410,7 +6410,7 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 ### Review chiusura lotti — 2 novembre 2026
 - Lotti precedenti chiusi dal1gennaio italiano, residui nello storico dell'annooriginario e disponibilitàcorrente separata; nessun trasferimento o riciclo. Annoimmutabile e guardie antiuso/riapertura anche prima dello scheduler. Nuovo lotto2027 solo dai nuovi acquisti; nessuna necessità di popolare anticipatamente il magazzino.
 - Backend1141passed/13skipped, frontend392passed/61file e build riusciti; reviewindipendente completata. Prove su confineUTC/Roma, pagamentoheldconfermato, ritardoordine2026, blocchiAPI,tenant,scope e invarianti su tutti i dati storici. Nessuna migrazione o dipendenza nuova.
-- Browser locale con dati sintetici: lotto2026chiuso con52tessere residue nonutilizzabili, desktop/mobile390px leggibili senzaoverflow. ServerQAfermato, schedechiuse e viewport ripristinato; nessuna modifica a dati reali perQA.
+- Browser locale con dati sintetici: lotto2026chiuso con52tessere residue nonutilizzabili, desktop/mobile390px leggibili senzaoverflow. ServerQAfermato, schedechiuse e viewport ripristinato; nessuna modifica a dati reali per QA.
 - Pubblicato0a91388 su Main; pipeline41533150681 e deploy125579084885 riusciti, Final canary passed alle23:05 del2novembre2026 Europe/Rome.62controlliHTTPS/hashasset superati; sette servizi healthy sulnuovoSHA,0restart/OOM, schema invariato. Jobchiusuralotti realmente eseguito conoktrue/errori0; zero lotti di annualità precedenti ancora abilitati in produzione. Rapporto docs/card_lot_year_closure_release_2026-11-02.md.
 
 # Piano — verifica ricerca soci (4 novembre 2026)
@@ -6445,7 +6445,7 @@ oot:root, mentre il workflow deploy gira come utente deploy; git clean -fd falli
 
 ### Review deploy UI/UX Gemini
 - Due fasi pubblicate con232e335, due correzioni accessibilita e relative regressioni. Build e394test/62file riusciti, review indipendenti e smoke mobile/desktop chiaro/scuro. Nessuna pratica o pagamento reale eseguito.
-- Pipeline41892340754/deploy126793764484 riusciti, Final canary passed alle20:05 del4novembre.63controlliHTTPS/hashasset, sette servizi healthy sulloSHA/zero restartOOM, schema invariato. Primo errore generico browser durante rollout risolto al reload e non riprodotto nella nuova scheda; causa non attribuita. Rapporto docs/gemini_uiux_release_2026-11-04.md; anteprima fermata e browser ripristinato.
+- Pipeline41892340754/deploy126793764484 riusciti, Final canary passed alle20:05 del4novembre.63controlliHTTPS/hashasset, sette servizi healthy sullo SHA/zero restartOOM, schema invariato. Primo errore generico browser durante rollout risolto al reload e non riprodotto nella nuova scheda; causa non attribuita. Rapporto docs/gemini_uiux_release_2026-11-04.md; anteprima fermata e browser ripristinato.
 
 # Piano — completamento reattività e flussi operativi Gemini (4 novembre 2026)
 - [x] Verificare e completare cache con invalidazione/sessioni, prefetch, caricamento route/CSS, tessera offline, UI ottimistica e polling visibile.
@@ -6460,10 +6460,10 @@ Specifica: applicare il perimetro selezionato nell'ultimo screenshot; Apple Wall
 
 ### Review completamento Gemini
 - Backend completo1164passati/13saltati; frontend446passati/71file; build finale riuscita.70screenshot a320/390/768/1280/1440px, chiaro/scuro, zerooverflow; card eQR verificati con vero reload offline. Campagna aperta con destinatari filtrati senza invio.
-- Rilevati e corretti: cache tra sessioni/schede, PII inURL, timeline irraggiungibile per utenti pending, anteprimaPDF attachment, deep link verso prenotazione gestita, errori tecnici offline e PATCH stato che cancellava sala/tavolo. Nessun dato reale modificato perQA. Rapporto docs/gemini_performance_workflows_release_2026-11-05.md.
+- Rilevati e corretti: cache tra sessioni/schede, PII inURL, timeline irraggiungibile per utenti pending, anteprimaPDF attachment, deep link verso prenotazione gestita, errori tecnici offline e PATCH stato che cancellava sala/tavolo. Nessun dato reale modificato per QA. Rapporto docs/gemini_performance_workflows_release_2026-11-05.md.
 
 ### Pubblicazione completamento Gemini — 5 novembre 2026
-- Applicativo0aa00f9 pubblicato suMain; pipeline41932497563 e deploy126933321927 riusciti, Final canary passed alle00:23:51Europe/Rome.74controlliHTTPS/hashasset e8controllibrowserlive superati; sette servizi healthy sulnuovoSHA, zero restart/OOM, schema invariato. WorkerPWA corrente eprecacherisorse verificati, nessun dato reale modificato perQA. Rapporto docs/gemini_performance_workflows_release_2026-11-05.md; serverlocale fermato/browserheadlesschiusi.
+- Applicativo0aa00f9 pubblicato suMain; pipeline41932497563 e deploy126933321927 riusciti, Final canary passed alle00:23:51Europe/Rome.74controlliHTTPS/hashasset e8controllibrowserlive superati; sette servizi healthy sulnuovoSHA, zero restart/OOM, schema invariato. WorkerPWA corrente eprecacherisorse verificati, nessun dato reale modificato per QA. Rapporto docs/gemini_performance_workflows_release_2026-11-05.md; serverlocale fermato/browserheadlesschiusi.
 
 # Piano — correzioni accesso email, prenotazioni socio e Documenti Super Admin (5 novembre 2026)
 - [x] Ricostruire email di accesso soci e uniformare HTML/CTA a uno standard curato, mobile-safe, senza URL lungo visibile; preservare testo semplice e sicurezza token.
@@ -6482,7 +6482,7 @@ Specifica: seguire le tre correzioni del cliente, senza confondere form attivo p
 
 ### Review e pubblicazione correzioni — 6 novembre 2026
 - Email transazionali uniformate, rinnovi disponibili dal1gennaio2027 italiano, pubblicazione esplicita per form e Documenti compatti verificati anche nelle operazioni su richiesta. Modelli personalizzati, storico prenotazioni e fulfillment dei pagamenti preservati.
-- Backend1186passati/13saltati; frontend462passati/73file; build e review riusciti.108controlli browser Documenti,48email,14prenotazioni e8rinnovo; entrambe le migrazioni provate suPostgreSQL isolato con rollback. Nessun dato reale modificato perQA.
+- Backend1186passati/13saltati; frontend462passati/73file; build e review riusciti.108controlli browser Documenti,48email,14prenotazioni e8rinnovo; entrambe le migrazioni provate suPostgreSQL isolato con rollback. Nessun dato reale modificato per QA.
 - Applicativo5cba569 pubblicato suMain; pipeline42216220609/deploy127887683789 riusciti. Final canary passed alle13:22:17Europe/Rome.76controlliHTTPS/hashasset e10browserlive, sette servizi healthy senza restart/OOM, schema20261105_02_renewal_email e tre preset gestiti aggiornati. ServerQA fermati. Rapporto docs/service_emails_booking_visibility_documents_release_2026-11-06.md.
 
 # Piano — QR iscrizione associazioni (6 novembre 2026)
@@ -6503,8 +6503,15 @@ Specifica: il QR punta al percorso pubblico /associazioni/{slug}/iscrizione sull
 
 # Piano — deploy QR iscrizione (6 novembre 2026)
 - [x] Confermare allineamento Main/origin, review finale e verifiche prima della pubblicazione.
-- [ ] Commit delle sole modifiche QR autorizzate e push su Main per attivare il workflow Hetzner.
-- [ ] Seguire build, rollout e canary fino a conclusione.
-- [ ] Verificare salute, asset e QR nell'ambiente online in sola lettura; documentare esito.
+- [x] Commit delle sole modifiche QR autorizzate e push su Main per attivare il workflow Hetzner.
+- [x] Seguire build, rollout e canary fino a conclusione.
+- [x] Verificare salute, asset e QR nell'ambiente online in sola lettura; documentare esito.
 
 Specifica: deploy autorizzato dall'utente dopo anteprime approvate. Riutilizzare pipeline esistente senza introdurre migrazioni, dipendenze o cambiamenti infrastrutturali; conservare output locali e dati reali.
+
+
+### Review e pubblicazione QR iscrizione
+- Commit applicativo f89bd9d2636516201b1bafbba6f6eac4083a72ae pubblicato su Main; pipeline 42283958189, build 128119840463 e deploy 128120734968 riusciti. Final canary passed alle 21:02:58 Europe/Rome del 6 novembre 2026.
+- Suite backend completa: 1190 passati / 13 saltati, frontend: 469 passati / 74 file e build riusciti; review finale senza blocker.
+- 23 controlli HTTPS inclusi 11 asset con hash identico alla build,12smoke browser pubblici mobile/desktop chiaro/scuro e QR generato dal servizio produzione decodificato viaZXing sul link esatto di JappaClub. Endpoint QR anonimi: 401.
+- Sette servizi applicativi healthy sulla nuova immagine, zero restart/OOM, schema invariato 20261105_02_renewal_email; nessun dato reale modificato per QA. Evidenze output/enrollment-qr-20261106/; rapporto docs/enrollment_qr_2026-11-06.md.
