@@ -6470,7 +6470,7 @@ Specifica: applicare il perimetro selezionato nell'ultimo screenshot; Apple Wall
 - [x] Rendere esplicita la pubblicazione delle prenotazioni nell'area socio, con visibilità nascosta, perenne o fino a scadenza italiana; tenere distinti storico prenotazioni e inviti prenotabili, nessuna pubblicazione automatica di contenuti legacy.
 - [x] Correggere Documenti Super Admin su telefono/tablet/desktop, inclusi archivio, filtri, nomi lunghi e pannelli/modali, nei temi chiaro/scuro.
 - [x] Test funzionali e di sicurezza, build e screenshot reali a320/390/768/1024/1280/1440px; preview email senza invii reali.
-- [ ] Deploy suMain nel seguito autorizzato, migration eventuale, monitoraggio pipeline/canary e verifiche online in sola lettura; rapporto finale.
+- [x] Deploy suMain nel seguito autorizzato, migration eventuale, monitoraggio pipeline/canary e verifiche online in sola lettura; rapporto finale.
 
 Specifica: seguire le tre correzioni del cliente, senza confondere form attivo pubblico con contenuto esplicitamente pubblicato per i soci. Confermare il livello di configurazione form/serata durante l'analisi. Non modificare consensi, credenziali, accessi o dati reali per collaudo.
 
@@ -6478,3 +6478,9 @@ Specifica: seguire le tre correzioni del cliente, senza confondere form attivo p
 - [x] Uniformare anche rinnovo e altre email di servizio, inclusi cambi cellulare/email, con CTA leggibile e testo semplice di riserva.
 - [x] Aprire i rinnovi solo dal1gennaio2027Europe/Rome, con guardie server e UI su tutti i percorsi di avvio; preservare fulfillment/tracciamento già avviati e scadenza annualeJan2.
 - [x] Rivedere la densità di Documenti: archivio prioritario, riepiloghi compatti, upload/configurazione su richiesta, dettaglio contestuale, prima riga misurata nei viewport reali. Il cliente ha respinto la prima soluzione ancora troppo lunga.
+
+
+### Review e pubblicazione correzioni — 6 novembre 2026
+- Email transazionali uniformate, rinnovi disponibili dal1gennaio2027 italiano, pubblicazione esplicita per form e Documenti compatti verificati anche nelle operazioni su richiesta. Modelli personalizzati, storico prenotazioni e fulfillment dei pagamenti preservati.
+- Backend1186passati/13saltati; frontend462passati/73file; build e review riusciti.108controlli browser Documenti,48email,14prenotazioni e8rinnovo; entrambe le migrazioni provate suPostgreSQL isolato con rollback. Nessun dato reale modificato perQA.
+- Applicativo5cba569 pubblicato suMain; pipeline42216220609/deploy127887683789 riusciti. Final canary passed alle13:22:17Europe/Rome.76controlliHTTPS/hashasset e10browserlive, sette servizi healthy senza restart/OOM, schema20261105_02_renewal_email e tre preset gestiti aggiornati. ServerQA fermati. Rapporto docs/service_emails_booking_visibility_documents_release_2026-11-06.md.

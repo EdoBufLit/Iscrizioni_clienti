@@ -19,4 +19,6 @@
 
 ## Pubblicazione
 
-Deploy autorizzato su Main; esito pipeline, canary e controlli online da registrare dopo la pubblicazione.
+Applicativo `5cba569a7a41755bdb5e614d1f97ea48f6a8cf02` pubblicato su Main. [Pipeline42216220609](https://github.com/EdoBufLit/Iscrizioni_clienti/actions/runs/42216220609), build127886779443 e deploy127887683789 riusciti. **Final canary passed alle13:22:17 del6novembre2026 Europe/Rome**: servizi stabili, health200, Alembic a head.
+
+76controlli HTTPS/hash degli asset e10controlli browser pubblici superati. Sette servizi applicativi healthy sulla nuova immagine, zero restart/OOM. Schema `20261105_02_renewal_email`, nuove colonne dei form presenti, tre preset globali email aggiornati e rinnovi bloccati fino al2027 confermati in sola lettura. Manutenzione annuale riuscita senza cancellazioni o disattivazioni nel ciclo osservato. `/version` non espone loSHA per configurazione preesistente: versione verificata tramite immagine Docker e corrispondenza degli asset. ServerQA locali fermati e browserheadless chiusi.
