@@ -6548,7 +6548,14 @@ Specifica: modifica limitata al posizionamento del modal Cerca socio in Presenze
 # Piano — deploy filtri soci e ricerca Presenze (7 novembre 2026)
 - [x] Confermare Main/origin e perimetro delle due correzioni autorizzate.
 - [x] Review finale e test frontend prima della pubblicazione.
-- [ ] Commit e push su Main; seguire build, rollout e canary.
-- [ ] Verificare asset online, salute, servizi e risorse host; documentare esito.
+- [x] Commit e push su Main; seguire build, rollout e canary.
+- [x] Verificare asset online, salute, servizi e risorse host; documentare esito.
 
 Specifica: deploy autorizzato dall'utente; solo UI già verificata, nessuna migrazione o modifica dati reali. Preservare output locali non versionati.
+
+
+### Pubblicazione filtri soci e ricerca Presenze — 7 novembre 2026
+- Commit applicativo0a769b68b80bd9e0b0dedd35d3afefab784fdbeb pubblicato suMain. Pipeline42310103403, build128209129170 e deploy128209889725 riusciti; canary finale superato.
+- Frontend469test/74file superati, build e review finale riuscite. Collaudo autenticato locale su database sintetico:14layout filtri e12ricerca Presenze, chiaro/scuro, inclusi767/768px e desktop basso.
+- Verifica online:37controlliHTTPS,25asset con hash identico alla build,12smoke browser pubblici chiaro/scuro. Sette servizi healthy sulla nuova immagine, zero restart/OOM; disco51%, inode13%. Nessun dato reale modificato e nessuna migrazione aggiunta.
+- Rapporto docs/member_filters_attendance_release_2026-11-07.md; evidenze output/member-filters-20261106/. Output locali preservati.
