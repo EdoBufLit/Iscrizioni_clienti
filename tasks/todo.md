@@ -6580,10 +6580,16 @@ Specifica. Presenze conta gli ingressi unici del giorno in Europe/Rome. Prenotaz
 
 - [x] Confermare perimetro, ramo Main, pipeline e risorse del server.
 - [x] Verificare migrazione e concorrenza su PostgreSQL isolato.
-- [ ] Pubblicare su Main e seguire build, deploy e canary.
-- [ ] Verificare revisione, asset e salute in produzione. Registrare l'esito.
+- [x] Pubblicare su Main e seguire build, deploy e canary.
+- [x] Verificare revisione, asset e salute in produzione. Registrare l'esito.
 
 Specifica. Usare la pipeline Hetzner esistente per applicare la migrazione incrementale. Provare gli avvisi con dati sintetici. Limitare i controlli sui dati di produzione alla lettura.
 
 - Verificato su PostgreSQL 16 isolato con copia del solo schema di produzione alla revisione precedente. La migrazione ha preservato la riga sintetica e tre prenotazioni concorrenti hanno prodotto esattamente due avvisi e due email accodate. Container di prova rimossi e volumi Docker verificati.
 - Spostata la verifica di capienza dopo le chiamate WhatsApp e prima del commit nei flussi di prenotazione che inviano messaggi. Superati 82 test backend mirati dopo la modifica.
+
+### Review deploy Capienza
+
+- Commit applicativo `dad724c2a7ba3e4943b9ea55ecb389abdb1f3165` su Main. Il primo tentativo si è interrotto per un errore interno di GitHub prima del job di deploy. Secondo tentativo riuscito con build `129352617725` e deploy `129353382543`. Canary concluso alle 19:37:12 Europe/Rome del 9 novembre 2026. [Pipeline](https://github.com/EdoBufLit/Iscrizioni_clienti/actions/runs/42674121910/attempts/2)
+- In produzione verificati revisione Alembic `20261109_01_org_capacity`, colonna e tabella degli avvisi, salute HTTP e database. Tutti e sette i servizi applicativi operativi sulla nuova immagine con zero riavvii e zero OOM. Nove verifiche HTTPS riuscite, compresi gli hash di quattro asset e il controllo degli endpoint protetti. Disco 48%, inode 11%, volumi Docker verificati.
+- Suite backend rieseguita sul commit con 1192 test superati e 13 saltati. Frontend con 470 test superati. Invio di prova e concorrenza verificati con dati sintetici.
