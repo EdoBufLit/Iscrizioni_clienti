@@ -1092,6 +1092,7 @@ export type OrgAdminOrganizationDetail = {
   email: string | null;
   phone: string | null;
   website: string | null;
+  max_capacity?: number | null;
   logo_url: string | null;
   statute_version: string | null;
   statute_updated_at: string | null;
@@ -1997,6 +1998,7 @@ export async function patchOrgAdminOrganization(data: {
   email?: string;
   phone?: string;
   website?: string;
+  max_capacity?: number | null;
   address_line1?: string;
   address_line2?: string;
   postal_code?: string;

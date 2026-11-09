@@ -980,6 +980,7 @@ def _run_legacy_column_migrations() -> None:
             conn, "operation_logs", "actor_member_id", "INTEGER REFERENCES members(id)"
         )
         _add_column_if_missing(conn, "organizations", "deleted_at", "DATETIME")
+        _add_column_if_missing(conn, "organizations", "max_capacity", "INTEGER")
         _add_column_if_missing(conn, "organizations", "whatsapp_e164", "TEXT")
         # Card-branding fields: keep startup resilient even if alembic wasn't run yet.
         _add_column_if_missing(conn, "organizations", "club_display_name", "VARCHAR")

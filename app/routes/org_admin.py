@@ -173,8 +173,10 @@ from app.services.bookings import (
     serialize_booking,
     update_booking_status,
 )
+from app.services.org_capacity import check_booking_capacity
 from app.services.booking_customer_actions import mark_booking_customer_note_reviewed
 from app.services.booking_rooms import (
+    BOOKING_OCCUPANCY_ACTIVE_STATUSES,
     apply_room_table_updates,
     apply_room_updates,
     get_room_for_org_admin,
@@ -899,6 +901,7 @@ def _serialize_org_admin_organization(
         "email": org.email,
         "phone": org.phone,
         "website": org.website,
+        "max_capacity": org.max_capacity,
         "logo_url": f"/api/organizations/{org.slug}/logo" if org.logo_path else None,
         "statute_version": org.statute_version,
         "statute_updated_at": org.statute_updated_at,
@@ -2957,6 +2960,7 @@ class PatchOrgOrganization(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     website: Optional[str] = None
+    max_capacity: Optional[int] = Field(default=None, strict=True, ge=1, le=2_147_483_647)
     address_line1: Optional[str] = None
     address_line2: Optional[str] = None
     postal_code: Optional[str] = None
@@ -8462,6 +8466,7 @@ def update_association_form_submission_status(
         )
 
     booking = next(iter(submission.bookings or []), None)
+    previous_booking_status = booking.status if booking is not None else None
     if booking is not None:
         target_booking_status = None
         if next_status == "confirmed":
@@ -8479,6 +8484,7 @@ def update_association_form_submission_status(
                 room_id=booking.room_id,
                 table_id=booking.table_id,
                 notes=booking.notes,
+                check_capacity=False,
             )
 
     whatsapp_result: dict[str, object] = {"sent": False, "reason": "unchanged"}
@@ -8529,6 +8535,8 @@ def update_association_form_submission_status(
         user_agent=request.headers.get("user-agent"),
     )
 
+    if booking is not None and previous_booking_status not in BOOKING_OCCUPANCY_ACTIVE_STATUSES:
+        check_booking_capacity(db, booking)
     db.commit()
     db.refresh(submission)
     if booking is not None:
@@ -9146,6 +9154,7 @@ def patch_org_admin_booking(
         _track_detail_change("party_size", booking.party_size, body.party_size)
         booking.party_size = body.party_size
 
+    previous_booking_status = booking.status
     next_booking_status = str(body.status or "").strip().lower()
     # Status-only PATCH requests preserve assignments; explicit null still clears them.
     update_booking_status(
@@ -9157,6 +9166,7 @@ def patch_org_admin_booking(
         table_id=body.table_id if "table_id" in submitted_fields else booking.table_id,
         notes=body.notes,
         notify_customer=body.notify_customer,
+        check_capacity=False,
     )
     if detail_changes:
         db.add(
@@ -9218,6 +9228,12 @@ def patch_org_admin_booking(
             "status": next_request_status,
             "whatsapp_result": whatsapp_result,
         }
+    if (
+        previous_booking_status not in BOOKING_OCCUPANCY_ACTIVE_STATUSES
+        or "booking_date" in detail_changes
+        or "party_size" in detail_changes
+    ):
+        check_booking_capacity(db, booking)
     db.commit()
     db.refresh(booking)
     return {
@@ -9525,6 +9541,8 @@ def create_org_admin_manual_booking(
         updated_at=now
     )
     db.add(booking)
+    db.flush()
+    check_booking_capacity(db, booking)
     db.commit()
     db.refresh(booking)
     return {"booking": serialize_booking(booking)}

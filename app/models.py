@@ -187,6 +187,8 @@ class OrgAdminNotificationType(str, enum.Enum):
     LOW_CARDS = "low_cards"
     RENEWAL = "renewal"
     CENTRAL_COMMUNICATION = "central_communication"
+    CAPACITY_WARNING = "capacity_warning"
+    CAPACITY_REACHED = "capacity_reached"
 
 
 class MemberNotificationType(str, enum.Enum):
@@ -317,6 +319,7 @@ class Organization(Base):
     phone = Column(String, nullable=True)
     whatsapp_e164 = Column(String, nullable=True)
     website = Column(String, nullable=True)
+    max_capacity = Column(Integer, nullable=True)
     logo_path = Column(String, nullable=True)
     club_display_name = Column(String, nullable=True)
     card_email_subject = Column(String, nullable=True)
@@ -1404,6 +1407,15 @@ class OrgAdminNotification(Base):
         foreign_keys=[admin_user_id],
     )
     organization = relationship("Organization", foreign_keys=[org_id])
+
+
+class OrgCapacityAlert(Base):
+    __tablename__ = "org_capacity_alerts"
+
+    org_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), primary_key=True)
+    source = Column(String(16), primary_key=True)
+    day = Column(Date, primary_key=True)
+    full_notified = Column(Boolean, nullable=False)
 
 
 class MemberNotification(Base):

@@ -26,7 +26,7 @@ const formatDateTime = (value: string | null | undefined) => {
 };
 
 const notificationTone = (type: string) => {
-  if (type === "member_document") return "bg-amber-50 text-amber-700 ring-amber-200/60";
+  if (type === "member_document" || type === "capacity_warning") return "bg-amber-50 text-amber-700 ring-amber-200/60";
   if (type === "booking_request") {
     return "bg-emerald-50 text-emerald-700 ring-emerald-200/60";
   }
@@ -36,7 +36,7 @@ const notificationTone = (type: string) => {
   if (type === "document_accounting") {
     return "bg-amber-50 text-amber-700 ring-amber-200/60";
   }
-  if (type === "low_cards") {
+  if (type === "low_cards" || type === "capacity_reached") {
     return "bg-rose-50 text-rose-700 ring-rose-200/60";
   }
   return "bg-sky-50 text-sky-700 ring-sky-200/60";
@@ -49,6 +49,7 @@ const notificationLabel = (type: string) => {
   if (type === "form_submission") return "Richiesta";
   if (type === "document_accounting") return "Accounting";
   if (type === "low_cards") return "Tessere";
+  if (type === "capacity_warning" || type === "capacity_reached") return "Capienza";
   return "Documenti";
 };
 

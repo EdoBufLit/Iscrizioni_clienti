@@ -5,6 +5,7 @@ import uuid
 
 import pytest
 
+from app.config import settings
 from app.db import SessionLocal
 from app.models import (
     AdminRole,
@@ -20,6 +21,7 @@ from app.models import (
 from app.services import attendance, attendance_manual
 from app.services.card_verification import build_card_verification_token
 from app.services.org_admin_sessions import create_org_admin_persistent_session
+from app.utils import get_captured_emails
 
 
 BASE = "/api/org-admin/attendances"
@@ -109,6 +111,53 @@ def _annual_term(db, member, **overrides):
     db.add(term)
     db.commit()
     return term
+
+
+def test_capacity_settings_and_attendance_alerts(client, context, monkeypatch, drain_email_outbox):
+    db, org, admin = context
+    monkeypatch.setattr(settings, "EMAIL_MODE", "test")
+    organization_url = "/api/org-admin/organization"
+    assert client.get(organization_url).json()["max_capacity"] is None
+    for invalid in [0, -1, True, "10", 9.5, 2_147_483_648]:
+        assert client.patch(organization_url, json={"max_capacity": invalid}).status_code == 422
+    configured = client.patch(organization_url, json={"max_capacity": 10})
+    assert configured.status_code == 200, configured.text
+    assert client.get(organization_url).json()["max_capacity"] == 10
+
+    members = [_member(db, org) for _ in range(12)]
+    for member in members[:8]:
+        response = _check_in(client, member)
+        assert response.status_code == 200 and response.json()["created"]
+    notifications_url = "/api/org-admin/notifications"
+    assert client.get(notifications_url).json()["unread_count"] == 0
+
+    assert _check_in(client, members[8]).json()["created"]
+    warning = client.get(notifications_url).json()["items"][0]
+    assert warning["type"] == "capacity_warning"
+    assert warning["href"] == "/org-admin/presenze"
+    assert "9 su 10" in warning["body"]
+    assert not _check_in(client, members[8], source="qr").json()["created"]
+    assert client.get(notifications_url).json()["unread_count"] == 1
+
+    assert _check_in(client, members[9], source="qr").json()["created"]
+    items = client.get(notifications_url).json()["items"]
+    assert [item["type"] for item in items] == ["capacity_reached", "capacity_warning"]
+    assert "10 su 10" in items[0]["body"]
+    assert client.delete(f"{notifications_url}/{items[0]['id']}").status_code == 200
+    assert _check_in(client, members[10]).json()["created"]
+    assert client.get(notifications_url).json()["unread_count"] == 1
+
+    cleared = client.patch(organization_url, json={"max_capacity": None})
+    assert cleared.status_code == 200 and cleared.json()["organization"]["max_capacity"] is None
+    assert _check_in(client, members[11]).json()["created"]
+    drain_email_outbox()
+    captured = get_captured_emails()
+    assert len(captured) == 2
+    assert {email["to"] for email in captured} == {admin.email}
+    assert {email["text_body"].splitlines()[0] for email in captured} == {
+        "Capienza quasi esaurita · Presenze",
+        "Capienza esaurita · Presenze",
+    }
 
 
 def test_search_is_tenant_scoped_excludes_deleted_and_has_minimal_fields(client, context):

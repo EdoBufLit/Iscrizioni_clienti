@@ -21,6 +21,7 @@ from app.services.card_verification import (
     resolve_card_verification_membership,
 )
 from app.services.member_membership import resolve_member_membership_type
+from app.services.org_capacity import check_attendance_capacity
 
 
 @dataclass(frozen=True)
@@ -132,6 +133,8 @@ def check_in_member_from_qr(
     )
     db.add(attendance)
     try:
+        db.flush()
+        check_attendance_capacity(db, attendance)
         db.commit()
     except IntegrityError:
         db.rollback()

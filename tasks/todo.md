@@ -6559,3 +6559,31 @@ Specifica: deploy autorizzato dall'utente; solo UI già verificata, nessuna migr
 - Frontend469test/74file superati, build e review finale riuscite. Collaudo autenticato locale su database sintetico:14layout filtri e12ricerca Presenze, chiaro/scuro, inclusi767/768px e desktop basso.
 - Verifica online:37controlliHTTPS,25asset con hash identico alla build,12smoke browser pubblici chiaro/scuro. Sette servizi healthy sulla nuova immagine, zero restart/OOM; disco51%, inode13%. Nessun dato reale modificato e nessuna migrazione aggiunta.
 - Rapporto docs/member_filters_attendance_release_2026-11-07.md; evidenze output/member-filters-20261106/. Output locali preservati.
+
+# Piano — capienza del locale (9 novembre 2026)
+
+- [x] Verificare Main, flussi di ingresso e prenotazione, conteggi e recapito agli amministratori.
+- [x] Aggiungere la configurazione facoltativa in Impostazioni e la migrazione.
+- [x] Collegare conteggi e avvisi persistenti ai flussi di Presenze e Prenotazioni.
+- [x] Verificare soglie, deduplica, separazione tra associazioni e funzionamento delle schermate.
+- [x] Registrare l'esito della verifica.
+
+Specifica. Presenze conta gli ingressi unici del giorno in Europe/Rome. Prenotazioni somma i coperti delle prenotazioni attive per data e associazione, includendo le richieste in attesa. Una prenotazione senza numero di persone vale un coperto. Campanello ed email per gli amministratori attivi quando resta al massimo il 10% o si raggiunge il limite. Una sola notifica per soglia, giorno e flusso. Se un'operazione salta la prima soglia, inviare direttamente l'avviso di capienza raggiunta. Gli avvisi non bloccano le operazioni.
+
+### Review capienza del locale
+
+- Presenze verificato con inserimento manuale, QR e postazione scanner. Prenotazioni verificato con inserimenti manuali, invio da modulo, modifica di data e numero di persone. Il worker ha consegnato entrambe le email in modalità di test e la cancellazione dell'avviso dal campanello non ne provoca un nuovo invio.
+- Suite backend con 1192 test superati e 13 saltati. Suite frontend con 470 test superati e build di produzione riuscita. In browser verificati salvataggio, rilettura, disattivazione e link dal campanello all'agenda, su desktop e mobile in chiaro e scuro.
+- Migrazione verificata in upgrade, downgrade e nuovo upgrade su SQLite con dati esistenti. Tre scritture simultanee su SQLite hanno prodotto un solo avviso per soglia. La query di lock PostgreSQL è stata compilata per il dialetto PostgreSQL. Verifiche eseguite su dati sintetici in locale.
+
+# Piano — deploy Capienza (9 novembre 2026)
+
+- [x] Confermare perimetro, ramo Main, pipeline e risorse del server.
+- [x] Verificare migrazione e concorrenza su PostgreSQL isolato.
+- [ ] Pubblicare su Main e seguire build, deploy e canary.
+- [ ] Verificare revisione, asset e salute in produzione. Registrare l'esito.
+
+Specifica. Usare la pipeline Hetzner esistente per applicare la migrazione incrementale. Provare gli avvisi con dati sintetici. Limitare i controlli sui dati di produzione alla lettura.
+
+- Verificato su PostgreSQL 16 isolato con copia del solo schema di produzione alla revisione precedente. La migrazione ha preservato la riga sintetica e tre prenotazioni concorrenti hanno prodotto esattamente due avvisi e due email accodate. Container di prova rimossi e volumi Docker verificati.
+- Spostata la verifica di capienza dopo le chiamate WhatsApp e prima del commit nei flussi di prenotazione che inviano messaggi. Superati 82 test backend mirati dopo la modifica.

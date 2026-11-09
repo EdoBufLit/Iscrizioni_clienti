@@ -30,6 +30,7 @@ from app.models import (
     OrgAdminSession,
     OrgAdminNotification,
     OrgAdminToken,
+    OrgCapacityAlert,
     RechargeRequest,
     RechargeRequestAccountingEvent,
     Token,
@@ -154,6 +155,9 @@ def _purge_association_dependencies(db: Session, *, org: Organization) -> None:
     db.query(OrgAdminNotification).filter(
         OrgAdminNotification.org_id == org.id
     ).delete(synchronize_session=False)
+    db.query(OrgCapacityAlert).filter(OrgCapacityAlert.org_id == org.id).delete(
+        synchronize_session=False
+    )
     if admin_ids:
         db.query(OrgAdminNotification).filter(
             OrgAdminNotification.admin_user_id.in_(admin_ids)

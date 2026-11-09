@@ -1701,8 +1701,80 @@ def test_org_admin_can_create_manual_booking_from_agenda(client, db):
     assert any(item["customer_name"] == "Prenotazione manuale" for item in list_res.json()["items"])
 
 
+def test_booking_capacity_counts_active_people_across_times_and_detects_edits(client, db):
+    org, admin = _create_org_admin(db)
+    other, _ = _create_org_admin(db)
+    org.max_capacity = 10
+    day = datetime(2026, 11, 20).date()
+    next_day = day + timedelta(days=1)
+    db.add(Booking(
+        association_id=other.id, booking_date=day, status="confirmed",
+        customer_name="Altra associazione", party_size=100,
+    ))
+    db.commit()
+    _login_org_admin(client, db, admin.id)
+
+    def book(party_size, *, status="confirmed", date=day, time="19:00"):
+        response = client.post("/api/org-admin/bookings", json={
+            "customer_name": "Gruppo",
+            "status": status,
+            "booking_date": date.isoformat() if date else None,
+            "booking_time": time,
+            "party_size": party_size,
+        })
+        assert response.status_code == 201, response.text
+        return response.json()["booking"]["id"]
+
+    def alerts():
+        return (
+            db.query(OrgAdminNotification)
+            .filter_by(org_id=org.id, admin_user_id=admin.id)
+            .order_by(OrgAdminNotification.id)
+            .all()
+        )
+
+    book(100, status="cancelled")
+    book(100, status="no_show")
+    book(100, date=None)
+    book(5, date=next_day)
+    book(6)
+    book(None)
+    assert alerts() == []
+
+    booking_id = book(2, status="pending", time="20:30")
+    warning, = alerts()
+    assert warning.type == "capacity_warning"
+    assert "9 su 10" in warning.body
+    assert warning.href == f"/org-admin/prenotazioni?section=agenda&date={day}"
+
+    edited = client.patch(
+        f"/api/org-admin/bookings/{booking_id}",
+        json={"status": "confirmed", "party_size": 5},
+    )
+    assert edited.status_code == 200, edited.text
+    warning, reached = alerts()
+    assert reached.type == "capacity_reached"
+    assert "12 su 10" in reached.body
+    assert "superato di 2 posti" in reached.body
+
+    book(1)
+    assert len(alerts()) == 2
+    moved = client.patch(
+        f"/api/org-admin/bookings/{booking_id}",
+        json={"status": "confirmed", "booking_date": next_day.isoformat()},
+    )
+    assert moved.status_code == 200, moved.text
+    assert [item.type for item in alerts()] == ["capacity_warning", "capacity_reached", "capacity_reached"]
+    assert {email.email_type for email in db.query(EmailOutbox).all()} == {
+        "capacity_warning", "capacity_reached",
+    }
+    assert db.query(EmailOutbox).filter_by(to_email=admin.email).count() == 3
+
+
 def test_booking_enabled_form_creates_booking_and_exposes_agenda(client, db):
     org, admin = _create_org_admin(db)
+    org.max_capacity = 4
+    db.commit()
     _login_org_admin(client, db, admin.id)
     public_slug = f"prenota-cena-{uuid.uuid4().hex[:6]}"
 
@@ -1785,6 +1857,10 @@ def test_booking_enabled_form_creates_booking_and_exposes_agenda(client, db):
         )
         assert "Giulia Bianchi" in notification.title
         assert notification.href == f"/org-admin/prenotazioni?date=2026-03-25&bookingId={booking.id}"
+        capacity_alert = verification_db.query(OrgAdminNotification).filter_by(
+            org_id=org.id, admin_user_id=admin.id, type="capacity_reached",
+        ).one()
+        assert "4 su 4" in capacity_alert.body
     finally:
         verification_db.close()
 

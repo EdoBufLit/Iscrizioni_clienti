@@ -15,6 +15,7 @@ from app.models import (
     MemberAttendance,
     MemberStatus,
     MembershipType,
+    OrgAdminNotification,
     OrgAdminToken,
     Organization,
 )
@@ -131,6 +132,7 @@ def test_station_pairing_check_in_is_scoped_idempotent_and_auditable(client, db)
     client.cookies.clear()
     suffix = uuid.uuid4().hex[:8]
     organization = _organization(db, suffix=suffix)
+    organization.max_capacity = 2
     other_organization = _organization(
         db,
         suffix=uuid.uuid4().hex[:8],
@@ -242,6 +244,10 @@ def test_station_pairing_check_in_is_scoped_idempotent_and_auditable(client, db)
     assert attendance.checked_in_by_admin_id is None
     assert attendance.scanner_station_id == station_id
     assert attendance.source == "qr_station"
+    capacity_alert = db.query(OrgAdminNotification).filter_by(
+        org_id=organization.id, admin_user_id=admin.id, type="capacity_reached",
+    ).one()
+    assert "2 su 2" in capacity_alert.body
     assert (
         db.query(MemberAttendance)
         .filter_by(member_id=foreign_member.id)

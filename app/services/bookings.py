@@ -13,6 +13,7 @@ from app.config import settings
 from app.models import Booking, BookingEvent, BookingEventSeries, BookingStatus, Form, FormSubmission, Member
 from app.services.booking_formatting import format_booking_date_it
 from app.services.booking_rooms import (
+    BOOKING_OCCUPANCY_ACTIVE_STATUSES,
     auto_assign_booking_table,
     maybe_record_assignment_event,
     resolve_assignment_targets,
@@ -33,6 +34,7 @@ from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
 from app.services.email_templates import build_template_context, render_template_string
 from app.services.member_activity import is_member_active
+from app.services.org_capacity import check_booking_capacity
 
 
 BOOKING_FORM_TYPES = {"generic", "booking", "request", "survey"}
@@ -1054,6 +1056,7 @@ def update_booking_status(
     table_id: int | None = None,
     notes: str | None = None,
     notify_customer: bool = True,
+    check_capacity: bool = True,
 ) -> Booking:
     normalized_status = (_normalize_text(next_status) or "").lower()
     if normalized_status not in BOOKING_STATUSES:
@@ -1128,6 +1131,8 @@ def update_booking_status(
                 email_type="booking_cancelled_status_update",
             )
     db.flush()
+    if check_capacity and previous_status not in BOOKING_OCCUPANCY_ACTIVE_STATUSES:
+        check_booking_capacity(db, booking)
     return booking
 
 

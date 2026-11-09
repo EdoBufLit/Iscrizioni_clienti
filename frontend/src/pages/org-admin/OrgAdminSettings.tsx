@@ -14,10 +14,11 @@ import EnrollmentQrPanel from "../../components/EnrollmentQrPanel";
 import { useToast } from "../../components/ui/ToastProvider";
 import { useUnsavedChangesGuard } from "../../components/ui/UnsavedChangesProvider";
 
-type SettingsTabKey = "profilo" | "documenti" | "email" | "wallet" | "qr";
+type SettingsTabKey = "profilo" | "capienza" | "documenti" | "email" | "wallet" | "qr";
 
 const SETTINGS_TABS: Array<{ key: SettingsTabKey; label: string }> = [
   { key: "profilo", label: "Profilo" },
+  { key: "capienza", label: "Capienza" },
   { key: "qr", label: "QR iscrizione" },
   { key: "documenti", label: "Documenti" },
   { key: "email", label: "Email" },
@@ -29,6 +30,7 @@ const inputClass =
 const labelClass = "block text-xs font-semibold uppercase tracking-[0.08em] text-[var(--oa-muted)]";
 const COMMUNICATIONS_LOCKED_MESSAGE =
   "Modulo Comunicazioni non attivo. Contatta ASSONAM per abilitarlo.";
+const MAX_VENUE_CAPACITY = 2_147_483_647;
 
 type EmailPreview = {
   requestedMode: "association";
@@ -41,7 +43,7 @@ type EmailPreview = {
 };
 
 function resolveTab(raw: string | null): SettingsTabKey {
-  if (raw === "documenti" || raw === "email" || raw === "wallet" || raw === "qr") return raw;
+  if (raw === "capienza" || raw === "documenti" || raw === "email" || raw === "wallet" || raw === "qr") return raw;
   return "profilo";
 }
 
@@ -196,6 +198,11 @@ const OrgAdminSettings = () => {
   const [saveMsg, setSaveMsg] = useState("");
   const [saveError, setSaveError] = useState("");
 
+  const [capacity, setCapacity] = useState("");
+  const [capacitySaving, setCapacitySaving] = useState(false);
+  const [capacitySaved, setCapacitySaved] = useState(false);
+  const [capacityError, setCapacityError] = useState("");
+
   // Tab 2: Statute upload state
   const [statuteFile, setStatuteFile] = useState<File | null>(null);
   const [statuteDragActive, setStatuteDragActive] = useState(false);
@@ -255,6 +262,7 @@ const OrgAdminSettings = () => {
       .then((data) => {
         setOrg(data);
         setForm(organizationFormSnapshot(data));
+        setCapacity(String(data.max_capacity ?? ""));
         setWalletForm(organizationWalletSnapshot(data));
         setEmailSettingsForm(organizationEmailSettingsSnapshot(data));
       })
@@ -307,6 +315,33 @@ const OrgAdminSettings = () => {
       }
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleCapacitySave = async (event: FormEvent) => {
+    event.preventDefault();
+    if (capacitySaving) return;
+    setCapacitySaved(false);
+    setCapacityError("");
+    const value = capacity === "" ? null : Number(capacity);
+    if (value !== null && (!Number.isInteger(value) || value < 1 || value > MAX_VENUE_CAPACITY)) {
+      setCapacityError("Inserisci un numero intero positivo.");
+      return;
+    }
+    setCapacitySaving(true);
+    try {
+      await patchOrgAdminOrganization({ max_capacity: value });
+      setOrg((current) => current ? { ...current, max_capacity: value } : current);
+      setCapacity(String(value ?? ""));
+      setCapacitySaved(true);
+    } catch (err) {
+      if (err instanceof AuthError) {
+        navigate("/org-admin/login", { replace: true });
+      } else {
+        setCapacityError("Impossibile salvare la capienza.");
+      }
+    } finally {
+      setCapacitySaving(false);
     }
   };
 
@@ -533,16 +568,19 @@ const OrgAdminSettings = () => {
   const walletPreviewTitle = walletForm.wallet_title_override.trim() || org?.name || "ASSO.N.A.M.";
 
   const hasUnsavedSettingsChanges = useMemo(() => {
-    if (loading || saving || emailSettingsSaving || uploading || walletSaving) {
+    if (loading || saving || capacitySaving || emailSettingsSaving || uploading || walletSaving) {
       return false;
     }
     return (
       JSON.stringify(form) !== JSON.stringify(organizationFormSnapshot(org))
+      || capacity !== String(org?.max_capacity ?? "")
       || JSON.stringify(emailSettingsForm) !== JSON.stringify(organizationEmailSettingsSnapshot(org))
       || JSON.stringify(walletForm) !== JSON.stringify(organizationWalletSnapshot(org))
       || Boolean(statuteFile || walletLogoFile || walletHeroFile)
     );
   }, [
+    capacity,
+    capacitySaving,
     emailSettingsForm,
     emailSettingsSaving,
     form,
@@ -600,7 +638,7 @@ const OrgAdminSettings = () => {
           <p className="org-eyebrow hidden md:block">Impostazioni</p>
           <h1 className="org-page-header__title">Associazione</h1>
           <p className="org-page-header__subtitle hidden md:block">
-            Gestisci profilo pubblico, QR iscrizione, statuto PDF, mittente email e Google Wallet.
+            Gestisci profilo pubblico, capienza, QR iscrizione, statuto PDF, mittente email e Google Wallet.
           </p>
         </div>
       </header>
@@ -641,6 +679,54 @@ const OrgAdminSettings = () => {
         <div className="org-section-panel p-5 md:p-7">
           <EnrollmentQrPanel endpoint="/api/org-admin/organization/enrollment-qr" />
         </div>
+      )}
+
+      {activeTab === "capienza" && (
+        <form onSubmit={handleCapacitySave} className="org-section-panel p-5 md:p-7">
+          <div className="border-b border-[var(--oa-line)] pb-4">
+            <h2 className="text-base font-semibold text-[var(--oa-text)]">Capienza del locale</h2>
+            <p className="mt-1 text-sm text-[var(--oa-muted)]">
+              Ricevi un avviso via email e nel campanello quando resta al massimo il 10% dei posti
+              o quando viene raggiunta la capienza massima.
+            </p>
+          </div>
+
+          <div className="mt-5 max-w-sm">
+            <label htmlFor="org-capacity" className={labelClass}>Numero massimo di persone</label>
+            <input
+              id="org-capacity"
+              className={inputClass}
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={MAX_VENUE_CAPACITY}
+              step={1}
+              value={capacity}
+              disabled={capacitySaving}
+              aria-describedby="org-capacity-hint"
+              onChange={(event) => {
+                setCapacity(event.target.value);
+                setCapacitySaved(false);
+                setCapacityError("");
+              }}
+            />
+            <p id="org-capacity-hint" className="mt-2 text-sm text-[var(--oa-muted)]">
+              Lascia il campo vuoto per disattivare gli avvisi.
+            </p>
+          </div>
+          <p className="mt-4 text-sm text-[var(--oa-muted)]">
+            In Presenze si contano gli ingressi unici del giorno. In Prenotazioni si sommano le persone delle
+            prenotazioni attive per data, comprese quelle in attesa.
+          </p>
+          {capacitySaved && <p className="mt-4 text-sm text-[var(--oa-text)]" role="status">Capienza aggiornata.</p>}
+          {capacityError && <p className="mt-4 text-sm text-rose-600" role="alert">{capacityError}</p>}
+          <div className="mt-6 flex justify-end border-t border-[var(--oa-line)] pt-5">
+            <button className="btn-primary inline-flex items-center gap-2" type="submit" disabled={capacitySaving}>
+              {capacitySaving && <Spinner />}
+              {capacitySaving ? "Salvataggio..." : "Salva capienza"}
+            </button>
+          </div>
+        </form>
       )}
 
       {/* TAB 1: PROFILO */}

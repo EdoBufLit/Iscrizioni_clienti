@@ -48,6 +48,7 @@ from app.services.forms import (
     validate_form_submission_payload,
 )
 from app.services.bookings import serialize_booking
+from app.services.org_capacity import check_booking_capacity
 from app.services.booking_event_availability import (
     form_uses_dynamic_booking_controls,
     public_booking_available_dates_payload,
@@ -840,6 +841,8 @@ def _submit_public_form(
         submitter_email=validated_submission.submitter_email,
         payload=validated_submission.payload,
     )
+    if booking is not None:
+        check_booking_capacity(db, booking)
     db.commit()
     db.refresh(submission)
     if booking is not None:

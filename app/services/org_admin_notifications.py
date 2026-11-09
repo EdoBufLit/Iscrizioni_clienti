@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
-from typing import Iterable
+from datetime import date, datetime
+from typing import Iterable, Literal
 
 from fastapi import Request
 from sqlalchemy.orm import Session
@@ -106,6 +106,82 @@ def _build_email_html(
         cta_url=cta_url,
         cta_label=cta_label,
     )
+
+
+def notify_org_admins_about_capacity(
+    db: Session,
+    *,
+    org_id: int,
+    organization_name: str,
+    source: Literal["attendance", "bookings"],
+    day: date,
+    people: int,
+    capacity: int,
+) -> bool:
+    admins = _list_active_org_admins(db, org_id)
+    if not admins:
+        return False
+
+    remaining = capacity - people
+    section = "Presenze" if source == "attendance" else "Prenotazioni"
+    href = (
+        "/org-admin/presenze"
+        if source == "attendance"
+        else f"/org-admin/prenotazioni?section=agenda&date={day.isoformat()}"
+    )
+    if remaining > 0:
+        notification_type = OrgAdminNotificationType.CAPACITY_WARNING
+        title = "Capienza quasi esaurita"
+        detail = (
+            "Rimane 1 posto disponibile."
+            if remaining == 1
+            else f"Rimangono {remaining} posti disponibili."
+        )
+    else:
+        notification_type = OrgAdminNotificationType.CAPACITY_REACHED
+        title = "Capienza esaurita"
+        if remaining == 0:
+            detail = "Il limite è stato raggiunto."
+        else:
+            excess = -remaining
+            unit = "posto" if excess == 1 else "posti"
+            detail = f"Il limite è superato di {excess} {unit}."
+
+    title = f"{title} · {section}"
+    body = f"Per il {day:%d/%m/%Y} il conteggio è di {people} su {capacity}. {detail}"
+    _create_notification_rows(
+        db,
+        admins=admins,
+        org_id=org_id,
+        notification_type=notification_type,
+        title=title,
+        body=body,
+        href=href,
+    )
+    cta_url = f"{_resolve_frontend_base_url()}{href}"
+    html_body = _build_email_html(
+        heading="Capienza del locale",
+        title=title,
+        body=body,
+        cta_url=cta_url,
+        cta_label=f"Apri {section}",
+        organization_name=organization_name,
+    )
+    for admin, email in _unique_org_admin_recipient_emails(admins):
+        enqueue_email(
+            db,
+            email_type=notification_type.value,
+            to_email=email,
+            subject=f"{title} · {organization_name}",
+            payload=build_email_payload(
+                text_body=f"{title}\n\n{body}\n\nApri {section} {cta_url}",
+                html_body=html_body,
+                meta={"admin_id": admin.id, "org_id": org_id, "href": href},
+            ),
+            priority=2,
+            dedupe_key=f"{notification_type.value}:{org_id}:{source}:{day.isoformat()}:{admin.id}",
+        )
+    return True
 
 
 def notify_org_admins_about_member_document(

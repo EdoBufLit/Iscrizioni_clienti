@@ -113,6 +113,26 @@ describe("OrgAdminSettings tabbed architecture", () => {
     expect(await screen.findByText("Dati aggiornati correttamente.")).toBeInTheDocument();
   });
 
+  it("loads, saves and clears the venue capacity independently of the profile", async () => {
+    mocks.fetchOrg.mockResolvedValue({ ...baseOrg, max_capacity: 120 });
+    render(<MemoryRouter initialEntries={["/org-admin/associazione"]}><OrgAdminSettings /></MemoryRouter>);
+    await screen.findByLabelText("Nome");
+    fireEvent.click(screen.getByRole("tab", { name: "Capienza" }));
+
+    const input = screen.getByRole("spinbutton", { name: "Numero massimo di persone" });
+    const save = screen.getByRole("button", { name: "Salva capienza" });
+    expect(input).toHaveValue(120);
+    fireEvent.change(input, { target: { value: "90" } });
+    fireEvent.click(save);
+    expect(await screen.findByRole("status")).toHaveTextContent("Capienza aggiornata.");
+    expect(mocks.patchOrg).toHaveBeenLastCalledWith({ max_capacity: 90 });
+
+    fireEvent.change(input, { target: { value: "" } });
+    fireEvent.click(save);
+    expect(await screen.findByRole("status")).toHaveTextContent("Capienza aggiornata.");
+    expect(mocks.patchOrg).toHaveBeenLastCalledWith({ max_capacity: null });
+  });
+
   it("switches to Documenti tab, shows current statute v3, and uploads a new PDF", async () => {
     render(
       <MemoryRouter initialEntries={["/org-admin/associazione"]}>
