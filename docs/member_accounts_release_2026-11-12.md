@@ -32,12 +32,19 @@
 - PostgreSQL 16.12 isolato sul solo schema di produzione: 18 controlli upgrade/downgrade/upgrade, preservazione di soci, numeri, credenziali e storico; 7 prove concorrenti, comprese revoche tra club, collegamenti concorrenti e rinnovo contro reset. Container e stage rimossi; inventario volumi invariato.
 - Browser sulla build di produzione con 20 iscrizioni sintetiche, a 320x568, 390x844, 767x900, 768x900, 1024x768, 1440x900, 1440x600, chiaro/scuro. Elenco, stati, cambio tessera, QR, modale e documenti del club selezionato verificati. Una seconda scheda aperta sui documenti si aggiorna al nuovo club senza conservare i documenti del precedente. Nessun errore JavaScript o overflow orizzontale.
 - Evidenze private in `output/member-accounts-20261112/`. Nessun dato personale reale usato nelle prove browser e nessuna email reale inviata.
-- Estensione cartacea: browser ripetuto su tutti i layout, piu sei prove della cartacea marcata, verifica QR e download PDF reale. 21 scenari complessivi superati, inclusa seconda scheda. PostgreSQL: 25 controlli aggiuntivi sulla migrazione cartacea e sull'import, oltre ai 18 account e alle sette prove concorrenti. Test SQLite dedicati sulla migrazione cartacea superati.
+- Estensione cartacea: browser ripetuto su tutti i layout, piu sei prove della cartacea marcata, verifica QR e download PDF reale. 21 scenari complessivi superati, inclusa seconda scheda. PostgreSQL: 28 controlli aggiuntivi sulla migrazione cartacea, sull'import e sullo script operatore completo, oltre ai 18 account e alle sette prove concorrenti. Test SQLite dedicati sulla migrazione cartacea superati.
 
 ## Caso segnalato e limite operativo
 
-Il profilo Golden Age indicato dal cliente e stato trovato. Il numero comunicato per Frutta e verdura risulta gia assegnato a un'altra persona in Golden Age e non appartiene ai lotti del club richiesto. Dopo questo riscontro, l'utente ha autorizzato espressamente l'import cartaceo in namespace distinto con asterisco. L'applicazione dell'eccezione e prevista dopo il rilascio, con controllo di invariabilita dell'altro titolare, della vecchia tessera Golden Age e del magazzino.
+Il profilo Golden Age indicato dal cliente e stato trovato. Il numero comunicato per Frutta e verdura risulta gia assegnato a un'altra persona in Golden Age e non appartiene ai lotti del club richiesto. Dopo questo riscontro, l'utente ha autorizzato espressamente l'import cartaceo in namespace distinto con asterisco.
+
+Eccezione applicata dopo il rilascio: lo stesso account contiene Golden Age 27635/2026 e Frutta e verdura 28696*/2026, entrambe accessibili. La selezione preesistente resta Golden Age. Numeri, anagrafica, storico e identita Wallet della vecchia tessera, l'altro titolare digitale e il magazzino sono stati verificati invariati. Nessun nuovo addebito, incasso, documento, consenso o email.
+
+Verifica reale finale in sola lettura: elenco account con due tessere; QR Golden Age, cartaceo e dell'altro titolare validi e distinti; PDF cartaceo HTTP200, due pagine. La verifica pubblica della cartacea mostra Nessun nuovo addebito senza attestare un pagamento storico. Il dry-run successivo riconosce l'import esistente; l'operazione non e stata applicata una seconda volta.
 
 ## Rilascio
 
-Da completare con commit, pipeline, migrazione e verifiche runtime dopo il deploy.
+- Commit applicativo `72023e633fda54338d1712415e532f4aa7f2861e` pubblicato su Main. [Pipeline 43264235076](https://github.com/EdoBufLit/Iscrizioni_clienti/actions/runs/43264235076) completata con successo, build e deploy. Canary finale passato alle18:04:15 Europe/Rome del12novembre2026.
+- In produzione verificati revisione `20261112_02_paper_cards`, HEAD e immagini esatte del commit, tutti e sette i servizi principali healthy con zero restart/OOM, 46 controlli HTTPS e hash degli asset pubblicati. `/version` non espone il git_sha nella configurazione runtime esistente: la revisione e stata provata tramite checkout, immagini e hash degli asset.
+- Risorse finali: disco45%,inode10%,due volumi persistenti, nessuna build cache. Container e stage QA rimossi, server QA locale fermato.
+- Evidenze private: `release-verification.json`, `workflow-release.json`, `gabriele-paper-apply-result.json`, `gabriele-postapply-readonly-dry-run.json`, `gabriele-postapply-verification.json` nella directory output della verifica. Nessuna credenziale o token tessera pubblicato nella documentazione.

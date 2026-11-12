@@ -6618,8 +6618,8 @@ Specifica approvata dall'utente: un account personale collega piu iscrizioni ai 
 - [x] Implementare modello account/collegamenti, migrazione, accesso unico, lista/selezione e collegamento verificato.
 - [x] Implementare Le mie tessere responsive e cambio club con isolamento cache e azioni.
 - [x] Verificare regressioni auth/permessi/dati, migrazione PostgreSQL e SQLite, frontend/build e browser su dati sintetici.
-- [ ] Rilasciare con pipeline esistente, controllare migrazione/asset/servizi e applicare eccezione Gabriele se i riscontri lo consentono.
-- [ ] Documentare risultati, limiti ed evidenze nella review.
+- [x] Rilasciare con pipeline esistente, controllare migrazione/asset/servizi e applicare eccezione Gabriele se i riscontri lo consentono.
+- [x] Documentare risultati, limiti ed evidenze nella review.
 
 ### Review account unico prima del rilascio
 
@@ -6627,9 +6627,17 @@ Specifica approvata dall'utente: un account personale collega piu iscrizioni ai 
 
 - [x] Completare namespace paper_exception e label asterisco in area socio/admin/QR/PDF/Wallet, con esclusione stock e storico annuale distinto.
 - [x] Verificare migrazione del vincolo unico su PostgreSQL/SQLite, regressioni cartacee/digitali e browser dell'eccezione.
-- [ ] Dopo il rilascio applicare l'import eccezionale idempotente e verificare entrambe le tessere nell'account Gabriele, preservando altri titolari e magazzino.
+- [x] Dopo il rilascio applicare l'import eccezionale idempotente e verificare entrambe le tessere nell'account Gabriele, preservando altri titolari e magazzino.
 
 - Conservati record socio, numeri e storico; account e collegamenti additivi/lazy, senza accorpamenti email. Permessi, token, reset, onboarding, eliminazioni e rinnovi verificati in review indipendente.
 - Backend definitivo 1244 passed/14 skipped, piu un test CLI Alembic reale successivo alla collection. Frontend 490 passed, build riuscita. PostgreSQL16: 18 controlli account, 25 cartacee e 7 race passed. Browser: 21 scenari su 14 viewport/tema con 20 iscrizioni, cartacea marcata, QR/PDF reali e cambio contesto su seconda scheda aperta, zero errori JS/overflow.
 - Il profilo Golden Age 27635/2026 corrisponde all'email della segnalazione ma ha nome legacy Socio. L'utente ha autorizzato l'eccezione Frutta e verdura 28696*/2026 in namespace cartaceo distinto; script operatore idempotente e dry-run read-only pronti. Prima del rilascio nessun dato reale modificato.
 - Evidenze in output/member-accounts-20261112; dettagli e limiti in docs/member_accounts_release_2026-11-12.md.
+
+### Review rilascio ed eccezione applicata
+
+- Commit72023e633fda54338d1712415e532f4aa7f2861e su Main, pipeline43264235076 build/deploy success. Canary18:04:15Europe/Rome. Schema02, 46 controlli HTTPS/asset, sette servizi healthy zero restart/OOM; disco45%/inode10%, due volumi invariati.
+- QA PostgreSQL definitiva:18 account+28 cartacee/import/scriptoperatore e7race passed. Backend1244passed14skipped+1CLI Alembic; frontend490passed; browser21scenari passed.
+- Applicata una sola volta l'eccezione autorizzata: account1 collega Golden Age socio2927 tessera27635/2026 e Frutta socio7182/term6947 tessera28696*/2026. Namespace cartaceo separato, quota nuova0, nessuna email o nuova evidenza di pagamento/consensi/documenti.
+- Verifica reale READ ONLY: elenco esatto di due tessere selezionabili, selezione Golden preesistente conservata; tutti e tre i QR (Golden, Frutta*, altro titolare digitale28696) HTTP200 validi; PDFcartaceo200, due pagine. Golden/Wallet/storico/altro titolare e lotti verificati invariati. Dry-run successivo riconosce lo stesso import, senza ripeterlo.
+- QA remoto e server locale chiusi. Documentazione completata; nessuna operazione ulteriore sui dati reali.
