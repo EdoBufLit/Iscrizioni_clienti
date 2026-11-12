@@ -9,6 +9,7 @@ export function prefetchDashboardRoute(path: string): void {
   const pathname = path.split("?")[0].replace(/\/$/, "");
   let requests: Promise<unknown>[] = [];
   if (pathname === "/dashboard") requests = [fetchMemberMembership(), import("../pages/dashboard/DashboardHome")];
+  else if (pathname === "/dashboard/tessere") requests = [import("../pages/dashboard/DashboardCards")];
   else if (pathname === "/dashboard/documenti") requests = [fetchMemberDocuments(), fetchMemberOrganizationStatute(), import("../pages/dashboard/DashboardDocuments")];
   else if (pathname === "/dashboard/prenotazioni") requests = [fetchMemberBookings(), import("../pages/dashboard/DashboardBookings")];
   else if (pathname === "/dashboard/profilo") requests = [import("../pages/dashboard/DashboardProfile")];

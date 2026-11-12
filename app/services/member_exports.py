@@ -4,6 +4,7 @@ from datetime import datetime
 from io import BytesIO
 
 from app.models import Member, Organization
+from app.services.card_identity import DIGITAL_CARD_NAMESPACE, card_namespace, card_number_label
 from app.services.csv_safety import neutralize_csv_formula
 
 
@@ -28,6 +29,12 @@ MEMBER_STATUS_LABELS = {
 }
 
 
+def _export_card_number(member: Member) -> int | str:
+    if member.card_no is None:
+        return ""
+    return member.card_no if card_namespace(member) == DIGITAL_CARD_NAMESPACE else card_number_label(member)
+
+
 def member_export_values(member: Member) -> list[object]:
     return [
         neutralize_csv_formula(member.first_name or ""),
@@ -36,7 +43,7 @@ def member_export_values(member: Member) -> list[object]:
         neutralize_csv_formula(member.fiscal_code or ""),
         neutralize_csv_formula(member.phone or ""),
         neutralize_csv_formula(member.status.value if member.status else ""),
-        member.card_no if member.card_no is not None else "",
+        _export_card_number(member),
         member.joined_at.date() if member.joined_at else "",
     ]
 
@@ -57,7 +64,7 @@ def member_workbook_values(member: Member) -> list[object]:
         _xlsx_text(member.fiscal_code),
         _xlsx_text(member.phone),
         MEMBER_STATUS_LABELS.get(raw_status, raw_status),
-        member.card_no if member.card_no is not None else "",
+        _export_card_number(member),
         member.joined_at.date() if member.joined_at else "",
     ]
 

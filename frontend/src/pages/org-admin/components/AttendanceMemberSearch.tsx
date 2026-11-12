@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { OrgAdminAttendance } from "../../../lib/api";
 import { checkInAttendanceMember, searchAttendanceMembers, type AttendanceMemberOption } from "../../../lib/attendance";
 import { StatusChip } from "./OrgAdminPrimitives";
+import { displayCardNumber } from "../../../lib/cardIdentity";
 
 type CheckInResult = { created: boolean; item: OrgAdminAttendance };
 
@@ -113,12 +114,12 @@ export default function AttendanceMemberSearch({ onRegistered, onBusyChange }: {
                 type="button"
                 className={`w-full rounded-xl border p-3 text-left transition ${selected?.id === member.id ? "border-brand bg-brand/5 ring-1 ring-brand" : "border-slate-200 bg-white hover:border-brand/50"}`}
                 aria-pressed={selected?.id === member.id}
-                aria-label={`Seleziona ${member.name}, tessera ${member.card_no ?? "non assegnata"}`}
+                aria-label={`Seleziona ${member.name}, tessera ${displayCardNumber(member) ?? "non assegnata"}`}
                 disabled={saving}
                 onClick={() => { setSelected(member); setSaveError(""); setRegistered(null); }}
               >
                 <span className="block break-words font-semibold text-slate-900 [overflow-wrap:anywhere]">{member.name}</span>
-                <span className="mt-1 block text-xs leading-5 text-slate-500">{member.card_no ? `Tessera ${member.card_no}${member.card_year ? ` / ${member.card_year}` : ""}` : "Tessera non assegnata"}</span>
+                <span className="mt-1 block text-xs leading-5 text-slate-500">{displayCardNumber(member) ? `Tessera ${displayCardNumber(member)}${member.card_year ? ` / ${member.card_year}` : ""}` : "Tessera non assegnata"}</span>
                 {member.email ? <span className="block break-all text-xs leading-5 text-slate-500">{member.email}</span> : null}
                 <span className="mt-2 flex flex-wrap gap-2">
                   <StatusChip tone={member.already_checked_in ? "info" : member.is_active ? "success" : "warning"}>{member.already_checked_in ? "Già presente oggi" : member.is_active ? "Tessera attiva" : "Tessera non attiva"}</StatusChip>

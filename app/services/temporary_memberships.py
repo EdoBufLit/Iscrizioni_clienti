@@ -310,6 +310,7 @@ def fulfill_purchase(db: Session, *, purchase: TemporaryMembershipPurchase, paym
     purchase.valid_until = released_at + duration
     purchase.status, purchase.issue_reason = "active", None
     member.card_no, member.card_year = allocation.card_no, allocation.year
+    member.card_namespace = "digital"
     member.batch_id, member.numbering_scope_id = allocation.batch_id, allocation.numbering_scope_id
     member.membership_type = "temporary"
     member.valid_from = released_at.replace(tzinfo=None)

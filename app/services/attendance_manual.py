@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, load_only
 
 from app.models import Member, MemberAttendance
 from app.services.annual_memberships import as_rome_datetime
+from app.services.card_identity import card_namespace, card_number_label
 from app.services.attendance import AttendanceCheckInResult, check_in_member_from_qr
 from app.services.card_verification import (
     build_card_verification_token,
@@ -58,7 +59,7 @@ def search_attendance_members(db: Session, *, org_id: int, search: str) -> dict:
         query.add_columns(already_checked_in.label("already_checked_in"))
         .options(load_only(
             Member.id, Member.org_id, Member.first_name, Member.last_name,
-            Member.email, Member.card_no, Member.card_year, Member.membership_type,
+            Member.email, Member.card_no, Member.card_year, Member.card_namespace, Member.membership_type,
         ))
         .order_by(Member.last_name, Member.first_name, Member.id)
         .limit(20)
@@ -76,6 +77,7 @@ def search_attendance_members(db: Session, *, org_id: int, search: str) -> dict:
                     "org_id": org_id,
                     "card_number": member.card_no,
                     "card_year": member.card_year,
+                    "card_namespace": card_namespace(member),
                 },
                 checked_at=now,
             )
@@ -86,6 +88,8 @@ def search_attendance_members(db: Session, *, org_id: int, search: str) -> dict:
             "name": f"{member.first_name or ''} {member.last_name or ''}".strip(),
             "email": member.email,
             "card_no": member.card_no,
+            "card_namespace": card_namespace(member),
+            "card_number_label": card_number_label(member),
             "card_year": member.card_year,
             "membership_type": membership_type,
             "is_active": active,
@@ -118,6 +122,7 @@ def check_in_member_manually(
         org_id=org_id,
         card_number=member.card_no,
         card_year=member.card_year,
+        card_namespace=card_namespace(member),
     )
     return check_in_member_from_qr(
         db,

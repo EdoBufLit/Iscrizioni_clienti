@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models import CardBatch, Organization
 from app.services.card_availability import eligible_card_batches, occupied_card_numbers
+from app.services.card_identity import DIGITAL_CARD_NAMESPACE
 
 logger = logging.getLogger(__name__)
 
@@ -187,7 +188,10 @@ def release_card_number(
     year: int | None,
     card_no: int | None,
     batch_id: int | None = None,
+    card_namespace: str = DIGITAL_CARD_NAMESPACE,
 ) -> None:
+    if card_namespace != DIGITAL_CARD_NAMESPACE:
+        return
     if card_no is None or card_no <= 0:
         return
 

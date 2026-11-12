@@ -30,7 +30,7 @@ const MemberContactConfirmation = () => {
       const field = await confirmMemberContactChange(token);
       window.history.replaceState({}, document.title, "/conferma-contatto");
       setStatus("success");
-      setMessage(field === "email" ? "Il nuovo indirizzo email è attivo." : "Il nuovo numero di telefono è stato salvato.");
+      setMessage(field === "email" ? "Il nuovo indirizzo di contatto per questa associazione è stato salvato. L’email di accesso al tuo account personale resta invariata." : "Il nuovo numero di telefono è stato salvato.");
     } catch (caught) {
       setStatus("error");
       setMessage(caught instanceof Error ? caught.message : "Il link non è valido.");

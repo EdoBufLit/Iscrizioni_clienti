@@ -213,6 +213,7 @@ from app.services.member_exports import (
     member_export_values,
 )
 from app.services.card_lot_registry import format_card_number
+from app.services.card_identity import card_namespace, card_number_label, card_number_for_render
 from app.services.card_replenishments import (
     create_portal_replenishment_request,
     load_replenishment_request,
@@ -749,6 +750,7 @@ def _member_card_pdf_bytes(member: Member, request: Request) -> bytes:
         org_id=member.org_id,
         card_number=member.card_no,
         card_year=member.card_year,
+        card_namespace=card_namespace(member),
     )
     backend_base = (settings.BASE_URL or "").strip().rstrip("/") or str(request.base_url).rstrip("/")
     verification_url = f"{backend_base}/api/cards/verify/{token}"
@@ -762,7 +764,7 @@ def _member_card_pdf_bytes(member: Member, request: Request) -> bytes:
             organization_name=organization.name or "ASSONAM",
             club_display_name=resolve_club_display_name(organization) or organization.name or "ASSONAM",
             organization_slug=organization.slug,
-            card_number=member.card_no,
+            card_number=card_number_for_render(member),
             card_year=member.card_year,
             card_status="attiva" if is_member_active(member, now=datetime.utcnow()) else "non_attiva",
             verification_url=verification_url,
@@ -1810,6 +1812,7 @@ def _build_org_member_detail_payload(
             org_id=member.org_id,
             card_number=member.card_no,
             card_year=member.card_year,
+            card_namespace=card_namespace(member),
         )
         backend_base = (settings.BASE_URL or "").strip().rstrip("/") or str(request.base_url).rstrip("/")
         card_verification_url = f"{backend_base}/api/cards/verify/{card_token}"
@@ -1839,6 +1842,8 @@ def _build_org_member_detail_payload(
         "deleted_at": member.deleted_at.isoformat() if member.deleted_at else None,
         "card_no": member.card_no,
         "card_number": member.card_no,
+        "card_namespace": card_namespace(member),
+        "card_number_label": card_number_label(member),
         "card_year": member.card_year,
         "membership_type": resolve_member_membership_type(member),
         "membership_type_label": membership_type_label(
@@ -4670,6 +4675,8 @@ def search_communications_members(
                 "email": member.email,
                 "card_no": member.card_no,
                 "card_number": member.card_no,
+                "card_namespace": card_namespace(member),
+                "card_number_label": card_number_label(member),
                 "status": get_member_lifecycle_status(member, now=current_time),
                 "is_active": is_member_active(member, now=current_time),
             }
@@ -6226,6 +6233,8 @@ def list_org_members(
                 "deleted_at": m.deleted_at.isoformat() if m.deleted_at else None,
                 "card_no": m.card_no,
                 "card_number": m.card_no,
+                "card_namespace": card_namespace(m),
+                "card_number_label": card_number_label(m),
                 "card_year": m.card_year,
                 "membership_type": resolve_member_membership_type(m),
                 "membership_type_label": membership_type_label(
@@ -7231,6 +7240,7 @@ def delete_member(
 
     now = datetime.utcnow()
     released_card_no = member.card_no
+    released_card_namespace = getattr(member, "card_namespace", "digital")
     released_card_year = member.card_year
     released_batch_id = member.batch_id
     member = replace_member_password(
@@ -7245,6 +7255,7 @@ def delete_member(
         org_id=member.org_id,
         year=released_card_year,
         card_no=released_card_no,
+        card_namespace=released_card_namespace,
         batch_id=released_batch_id,
     )
     member.deleted_at = now

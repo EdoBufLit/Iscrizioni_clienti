@@ -5,7 +5,7 @@ import json
 import re
 from datetime import datetime, timezone
 from types import SimpleNamespace
-from typing import Optional, TypedDict
+from typing import Optional, TypedDict, NotRequired
 from urllib.parse import parse_qs, unquote, urlparse
 
 from sqlalchemy.orm import Session
@@ -27,6 +27,7 @@ from app.services.member_activity import (
     is_card_active,
 )
 from app.services.member_membership import resolve_member_membership_type
+from app.services.card_identity import DIGITAL_CARD_NAMESPACE, PAPER_CARD_NAMESPACE, card_namespace as resolve_card_namespace
 
 # HMAC domain separator/version string; not a secret.
 _TOKEN_PREFIX = "card-verify-v1"  # nosec hardcoded_secret_name
@@ -38,6 +39,7 @@ class CardVerificationPayload(TypedDict):
     org_id: int
     card_number: int
     card_year: int
+    card_namespace: NotRequired[str]
 
 
 def _b64url_encode(raw: bytes) -> str:
@@ -62,7 +64,10 @@ def build_card_verification_token(
     org_id: int,
     card_number: int,
     card_year: int,
+    card_namespace: str = DIGITAL_CARD_NAMESPACE,
 ) -> str:
+    if card_namespace not in {DIGITAL_CARD_NAMESPACE, PAPER_CARD_NAMESPACE}:
+        raise ValueError("Unsupported card namespace")
     payload = {
         "v": 1,
         "member_id": member_id,
@@ -70,6 +75,9 @@ def build_card_verification_token(
         "card_number": card_number,
         "card_year": card_year,
     }
+    if card_namespace == PAPER_CARD_NAMESPACE:
+        payload["v"] = 2
+        payload["card_namespace"] = PAPER_CARD_NAMESPACE
     encoded_payload = _b64url_encode(
         json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
     )
@@ -92,8 +100,13 @@ def parse_card_verification_token(token: str) -> Optional[CardVerificationPayloa
     except Exception:
         return None
 
-    if payload.get("v") != 1:
+    if not isinstance(payload, dict) or payload.get("v") not in (1, 2):
         return None
+    namespace = DIGITAL_CARD_NAMESPACE
+    if payload.get("v") == 2:
+        if payload.get("card_namespace") != PAPER_CARD_NAMESPACE:
+            return None
+        namespace = PAPER_CARD_NAMESPACE
 
     try:
         member_id = int(payload["member_id"])
@@ -106,12 +119,15 @@ def parse_card_verification_token(token: str) -> Optional[CardVerificationPayloa
     if min(member_id, org_id, card_number, card_year) <= 0:
         return None
 
-    return {
+    result = {
         "member_id": member_id,
         "org_id": org_id,
         "card_number": card_number,
         "card_year": card_year,
     }
+    if namespace == PAPER_CARD_NAMESPACE:
+        result["card_namespace"] = namespace
+    return result
 
 
 def extract_card_verification_token(raw_value: str | None) -> str | None:
@@ -144,6 +160,7 @@ def resolve_card_verification_membership(
     checked_at: datetime,
 ) -> tuple[Member | None, AnnualMembershipTerm | TemporaryMembershipPurchase | None, str]:
     """Resolve the signed card snapshot using the public verifier semantics."""
+    namespace = payload.get("card_namespace", DIGITAL_CARD_NAMESPACE)
 
     member = (
         db.query(Member)
@@ -160,6 +177,7 @@ def resolve_card_verification_membership(
             AnnualMembershipTerm.org_id == payload["org_id"],
             AnnualMembershipTerm.card_no == payload["card_number"],
             AnnualMembershipTerm.card_year == payload["card_year"],
+            AnnualMembershipTerm.card_namespace == namespace,
         )
         .first()
     )
@@ -171,7 +189,7 @@ def resolve_card_verification_membership(
         TemporaryMembershipPurchase.org_id == payload["org_id"],
         TemporaryMembershipPurchase.card_no == payload["card_number"],
         TemporaryMembershipPurchase.card_year == payload["card_year"],
-    ).order_by(TemporaryMembershipPurchase.id.desc()).first()
+    ).order_by(TemporaryMembershipPurchase.id.desc()).first() if namespace == DIGITAL_CARD_NAMESPACE else None
     if temporary is not None:
         checked_utc = checked_at.replace(tzinfo=timezone.utc) if checked_at.tzinfo is None else checked_at.astimezone(timezone.utc)
         expires = temporary.valid_until
@@ -190,7 +208,7 @@ def resolve_card_verification_membership(
     if current_membership_type != MembershipType.ANNUAL.value:
         # Legacy explicit type conversions reused their card number. Before a
         # purchase ledger exists the current identity remains authoritative.
-        if member.card_no == payload["card_number"] and member.card_year == payload["card_year"]:
+        if member.card_no == payload["card_number"] and member.card_year == payload["card_year"] and resolve_card_namespace(member) == namespace:
             return member, None, member_inactive_reason
         if term is not None:
             if term.status == "expired" or as_rome_datetime(checked_at).date() > min(term.valid_through, annual_membership_valid_through(term.membership_year)):
@@ -199,6 +217,7 @@ def resolve_card_verification_membership(
         if member_inactive_reason == "" and (
             member.card_no != payload["card_number"]
             or member.card_year != payload["card_year"]
+            or resolve_card_namespace(member) != namespace
         ):
             member_inactive_reason = MEMBER_INACTIVE_REASON_NOT_APPROVED
         return member, None, member_inactive_reason
@@ -210,6 +229,7 @@ def resolve_card_verification_membership(
         if inactive_reason == "" and (
             member.card_no != payload["card_number"]
             or member.card_year != payload["card_year"]
+            or resolve_card_namespace(member) != namespace
         ):
             inactive_reason = MEMBER_INACTIVE_REASON_NOT_APPROVED
         return member, None, inactive_reason

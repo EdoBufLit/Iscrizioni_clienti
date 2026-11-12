@@ -15,7 +15,7 @@ import MemberLogoutButton from "./MemberLogoutButton";
 const PERSONAL_FIELDS = [
   { key: "first_name", label: "Nome" },
   { key: "last_name", label: "Cognome" },
-  { key: "email", label: "Email" },
+  { key: "email", label: "Email per questa associazione" },
   { key: "fiscal_code", label: "Codice fiscale" },
   { key: "phone", label: "Telefono" },
 ] as const;
@@ -149,7 +149,9 @@ const DashboardProfile = () => {
       ) : null}
 
       {/* Password section */}
-      {!loading && user && <ChangePasswordSection />}
+      {!loading && user?.account && <ChangePasswordSection loginEmail={user.account.email} />}
+      {!loading && user && user.account === undefined && <ChangePasswordSection />}
+      {!loading && user && user.account === null && <p className="member-cards__hint">Per gestire la password comune alle tue tessere, <a href="/login?personal=1" className="underline">accedi al tuo account personale</a>.</p>}
       {!loading && user && (
         <section className="member-profile-logout flex flex-wrap items-center gap-3" aria-label="Sessione account">
           <MemberLogoutButton />
@@ -240,7 +242,7 @@ const ContactChangeSection = ({
       </div>
       <div className="grid gap-7 p-5 sm:p-7 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]">
         <form className="space-y-4" onSubmit={submit}>
-          <p className="text-sm leading-6 text-neutral-600">Il dato attuale non cambia finché non confermi il link monouso ricevuto via email.</p>
+          <p className="text-sm leading-6 text-neutral-600">Questi contatti valgono per l’associazione selezionata. La modifica richiede la conferma via email e mantiene invariata l’email di accesso al tuo account personale.</p>
           <fieldset className="flex gap-2" disabled={busy}>
             <legend className="sr-only">Contatto da modificare</legend>
             <button type="button" aria-pressed={field === "email"} className={`min-h-11 rounded-lg border px-4 py-2 text-sm font-semibold ${field === "email" ? "border-brand bg-brand/5 text-brand" : "border-neutral-200 text-neutral-600"}`} onClick={() => { setField("email"); setValue(""); }}>Email</button>
@@ -263,7 +265,7 @@ const ContactChangeSection = ({
   );
 };
 
-const ChangePasswordSection = () => {
+const ChangePasswordSection = ({ loginEmail }: { loginEmail?: string | null }) => {
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -314,7 +316,7 @@ const ChangePasswordSection = () => {
       </div>
       <div className="p-5 sm:p-8">
         <p className="text-sm font-medium text-neutral-500 max-w-md leading-relaxed">
-          Aggiorna regolarmente la tua password per garantire la massima protezione del tuo profilo digitale.
+          {loginEmail ? <>Email di accesso: <strong className="break-all">{loginEmail}</strong>. La password è comune a tutte le tessere collegate al tuo account.</> : "Gestisci la password del tuo account personale."}
         </p>
 
         {success && (

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.services.annual_memberships import as_rome_datetime
 from app.services.card_lot_lifecycle import is_closed_by_year
+from app.services.card_identity import DIGITAL_CARD_NAMESPACE
 
 from app.models import (
     AnnualMembershipTerm,
@@ -46,12 +47,12 @@ def _occupancy_rows(
     for model, number, scope, batch_id, filters, kind in (
         (
             Member, Member.card_no, Member.numbering_scope_id,
-            Member.batch_id, [], "assigned",
+            Member.batch_id, [Member.card_namespace == DIGITAL_CARD_NAMESPACE], "assigned",
         ),
         (
             AnnualMembershipTerm, AnnualMembershipTerm.card_no,
             AnnualMembershipTerm.numbering_scope_id, AnnualMembershipTerm.batch_id,
-            [AnnualMembershipTerm.status.notin_(("expired", "cancelled"))], "assigned",
+            [AnnualMembershipTerm.status.notin_(("expired", "cancelled")), AnnualMembershipTerm.card_namespace == DIGITAL_CARD_NAMESPACE], "assigned",
         ),
         (
             TemporaryMembershipPurchase, TemporaryMembershipPurchase.card_no,

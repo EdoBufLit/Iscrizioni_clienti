@@ -9,6 +9,7 @@ from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.models import CardBatch, Member, Organization
+from app.services.card_identity import DIGITAL_CARD_NAMESPACE
 from app.services.numbering_scopes import (
     ASSONAM_CENTRAL_SCOPE_NAME,
     ensure_assonam_central_scope,
@@ -107,6 +108,7 @@ def _serialize_allowlist_entry(entry: SharedScopeAllowlistEntry) -> dict[str, An
 
 def _batch_member_stats(db: Session, batch: CardBatch) -> dict[str, Any]:
     range_filter = and_(
+        Member.card_namespace == DIGITAL_CARD_NAMESPACE,
         Member.deleted_at.is_(None),
         Member.org_id == batch.org_id,
         Member.card_year == batch.year,
@@ -124,6 +126,7 @@ def _batch_member_stats(db: Session, batch: CardBatch) -> dict[str, Any]:
     linked_rows = (
         db.query(Member.id, Member.card_no)
         .filter(
+            Member.card_namespace == DIGITAL_CARD_NAMESPACE,
             Member.deleted_at.is_(None),
             Member.batch_id == batch.id,
         )
@@ -258,6 +261,7 @@ def _occupied_numbers_for_projected_scope(
         db.query(Member.card_no)
         .outerjoin(CardBatch, Member.batch_id == CardBatch.id)
         .filter(
+            Member.card_namespace == DIGITAL_CARD_NAMESPACE,
             Member.card_no.isnot(None),
             Member.card_no >= start_no,
             Member.card_no <= end_no,
@@ -284,6 +288,7 @@ def _occupied_numbers_for_org(
     rows = (
         db.query(Member.card_no)
         .filter(
+            Member.card_namespace == DIGITAL_CARD_NAMESPACE,
             Member.org_id == org_id,
             Member.deleted_at.is_(None),
             Member.card_no.isnot(None),
@@ -637,6 +642,7 @@ def run_shared_scope_migration(
         members_with_card_no = (
             db.query(Member)
             .filter(
+                Member.card_namespace == DIGITAL_CARD_NAMESPACE,
                 Member.org_id == org.id,
                 Member.deleted_at.is_(None),
                 Member.card_no.isnot(None),

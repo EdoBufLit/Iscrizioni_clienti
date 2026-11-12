@@ -118,6 +118,7 @@ from app.services.whatsapp_provider import (
 from app.services.whatsapp_sync import apply_connection_snapshot, serialize_connection
 from app.services.org_branding import sanitize_card_email_subject_template
 from app.services.card_allocation import lock_card_allocation
+from app.services.card_identity import DIGITAL_CARD_NAMESPACE, card_namespace, card_number_label
 from app.services.card_availability import CardBatchAvailability, batch_has_linked_terms_or_reservations, batches_with_linked_terms_or_reservations, card_batch_availability, card_lot_status, eligible_card_batches
 from app.services.card_lot_lifecycle import is_closed_by_year, require_card_lot_year_open
 from app.services.annual_memberships import ROME_TIMEZONE, as_rome_datetime
@@ -2145,6 +2146,8 @@ def super_admin_member_registry(
                 else str(member.status),
                 "is_active": is_member_active(member, now=current_time),
                 "card_no": member.card_no,
+                "card_namespace": card_namespace(member),
+                "card_number_label": card_number_label(member),
                 "card_year": member.card_year,
                 "joined_at": member.joined_at.isoformat() if member.joined_at else None,
             }
@@ -2190,6 +2193,8 @@ def super_admin_member_detail(
         "deleted_at": member.deleted_at.isoformat() if member.deleted_at else None,
         "card_no": member.card_no,
         "card_number": member.card_no,
+        "card_namespace": card_namespace(member),
+        "card_number_label": card_number_label(member),
         "card_year": member.card_year,
         "joined_at": member.joined_at.isoformat() if member.joined_at else None,
         "member_type": member.member_type,
@@ -4266,7 +4271,7 @@ def _count_linked_members_for_batch(db: Session, batch: CardBatch) -> int:
         )
     return int(
         db.query(func.count(func.distinct(Member.id)))
-        .filter(member_filter)
+        .filter(member_filter, Member.card_namespace == DIGITAL_CARD_NAMESPACE)
         .scalar()
         or 0
     )

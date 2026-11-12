@@ -92,12 +92,18 @@ from app.services.membership_payments import (
     serialize_public_membership_payment,
 )
 from app.services.card_pdf import generate_card_pdf_bytes
+from app.services.card_identity import DIGITAL_CARD_NAMESPACE, PAPER_CARD_NAMESPACE, format_card_number_label
 from app.services.card_image import generate_card_image_bytes
 from app.services.qr_code import build_qr_data_uri, generate_qr_png_bytes
 from app.services.municipalities import search_municipalities
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _display_card_number(number, payload):
+    namespace = (payload or {}).get("card_namespace", DIGITAL_CARD_NAMESPACE)
+    return format_card_number_label(number, namespace) if namespace == PAPER_CARD_NAMESPACE else number
 _PLATFORM_STATS_CACHE_TTL_SECONDS = 60.0
 _platform_stats_cache: dict[str, object] = {"expires_at": 0.0, "payload": None}
 _TITLE_TAG_RE = re.compile(r"<title>.*?</title>", flags=re.IGNORECASE | re.DOTALL)
@@ -1366,13 +1372,25 @@ def verify_member_card(request: Request, token: str, db: Session = Depends(get_d
         if term_payment is not None
         else bool(member and payment_status_is_paid(member.payment_status))
     )
-    payment_label = "Pagata" if is_paid else "Pagamento non registrato"
-    payment_tone = "#dcfce7" if is_paid else "#fee2e2"
+    paper_no_charge = (
+        payload.get("card_namespace") == PAPER_CARD_NAMESPACE and term_payment is None
+        and (annual_term.fee_amount if annual_term else getattr(member, "membership_fee_snapshot", None)) == 0
+    )
+    if paper_no_charge:
+        # A zero-cost digitalization does not attest payment of the original
+        # paper membership, nor create a new outstanding amount.
+        is_paid = False
+        payment_label, payment_tone = "Nessun nuovo addebito", "#e2e8f0"
+    else:
+        payment_label = "Pagata" if is_paid else "Pagamento non registrato"
+        payment_tone = "#dcfce7" if is_paid else "#fee2e2"
 
     response_payload = {
         "valid": is_valid,
         "card": {
             "number": card_number,
+            "number_label": format_card_number_label(card_number, payload.get("card_namespace", DIGITAL_CARD_NAMESPACE)),
+            "card_namespace": payload.get("card_namespace", DIGITAL_CARD_NAMESPACE),
             "status": card_status,
             "year": card_year,
             "membership_type": membership_type,
@@ -1387,7 +1405,7 @@ def verify_member_card(request: Request, token: str, db: Session = Depends(get_d
             "slug": organization.slug if organization else None,
         },
         "payment": {
-            "status": term_payment.status if term_payment else (member.payment_status if member else None),
+            "status": "not_required" if paper_no_charge else (term_payment.status if term_payment else (member.payment_status if member else None)),
             "is_paid": is_paid,
             "label": payment_label,
         },
@@ -1407,7 +1425,7 @@ def verify_member_card(request: Request, token: str, db: Session = Depends(get_d
             organization_name=organization_display_name,
             member_first_name=member.first_name if member else None,
             member_last_name=member.last_name if member else None,
-            card_number=card_number,
+            card_number=_display_card_number(card_number, payload),
             card_year=card_year,
             membership_type_text=membership_type_label(membership_type),
             valid_until_text=(
@@ -1509,7 +1527,7 @@ def download_member_card(token: str, request: Request, db: Session = Depends(get
         club_display_name=club_display_name,
         member_first_name=member.first_name if member else None,
         member_last_name=member.last_name if member else None,
-        card_number=card_number,
+        card_number=_display_card_number(card_number, payload),
         card_year=card_year,
         membership_type_text=membership_type_label(membership_type),
         valid_until_text=(
@@ -1624,7 +1642,7 @@ def download_card_pdf(token: str, request: Request, db: Session = Depends(get_db
             club_display_name=club_display_name
             or (organization.name if organization else "N/D"),
             organization_slug=organization.slug if organization else None,
-            card_number=card_number or 0,
+            card_number=_display_card_number(card_number, payload) or 0,
             card_year=card_year or 0,
             card_status=card_status,
             verification_url=verification_url,
@@ -1693,7 +1711,7 @@ def card_image_png(token: str, request: Request, db: Session = Depends(get_db)):
             club_display_name=club_display_name
             or (organization.name if organization else "N/D"),
             organization_slug=organization.slug if organization else None,
-            card_number=card_number or 0,
+            card_number=_display_card_number(card_number, payload) or 0,
             card_year=card_year or 0,
             card_status=card_status,
             membership_type_label=membership_type_label(membership_type),

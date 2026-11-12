@@ -43,6 +43,7 @@ from app.services.system_email_layout import build_system_email_html
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
 from app.services.member_sessions import resolve_member_session
+from app.services.card_identity import DIGITAL_CARD_NAMESPACE, card_namespace, card_number_label
 from app.services.renewal_availability import RENEWALS_OPEN_ON, renewals_available, require_renewals_open
 from app.services.quote_reminders import quote_reminder_unavailable_reason, require_quote_reminder_available
 from app.services.membership_payments import (
@@ -135,6 +136,7 @@ def get_current_annual_term(db: Session, member: Member) -> AnnualMembershipTerm
                 AnnualMembershipTerm.member_id == member.id,
                 AnnualMembershipTerm.card_no == member.card_no,
                 AnnualMembershipTerm.card_year == member.card_year,
+                AnnualMembershipTerm.card_namespace == card_namespace(member),
             )
             .order_by(AnnualMembershipTerm.id.desc())
             .first()
@@ -324,6 +326,7 @@ def promote_renewal_term(
         return False
 
     member.card_no = term.card_no
+    member.card_namespace = card_namespace(term)
     member.card_year = term.card_year
     member.batch_id = term.batch_id
     member.numbering_scope_id = term.numbering_scope_id
@@ -403,6 +406,7 @@ def allocate_renewal_card(
         return False
 
     term.card_no = allocation.card_no
+    term.card_namespace = DIGITAL_CARD_NAMESPACE
     term.card_year = allocation.year
     term.batch_id = allocation.batch_id
     term.numbering_scope_id = allocation.numbering_scope_id
@@ -582,6 +586,8 @@ def serialize_annual_term(
         "fee_amount": float(term.fee_amount or 0),
         "currency": term.currency,
         "card_no": term.card_no,
+        "card_number_label": card_number_label(term),
+        "card_namespace": card_namespace(term),
         "card_year": term.card_year,
         "issued_at": term.issued_at.isoformat() if term.issued_at else None,
         "payment": serialize_term_payment(payment),
@@ -618,7 +624,7 @@ def serialize_member_membership(
         (
             item
             for item in terms
-            if item.card_no == member.card_no and item.card_year == member.card_year
+            if item.card_no == member.card_no and item.card_year == member.card_year and card_namespace(item) == card_namespace(member)
         ),
         terms[0] if terms else None,
     )

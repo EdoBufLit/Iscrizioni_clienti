@@ -1,10 +1,12 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { fetchWhoAmI, loginWithPassword, requestMagicLink } from "../lib/api";
 import { applySeo } from "../lib/seo";
 
 const Login = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const personalLogin = searchParams.get("personal") === "1";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"password" | "magic">("password");
@@ -24,14 +26,17 @@ const Login = () => {
   }, []);
 
   useEffect(() => {
+    if (personalLogin) return;
+    let active = true;
     fetchWhoAmI()
       .then((whoAmI) => {
-        if (whoAmI.authenticated && whoAmI.redirect_to) {
+        if (active && whoAmI.authenticated && whoAmI.redirect_to) {
           navigate(whoAmI.redirect_to, { replace: true });
         }
       })
       .catch(() => {});
-  }, [navigate]);
+    return () => { active = false; };
+  }, [navigate, personalLogin]);
 
   useEffect(() => {
     if (!sent) return;

@@ -15,6 +15,7 @@ from app.models import (
     NumberingScope, OperationLog, Organization, RechargeRequest,
 )
 from app.services.card_allocation import lock_card_allocation
+from app.services.card_identity import DIGITAL_CARD_NAMESPACE
 from app.services.card_availability import CardBatchAvailability, card_batch_availability, card_lot_status
 from app.services.card_lot_lifecycle import is_closed_by_year
 from app.services.annual_memberships import as_rome_datetime
@@ -135,10 +136,10 @@ def _automatic_lot_bounds(db: Session, org: Organization, quantity: int) -> tupl
     # Legacy and unlinked assignments can sit beyond the lot history. Protect
     # owned numbers and numbers in the same scope, including linked-batch scope.
     for model, number, scope, batch_id, filters in (
-        (Member, Member.card_no, Member.numbering_scope_id, Member.batch_id, []),
+        (Member, Member.card_no, Member.numbering_scope_id, Member.batch_id, [Member.card_namespace == DIGITAL_CARD_NAMESPACE]),
         (AnnualMembershipTerm, AnnualMembershipTerm.card_no,
          AnnualMembershipTerm.numbering_scope_id, AnnualMembershipTerm.batch_id,
-         [AnnualMembershipTerm.status.notin_(("expired", "cancelled"))]),
+         [AnnualMembershipTerm.status.notin_(("expired", "cancelled")), AnnualMembershipTerm.card_namespace == DIGITAL_CARD_NAMESPACE]),
         (MembershipPayment, MembershipPayment.reserved_card_no,
          MembershipPayment.reserved_numbering_scope_id, MembershipPayment.reserved_batch_id,
          [MembershipPayment.reservation_state == "held"]),

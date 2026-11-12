@@ -176,6 +176,7 @@ def assign_card_manual(request: Request, member_id: int, db: Session = Depends(g
                 year=as_rome_datetime().year,
             )
             member.card_no = allocation.card_no
+            member.card_namespace = "digital"
             member.batch_id = allocation.batch_id
             member.card_year = allocation.year
             member.numbering_scope_id = allocation.numbering_scope_id

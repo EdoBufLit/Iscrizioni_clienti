@@ -6593,3 +6593,43 @@ Specifica. Usare la pipeline Hetzner esistente per applicare la migrazione incre
 - Commit applicativo `dad724c2a7ba3e4943b9ea55ecb389abdb1f3165` su Main. Il primo tentativo si è interrotto per un errore interno di GitHub prima del job di deploy. Secondo tentativo riuscito con build `129352617725` e deploy `129353382543`. Canary concluso alle 19:37:12 Europe/Rome del 9 novembre 2026. [Pipeline](https://github.com/EdoBufLit/Iscrizioni_clienti/actions/runs/42674121910/attempts/2)
 - In produzione verificati revisione Alembic `20261109_01_org_capacity`, colonna e tabella degli avvisi, salute HTTP e database. Tutti e sette i servizi applicativi operativi sulla nuova immagine con zero riavvii e zero OOM. Nove verifiche HTTPS riuscite, compresi gli hash di quattro asset e il controllo degli endpoint protetti. Disco 48%, inode 11%, volumi Docker verificati.
 - Suite backend rieseguita sul commit con 1192 test superati e 13 saltati. Frontend con 470 test superati. Invio di prova e concorrenza verificati con dati sintetici.
+
+# Piano — consiglio per soci con tessere di piu club (12 novembre 2026)
+
+Perimetro: analisi e raccomandazione sul caso segnalato; nessuna modifica applicativa o ai dati reali.
+
+- [x] Leggere istruzioni, lezioni e stato del branch Main.
+- [x] Verificare modello socio, accesso e area riservata per iscrizioni a piu associazioni.
+- [x] Definire esperienza con piu tessere e collegamento verificato delle iscrizioni, distinguendo il caso immediato dalla soluzione generale.
+- [x] Documentare riscontri e limiti della verifica nella review.
+
+### Review consiglio multi-club
+
+- Il modello consente email uguali fra organizzazioni (app/models.py:2176,2335). Il login ordina i soci corrispondenti per ID decrescente e sceglie un solo record accessibile (app/routes/member.py:1112); sessione e API me espongono una sola iscrizione (app/services/member_sessions.py:31; app/routes/member.py:1397). Dashboard e cache offline sono anch'esse singole.
+- Raccomandazione: account personale distinto dalle iscrizioni esistenti, elenco Le mie tessere e selezione del club con stato, QR, Wallet, rinnovi, quote e documenti separati. Collegamento esplicito verificato, senza fusioni automatiche per nome o email, e controlli backend sulle iscrizioni autorizzate.
+- Per il caso segnalato verificare prima presenza digitale della tessera Frutta e verdura, titolare, contatti e stato; la tessera cartacea non prova la presenza del record nel portale.
+- Verifica: lettura incrociata modello, login/registrazione, sessioni, API me e dashboard, con seconda analisi indipendente. Nessun accesso ai dati live, nessuna modifica applicativa, nessun test eseguito per questa analisi; la causa del caso individuale resta da accertare.
+
+# Piano — account unico e Le mie tessere (12 novembre 2026)
+
+Specifica approvata dall'utente: un account personale collega piu iscrizioni ai club. Conservare ID socio, numeri tessera, annualita, artwork, QR/Wallet e storico. Quote, rinnovi, prenotazioni, documenti e permessi restano del club selezionato. Nessuna fusione automatica per nome/email. Aggiungere elenco tessere e cambio contesto sicuro, invalidando cache e risposte pendenti. Migrazione additiva compatibile con credenziali/sessioni e percorsi legacy; collegamenti verificati e revoca credenziali comune. Non introdurre self-service cartacee: il caso Gabriele e una sola eccezione esplicitamente autorizzata, da eseguire dopo verifica del profilo Golden Age 27635 e della tessera Frutta e verdura 028696, senza sostituire iscrizioni o assegnare il numero a un altro titolare.
+
+- [x] Confermare Main e perimetro approvato; avviare analisi parallele backend, regressioni e riscontri produzione.
+- [x] Implementare modello account/collegamenti, migrazione, accesso unico, lista/selezione e collegamento verificato.
+- [x] Implementare Le mie tessere responsive e cambio club con isolamento cache e azioni.
+- [x] Verificare regressioni auth/permessi/dati, migrazione PostgreSQL e SQLite, frontend/build e browser su dati sintetici.
+- [ ] Rilasciare con pipeline esistente, controllare migrazione/asset/servizi e applicare eccezione Gabriele se i riscontri lo consentono.
+- [ ] Documentare risultati, limiti ed evidenze nella review.
+
+### Review account unico prima del rilascio
+
+- Estensione autorizzata dall'utente: associare eccezionalmente a Gabriele la cartacea dichiarata Frutta e verdura 28696/2026 con asterisco. Definire riferimento/namespace distinto dalla numerazione digitale condivisa; non duplicare una tessera centrale, non riassegnare il titolare esistente e non consumare stock senza emissione. Aggiungere test di lifecycle/QR/stock e transazione idempotente con audit. Il self-service cartacee resta escluso.
+
+- [x] Completare namespace paper_exception e label asterisco in area socio/admin/QR/PDF/Wallet, con esclusione stock e storico annuale distinto.
+- [x] Verificare migrazione del vincolo unico su PostgreSQL/SQLite, regressioni cartacee/digitali e browser dell'eccezione.
+- [ ] Dopo il rilascio applicare l'import eccezionale idempotente e verificare entrambe le tessere nell'account Gabriele, preservando altri titolari e magazzino.
+
+- Conservati record socio, numeri e storico; account e collegamenti additivi/lazy, senza accorpamenti email. Permessi, token, reset, onboarding, eliminazioni e rinnovi verificati in review indipendente.
+- Backend definitivo 1244 passed/14 skipped, piu un test CLI Alembic reale successivo alla collection. Frontend 490 passed, build riuscita. PostgreSQL16: 18 controlli account, 25 cartacee e 7 race passed. Browser: 21 scenari su 14 viewport/tema con 20 iscrizioni, cartacea marcata, QR/PDF reali e cambio contesto su seconda scheda aperta, zero errori JS/overflow.
+- Il profilo Golden Age 27635/2026 corrisponde all'email della segnalazione ma ha nome legacy Socio. L'utente ha autorizzato l'eccezione Frutta e verdura 28696*/2026 in namespace cartaceo distinto; script operatore idempotente e dry-run read-only pronti. Prima del rilascio nessun dato reale modificato.
+- Evidenze in output/member-accounts-20261112; dettagli e limiti in docs/member_accounts_release_2026-11-12.md.

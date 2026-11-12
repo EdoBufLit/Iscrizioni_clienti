@@ -14,6 +14,7 @@ from app.models import (
     MembershipType,
 )
 from app.services.annual_memberships import as_rome_datetime
+from app.services.card_identity import DIGITAL_CARD_NAMESPACE, card_namespace, format_card_number_label
 from app.services.card_verification import (
     card_snapshot_membership_type,
     extract_card_verification_token,
@@ -37,9 +38,22 @@ def serialize_utc(value: datetime) -> str:
     return rendered
 
 
+def attendance_card_namespace(item: MemberAttendance) -> str:
+    """Use the issued card's history even after the member renews digitally."""
+    member = item.member
+    if member is not None:
+        for term in getattr(member, "annual_membership_terms", ()):
+            if term.card_no == item.card_no and term.card_year == item.card_year:
+                return card_namespace(term)
+        if member.card_no == item.card_no and member.card_year == item.card_year:
+            return card_namespace(member)
+    return DIGITAL_CARD_NAMESPACE
+
+
 def serialize_attendance(item: MemberAttendance) -> dict[str, object]:
     member = item.member
     station = item.scanner_station
+    namespace = attendance_card_namespace(item)
     return {
         "id": item.id,
         "member_id": item.member_id,
@@ -49,6 +63,8 @@ def serialize_attendance(item: MemberAttendance) -> dict[str, object]:
             else "Socio"
         ),
         "card_no": item.card_no,
+        "card_namespace": namespace,
+        "card_number_label": format_card_number_label(item.card_no, namespace),
         "card_year": item.card_year,
         "membership_type": item.membership_type,
         "attendance_date": item.attendance_date.isoformat(),

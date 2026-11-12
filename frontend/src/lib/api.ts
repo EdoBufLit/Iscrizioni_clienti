@@ -8,7 +8,8 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
   const method = (init?.method ?? (typeof Request !== "undefined" && input instanceof Request ? input.method : "GET")).toUpperCase();
   const mutation = method !== "GET" && method !== "HEAD";
   const url = String(input);
-  const authBoundary = /\/auth\/(?:login|logout|register|verify|password-reset\/confirm)(?:[/?]|$)/.test(url);
+  const authBoundary = /\/auth\/(?:login|logout|register|verify|password-reset\/confirm)(?:[/?]|$)/.test(url)
+    || /\/member\/cards\/(?:\d+\/select|link)(?:[/?]|$)/.test(url);
   if (mutation) invalidateSwrCache();
   if (authBoundary) { invalidateSwrCache(); clearMemberSnapshot(); }
   try {
@@ -43,6 +44,7 @@ export type Organization = {
 
 export type MemberProfile = {
   id: number;
+  account?: { id: number; email: string | null } | null;
   first_name: string;
   last_name: string;
   email: string;
@@ -53,6 +55,8 @@ export type MemberProfile = {
   payment_method?: string | null;
   status: string;
   card_no: number | null;
+  card_namespace?: string | null;
+  card_number_label?: string | null;
   card_status?: string | null;
   card_year?: number | null;
   membership_type?: "annual" | "temporary" | null;
@@ -61,6 +65,7 @@ export type MemberProfile = {
   card_verification_url?: string | null;
   card?: {
     number: number | null;
+    number_label?: string | null;
     status: string | null;
     year: number | null;
     verification_url: string | null;
@@ -4045,6 +4050,8 @@ export type OrgAdminMember = {
   is_active: boolean;
   deleted_at: string | null;
   card_no: number | null;
+  card_namespace?: string | null;
+  card_number_label?: string | null;
   card_number: number | null;
   card_year?: number | null;
   membership_type?: "annual" | "temporary" | null;
@@ -4077,6 +4084,8 @@ export type OrgAdminAttendance = {
   member_id: number;
   member_name: string;
   card_no: number;
+  card_namespace?: string | null;
+  card_number_label?: string | null;
   card_year: number;
   membership_type: "annual" | "temporary";
   attendance_date: string;
@@ -4389,6 +4398,8 @@ export type OrgAdminMemberDetail = {
   is_active: boolean;
   deleted_at?: string | null;
   card_no?: number | null;
+  card_namespace?: string | null;
+  card_number_label?: string | null;
   card_number?: number | null;
   card_year?: number | null;
   membership_type?: "annual" | "temporary" | null;
@@ -4690,6 +4701,8 @@ export type SuperAdminMemberDetail = {
   is_active?: boolean;
   deleted_at?: string | null;
   card_no: number | null;
+  card_namespace?: string | null;
+  card_number_label?: string | null;
   card_number?: number | null;
   card_year?: number | null;
   joined_at: string | null;
@@ -4718,6 +4731,8 @@ export type SuperAdminRegistryMember = {
   workflow_status?: string | null;
   is_active: boolean;
   card_no: number | null;
+  card_namespace?: string | null;
+  card_number_label?: string | null;
   card_year: number | null;
   joined_at: string | null;
 };
@@ -7186,6 +7201,8 @@ export type AnnualMembershipTerm = {
   fee_amount: number;
   currency: string;
   card_no: number | null;
+  card_namespace?: string | null;
+  card_number_label?: string | null;
   card_year: number | null;
   issued_at: string | null;
   payment: AnnualTermPayment | null;

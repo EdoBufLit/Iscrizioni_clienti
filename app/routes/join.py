@@ -48,12 +48,12 @@ from app.services.municipalities import (
 )
 from app.services.org_branding import resolve_club_display_name
 from app.services.system_email_layout import build_system_email_html
-from app.security import verify_password
 from app.config import settings
 from app.log_redaction import hash_identifier, redact_for_log
 from app.middleware import get_client_ip, get_request_id
 from app.services.security_rate_limits import enforce_auth_rate_limit, enforce_join_rate_limit
 from app.services.member_sessions import establish_member_session, issue_member_auth_token
+from app.services.member_accounts import verify_member_password
 from app.services.public_renewals import (
     consume_public_renewal_proof,
     find_annual_cardholder,
@@ -167,11 +167,8 @@ def _can_resume_existing_signup(
         if is_valid_continuation:
             return True
 
-    if password and member.password_hash:
-        try:
-            return verify_password(password, member.password_hash)
-        except (TypeError, ValueError):
-            return False
+    if password:
+        return verify_member_password(member, password)
     return False
 
 
@@ -562,8 +559,8 @@ def verify_public_renewal_access(request: Request, org_slug: str, token: str, db
     if member is None:
         db.rollback()
         return RedirectResponse(destination + "&link=expired", status_code=302, headers=headers)
-    db.commit()
     establish_member_session(request, member)
+    db.commit()
     audit.member_verified(member_id=member.id, ip=get_client_ip(request))
     return RedirectResponse(destination, status_code=302, headers=headers)
 
@@ -852,6 +849,7 @@ def api_join_continue(
                 year=datetime.utcnow().year,
             )
             member.card_no = allocation.card_no
+            member.card_namespace = "digital"
             member.batch_id = allocation.batch_id
             member.card_year = allocation.year
             member.numbering_scope_id = allocation.numbering_scope_id

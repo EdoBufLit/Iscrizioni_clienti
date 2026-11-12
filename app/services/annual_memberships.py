@@ -12,6 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.services.card_identity import card_namespace
 from app.models import (
     AnnualCardDeactivationRun,
     AnnualMembershipTerm,
@@ -178,6 +179,7 @@ def sync_annual_membership_term(
             fee_amount=getattr(member, "membership_fee_snapshot", None),
             currency=currency,
             card_no=int(member.card_no),
+            card_namespace=card_namespace(member),
             card_year=membership_year,
             batch_id=getattr(member, "batch_id", None),
             numbering_scope_id=getattr(member, "numbering_scope_id", None),
@@ -199,6 +201,7 @@ def sync_annual_membership_term(
 
     term.org_id = member.org_id
     term.card_no = int(member.card_no)
+    term.card_namespace = card_namespace(member)
     term.card_year = membership_year
     term.batch_id = getattr(member, "batch_id", None)
     term.numbering_scope_id = getattr(member, "numbering_scope_id", None)
@@ -263,6 +266,7 @@ def reactivate_current_annual_membership_term(
             AnnualMembershipTerm.member_id == member.id,
             AnnualMembershipTerm.card_year == int(member.card_year),
             AnnualMembershipTerm.card_no == int(member.card_no),
+            AnnualMembershipTerm.card_namespace == card_namespace(member),
         )
         .order_by(AnnualMembershipTerm.id.desc())
         .first()

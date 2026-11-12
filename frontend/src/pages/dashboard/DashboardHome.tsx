@@ -11,6 +11,7 @@ import Skeleton from "../../components/ui/Skeleton";
 import MemberOnboardingTimeline from "./MemberOnboardingTimeline";
 import TemporaryMembershipPanel from "./TemporaryMembershipPanel";
 import { formatMemberDate } from "../../lib/memberDates";
+import { displayCardNumber } from "../../lib/cardIdentity";
 import "./MemberDashboard.css";
 import { MEMBER_NOTIFICATIONS_UPDATED } from "./MemberNotificationBell";
 import { memberAccountStatus, memberNotificationHref } from "../../lib/memberAccount";
@@ -98,8 +99,9 @@ const buildMemberCardDataFromProfile = (
       compat.organization_logo_url ??
       null,
     cardNumber:
+      displayCardNumber(profile) ??
+      profile.card?.number_label ??
       card?.number ??
-      profile.card_no ??
       compat.card_number ??
       compat.assigned_card_number ??
       null,
@@ -314,6 +316,7 @@ const DashboardHome = () => {
               </button>
             ) : null}
             {!offline && walletError ? <p className="member-home__error" role="alert">{walletError}</p> : null}
+            {user.card_namespace === "paper_exception" && <p className="member-cards__hint">* Tessera cartacea collegata in via eccezionale, con numerazione distinta dalle tessere digitali ordinarie.</p>}
           </section>
 
           {!offline && renewalNeeded && membership ? (

@@ -23,6 +23,7 @@ import {
 import ModalShell from "../../components/ui/ModalShell";
 import AttendanceStationsPanel from "./components/AttendanceStationsPanel";
 import AttendanceMemberSearch from "./components/AttendanceMemberSearch";
+import { displayCardNumber } from "../../lib/cardIdentity";
 
 function localDateValue() {
   const now = new Date();
@@ -446,7 +447,7 @@ const OrgAdminAttendancePage = () => {
                       {lastResult.item.member_name}
                     </p>
                     <p className="mt-0.5 text-xs font-semibold opacity-90">
-                      Tessera #{lastResult.item.card_no} ({lastResult.item.card_year}) · {membershipLabel(lastResult.item.membership_type)} · Ore {formatTime(lastResult.item.checked_in_at)}
+                      Tessera #{displayCardNumber(lastResult.item)} ({lastResult.item.card_year}) · {membershipLabel(lastResult.item.membership_type)} · Ore {formatTime(lastResult.item.checked_in_at)}
                     </p>
                   </div>
                 </div>
@@ -542,7 +543,7 @@ const OrgAdminAttendancePage = () => {
                       {item.member_name}
                     </span>
                     <span className="shrink-0 tabular-nums text-[var(--oa-muted)]">
-                      #{item.card_no} · <strong className="text-[var(--oa-text)]">{formatTime(item.checked_in_at)}</strong>
+                      #{displayCardNumber(item)} · <strong className="text-[var(--oa-text)]">{formatTime(item.checked_in_at)}</strong>
                     </span>
                   </li>
                 ))}
@@ -631,7 +632,7 @@ const OrgAdminAttendancePage = () => {
                         {item.member_name}
                       </p>
                       <p className="mt-0.5 truncate text-xs text-slate-500">
-                        #{item.card_no}/{item.card_year} · {membershipLabel(item.membership_type)} · {attendanceSourceLabel(item)}
+                        #{displayCardNumber(item)}/{item.card_year} · {membershipLabel(item.membership_type)} · {attendanceSourceLabel(item)}
                       </p>
                     </div>
                     <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-bold tabular-nums text-emerald-700">
@@ -660,7 +661,7 @@ const OrgAdminAttendancePage = () => {
                         </td>
                         <td className="max-w-[280px] px-5 py-4 font-medium text-slate-900 [overflow-wrap:anywhere]">{item.member_name}</td>
                         <td className="px-5 py-4 tabular-nums text-slate-600">
-                          {item.card_no} / {item.card_year}
+                          {displayCardNumber(item)} / {item.card_year}
                         </td>
                         <td className="px-5 py-4 text-slate-600">{membershipLabel(item.membership_type)}</td>
                         <td className="px-5 py-4 text-slate-600">{attendanceSourceLabel(item)}</td>

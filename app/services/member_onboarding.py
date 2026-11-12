@@ -25,6 +25,7 @@ from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
 from app.services.file_deletion import UPLOADS_ROOT, resolve_storage_target
 from app.services.member_activity import is_member_active
+from app.services.member_accounts import lock_member
 from app.services.member_sessions import consume_member_auth_token, issue_member_auth_token, replace_member_password
 from app.services.org_admin_notifications import notify_org_admins_about_member_document
 from app.services.system_email_layout import build_system_email_html
@@ -139,6 +140,7 @@ def establish_onboarding_session(request: Request, db: Session, token: str) -> d
         if member.org_id != int(payload["org_id"]) or not hmac.compare_digest(_email_marker(member), str(payload["email_marker"])):
             raise ValueError()
         scope = {"member_id": member.id, "org_id": member.org_id, "auth_version": member.auth_version,
+            "account_auth_version": member.account.auth_version if member.account_id is not None and getattr(member, "_account_auth_proved", False) else None,
             "email_marker": _email_marker(member), "expires_at": int(time.time()) + ONBOARDING_SESSION_TTL_SECONDS}
         result = serialize_onboarding_context(db, member, scope)
         db.commit()
@@ -159,10 +161,7 @@ def get_onboarding_context(request: Request, db: Session, *, lock: bool = False)
     if int(scope.get("expires_at") or 0) <= int(time.time()):
         request.session.pop(ONBOARDING_SESSION_KEY, None)
         raise HTTPException(status_code=401, detail="La sessione di completamento è scaduta. Richiedi un nuovo invito.")
-    query = db.query(Member).filter(Member.id == scope["member_id"])
-    if lock:
-        query = query.with_for_update()
-    member = query.populate_existing().first()
+    member = lock_member(db, scope["member_id"]) if lock else db.query(Member).filter(Member.id == scope["member_id"]).populate_existing().first()
     try:
         member = _require_eligible(member)
         if member.org_id != scope.get("org_id") or member.auth_version != scope["auth_version"] or not hmac.compare_digest(_email_marker(member), str(scope.get("email_marker") or "")):
@@ -170,6 +169,7 @@ def get_onboarding_context(request: Request, db: Session, *, lock: bool = False)
     except HTTPException:
         request.session.pop(ONBOARDING_SESSION_KEY, None)
         raise
+    member._account_auth_proved = member.account_id is None or scope.get("account_auth_version") == member.account.auth_version
     return member, dict(scope)
 
 
@@ -267,6 +267,7 @@ def complete_onboarding(request: Request, db: Session, uploads: list[StagedOnboa
                 raise HTTPException(status_code=400, detail="Imposta una password per completare l'iscrizione.")
             member = replace_member_password(db, member_id=member.id, expected_version=scope["auth_version"], password_hash=prepared_password)
             scope["auth_version"] = member.auth_version
+            scope["account_auth_version"] = member.account.auth_version if member.account_id is not None else None
             scope["password_set"] = True
             password_changed = True
         db.flush()

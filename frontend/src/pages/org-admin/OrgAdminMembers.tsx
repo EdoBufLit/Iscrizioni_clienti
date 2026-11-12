@@ -25,6 +25,7 @@ import MembersTable from "./components/MembersTable";
 import ModalShell from "../../components/ui/ModalShell";
 import { useToast } from "../../components/ui/ToastProvider";
 import { formatMemberDate } from "../../lib/memberDates";
+import { displayCardNumber } from "../../lib/cardIdentity";
 import { memberLifecycleStatusMeta, memberWorkflowStatusMeta, resolveStatusMeta } from "../../lib/statusLabels";
 import { DetailPanel, KpiCard, SectionPanel, StatusChip } from "./components/OrgAdminPrimitives";
 import "./OrgAdminMembers.css";
@@ -894,7 +895,7 @@ function MemberQuickProfile({ member, onOpenMember }: { member: OrgAdminMember; 
   const isDeleted = Boolean(member.deleted_at) || member.status?.toUpperCase() === "DELETED";
   const isExpired = member.status?.toUpperCase() === "EXPIRED";
   const statusLabel = isDeleted ? "Eliminato" : isExpired ? "Scaduto" : member.workflow_status && member.workflow_status !== "active" ? workflow.label : lifecycle.label;
-  const cardNumber = member.card_number ?? member.card_no;
+  const cardNumber = displayCardNumber(member);
   const sourceLabel = ({ assonam_form: "Iscrizione online", online: "Iscrizione online", admin: "Inserito dall’amministratore", manual: "Inserimento manuale", pienissimo: "Integrazione Pienissimo" } as Record<string, string>)[member.signup_source ?? ""] ?? (member.is_manual ? "Inserimento manuale" : "Iscrizione online");
   return <div className="org-admin-members-profile-content">
     <div className="org-admin-members-profile-identity">

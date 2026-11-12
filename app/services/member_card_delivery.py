@@ -13,6 +13,7 @@ from app.config import settings
 from app.email_templates.member_card_email import build_member_card_email
 from app.models import DocStatus, Member, MemberDocument, Organization, TokenType
 from app.services.card_verification import build_card_verification_token
+from app.services.card_identity import card_namespace, card_number_for_render
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
 from app.services.member_sessions import issue_member_auth_token
@@ -93,6 +94,7 @@ def _build_card_links(member: Member, backend_base_url: str) -> tuple[str, str, 
         org_id=member.org_id,
         card_number=member.card_no,
         card_year=member.card_year,
+        card_namespace=card_namespace(member),
     )
     verification_url = f"{backend_base_url}/api/cards/verify/{token}"
     download_url = f"{backend_base_url}/api/cards/{token}/download.pdf"
@@ -217,7 +219,7 @@ def _enqueue_member_card_ready_email(
             organization_name=org.name,
             club_display_name=club_display_name,
             organization_slug=org.slug,
-            card_number=member.card_no,
+            card_number=card_number_for_render(member),
             card_year=member.card_year,
             card_status="attiva",
             membership_type_label=membership_label,
@@ -276,7 +278,7 @@ def _enqueue_member_card_ready_email(
         organization_name=org.name,
         club_display_name=club_display_name,
         organization_slug=org.slug,
-        card_number=member.card_no,
+        card_number=card_number_for_render(member),
         card_year=member.card_year,
         verification_url=verification_url,
         download_url=download_url,

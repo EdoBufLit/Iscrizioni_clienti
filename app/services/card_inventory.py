@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Member
 from app.services.card_availability import card_batch_availability, eligible_card_batches
+from app.services.card_identity import DIGITAL_CARD_NAMESPACE
 from app.services.member_activity import member_active_filters
 from app.services.annual_memberships import as_rome_datetime
 
@@ -31,6 +32,7 @@ def compute_org_card_stock(
         db.query(func.count(Member.id))
         .filter(
             Member.org_id == org_id,
+            Member.card_namespace == DIGITAL_CARD_NAMESPACE,
             *member_active_filters(now=now),
         )
         .scalar()

@@ -41,6 +41,7 @@ export function saveMemberSnapshot(profile: MemberProfile) {
     id: profile.id, first_name: profile.first_name, last_name: profile.last_name,
     email: "", phone: null, fiscal_code: null, joined_at: null,
     status: profile.status, card_no: profile.card_no, card_status: profile.card_status,
+    card_namespace: profile.card_namespace, card_number_label: profile.card_number_label,
     card_year: profile.card_year, membership_type: profile.membership_type,
     membership_type_label: profile.membership_type_label, valid_until: profile.valid_until,
     card_verification_url: profile.card_verification_url, card: profile.card,

@@ -2,6 +2,7 @@ import { memo } from "react";
 import Skeleton from "../../../components/ui/Skeleton";
 import { type OrgAdminMember } from "../../../lib/api";
 import { formatMemberDate } from "../../../lib/memberDates";
+import { displayCardNumber } from "../../../lib/cardIdentity";
 import {
   EMPTY_STATE_COPY,
   memberLifecycleStatusMeta,
@@ -246,7 +247,7 @@ const MembersTable = memo(function MembersTable({
                     <td className={`${tdClass} tabular-nums`}>
                       <div className="flex flex-col gap-1">
                         <span className="org-admin-members-table__card-number">
-                          {m.card_number ?? m.card_no ?? "-"}
+                          {displayCardNumber(m) ?? "-"}
                           {m.card_year ? ` / ${m.card_year}` : ""}
                         </span>
                         {m.membership_type_label ? (
@@ -303,7 +304,7 @@ const MembersTable = memo(function MembersTable({
             const lifecycleMeta = resolveStatusMeta(memberLifecycleStatusMeta, member.status);
             const workflowMeta = resolveStatusMeta(memberWorkflowStatusMeta, member.workflow_status);
             const isSelected = selectedMemberId === member.id;
-            const cardNo = member.card_number ?? member.card_no;
+            const cardNo = displayCardNumber(member);
             const hasPendingWorkflow = Boolean(member.workflow_status && member.workflow_status !== "active");
             const badgeMeta =
               String(member.status || "").toLowerCase() === "pending" && hasPendingWorkflow

@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app import audit
 from app.config import settings
 from app.models import Member, MemberStatus, MembershipType, Organization, Token, TokenType
-from app.security import verify_password
+from app.services.member_accounts import verify_member_password
 from app.services.annual_memberships import as_rome_datetime
 from app.services.card_allocation import lock_card_allocation
 from app.services.email_outbox import build_email_payload, enqueue_email
@@ -192,11 +192,8 @@ def submit_existing_cardholder_renewal(
         raise HTTPException(status_code=409, detail="Lo stato dell'iscrizione è cambiato. Ricarica la pagina.")
     session_member = resolve_member_session(request, db)
     verified = session_member is not None and session_member.id == candidate.id
-    if not verified and password and candidate.password_hash:
-        try:
-            verified = verify_password(password, candidate.password_hash)
-        except (TypeError, ValueError):
-            verified = False
+    if not verified and password:
+        verified = verify_member_password(candidate, password)
     if not verified:
         queue_public_renewal_link(db, member=candidate)
         db.commit()
@@ -219,6 +216,6 @@ def submit_existing_cardholder_renewal(
         actor_role="member",
         metadata={"org_id": org.id, "membership_year": result.term.membership_year, "source": "public_wizard"},
     )
-    db.commit()
     establish_member_session(request, candidate)
+    db.commit()
     return payload

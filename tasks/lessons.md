@@ -413,3 +413,12 @@ Do not interpret "date without slots" as closed when a default booking schedule 
 - 6 novembre 2026: se un pannello nato mobile viene aperto anche da desktop, gli stili di gruppi, chip e footer devono essere condivisi fuori dalle media query. Limitare ai breakpoint solo posizione e adattamenti di layout; verificare apertura reale a 767/768 px, centratura desktop e footer su viewport basso.
 
 - 6 novembre 2026: controllare il posizionamento responsive anche delle ricerche manuali nelle pagine operative (es. Presenze): placement bottom fisso richiede un adattamento desktop esplicito e verifica del margine ereditato da space-y.
+
+## Nov 12, 2026 - Account personale e iscrizioni ai club
+
+- Nei riscontri di una tessera distinguere sempre club, numero e annualita: la conferma del numero di un club non identifica la tessera dell'altro. Controllare anche collisioni nella numerazione condivisa prima di un collegamento amministrativo.
+- La mailbox comune non prova che due iscrizioni appartengano alla stessa persona. Collegarle solo con una prova esplicita, mantenendo separati ID socio, documenti, quote e storico.
+- Quando un account contiene piu club, distinguere email di accesso ed email di contatto tenant. Una prova spedita a un contatto diverso autorizza soltanto quell'iscrizione e non puo reimpostare la password comune.
+- Le preferenze UI non devono introdurre scritture Account dopo aver acquisito lock Member: conservare l'ordine dei lock delle operazioni credenziali e provarlo con una vera richiesta concorrente su PostgreSQL.
+- Un asterisco richiesto per distinguere un numero cartaceo duplicato deve corrispondere a un namespace persistito, escluso dallo stock e conservato nello storico e nei QR. Non basta cambiare il testo mostrato o aggirare l'allocatore centrale.
+- In una migrazione SQLite che ricostruisce una tabella padre, preservare figli CASCADE, indici espressione e trigger esplicitamente; verificare anche il vero comando Alembic, oltre alla chiamata diretta della funzione migration.

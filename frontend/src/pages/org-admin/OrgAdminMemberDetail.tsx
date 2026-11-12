@@ -31,6 +31,7 @@ import ConfirmModal from "../../components/ui/ConfirmModal";
 import { useToast } from "../../components/ui/ToastProvider";
 import { useOrgAdmin } from "./OrgAdminLayout";
 import { romeYear } from "../../lib/quoteReminders";
+import { displayCardNumber } from "../../lib/cardIdentity";
 import "./OrgAdminMemberDetail.css";
 
 function formatBytes(bytes: number, decimals = 2) {
@@ -734,7 +735,7 @@ function MemberDetailContent() {
     ? formatMemberDate(member.last_access_email_at, true)
     : null;
   const paymentMethodSummary = humanPaymentMethod(member.payment_method);
-  const cardNumber = member.card_number ?? member.card_no ?? null;
+  const cardNumber = displayCardNumber(member);
   const canUseCardActions = Boolean(cardNumber && member.card_year);
   const canSendCardEmail = Boolean(canUseCardActions && member.is_active && member.email);
   const cardPreviewData = {

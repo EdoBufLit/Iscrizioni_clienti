@@ -18,8 +18,10 @@ from app.models import (
     MemberAttendance,
 )
 from app.services.annual_memberships import as_rome_datetime
+from app.services.card_identity import format_card_number_label
 from app.services.attendance import (
     AttendanceCheckInResult,
+    attendance_card_namespace,
     check_in_member_from_qr,
     serialize_attendance,
     serialize_utc,
@@ -156,6 +158,8 @@ def _check_in_response(
             "attendance_date": attendance.attendance_date.isoformat(),
             "checked_in_at": serialize_utc(attendance.checked_in_at),
             "card_no": attendance.card_no,
+            "card_namespace": attendance_card_namespace(attendance),
+            "card_number_label": format_card_number_label(attendance.card_no, attendance_card_namespace(attendance)),
             "card_year": attendance.card_year,
             "membership_type": attendance.membership_type,
             "source": attendance.source,
@@ -230,7 +234,10 @@ def list_attendances(
 
     total = query.with_entities(func.count(MemberAttendance.id)).scalar() or 0
     items = (
-        query.order_by(
+        query.options(
+            joinedload(MemberAttendance.member).selectinload(Member.annual_membership_terms),
+            joinedload(MemberAttendance.scanner_station),
+        ).order_by(
             MemberAttendance.checked_in_at.desc(),
             MemberAttendance.id.desc(),
         )

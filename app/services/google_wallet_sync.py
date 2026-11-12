@@ -16,9 +16,10 @@ from sqlalchemy.orm import Session
 from app.db import SessionLocal
 from app.models import Member, Organization
 from app.models_wallet import GoogleWalletPass, GoogleWalletSyncJob
+from app.services.card_identity import DIGITAL_CARD_NAMESPACE, card_namespace
 
 logger = logging.getLogger(__name__)
-_MEMBER_FIELDS = {"first_name", "last_name", "status", "deleted_at", "expired_at", "card_no", "card_year", "membership_type", "valid_from", "valid_until", "google_wallet_object_id", "google_wallet_class_id"}
+_MEMBER_FIELDS = {"first_name", "last_name", "status", "deleted_at", "expired_at", "card_no", "card_year", "card_namespace", "membership_type", "valid_from", "valid_until", "google_wallet_object_id", "google_wallet_class_id"}
 _ORG_FIELDS = {"name", "slug", "club_display_name", "is_active", "card_logo_url", "logo_path", "wallet_bg_color", "wallet_logo_url", "wallet_hero_image_url", "wallet_title_override", "wallet_is_test_prefix"}
 
 
@@ -81,7 +82,7 @@ def snapshot_wallet_member(db, member):
     except GoogleWalletConfigError:
         # Provisioning reports configuration failures through the API's existing handler.
         identity = None
-    fields = ("id", "org_id", "first_name", "last_name", "status", "card_no", "card_year", "membership_type", "valid_from", "valid_until", "joined_at", "deleted_at", "expired_at", "google_wallet_object_id", "google_wallet_class_id")
+    fields = ("id", "org_id", "first_name", "last_name", "status", "card_no", "card_year", "card_namespace", "membership_type", "valid_from", "valid_until", "joined_at", "deleted_at", "expired_at", "google_wallet_object_id", "google_wallet_class_id")
     organization = member.organization
     org_fields = _ORG_FIELDS | {"id", "card_email_subject", "logo_url", "wallet_test_mode"}
     org_snapshot = SimpleNamespace(**{key: getattr(organization, key, None) for key in org_fields})
@@ -212,6 +213,7 @@ def _payload_for_pass(db, record):
             for name in ("card_no", "card_year", "valid_from", "valid_until"):
                 setattr(snapshot, name, getattr(purchase, name))
             snapshot.membership_type = "temporary"
+            snapshot.card_namespace = DIGITAL_CARD_NAMESPACE
             snapshot.status = "active" if status == "active" and purchase.status in {"active", "expired"} else "rejected"
             member = snapshot
         else:
@@ -222,7 +224,7 @@ def _payload_for_pass(db, record):
             proof = parse_card_verification_token(barcode.rstrip("/").rsplit("/", 1)[-1])
             end = payload.get("validTimeInterval", {}).get("end", {}).get("date")
             expiry = _utc(datetime.fromisoformat(end.replace("Z", "+00:00"))) if end else None
-            matches = proof and (proof["card_number"], proof["card_year"]) == (member.card_no, member.card_year)
+            matches = proof and (proof["card_number"], proof["card_year"], proof.get("card_namespace", DIGITAL_CARD_NAMESPACE)) == (member.card_no, member.card_year, card_namespace(member))
             payload["state"] = "ACTIVE" if status == "active" and matches and expiry and expiry > datetime.utcnow() else "EXPIRED"
             return payload, min(expiry, datetime.utcnow() + timedelta(days=1)) if expiry and expiry > datetime.utcnow() else datetime.utcnow() + timedelta(days=1)
     elif member.membership_type == "temporary":

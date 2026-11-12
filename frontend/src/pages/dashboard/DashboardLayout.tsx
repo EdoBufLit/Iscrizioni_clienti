@@ -53,6 +53,12 @@ const NAV_ITEMS = [
     icon: "M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25",
   },
   {
+    label: "Le mie tessere",
+    to: "/dashboard/tessere",
+    end: false,
+    icon: "M3 8h18M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2ZM6 13h4m-4 3h7",
+  },
+  {
     label: "Prenotazioni",
     to: "/dashboard/prenotazioni",
     end: false,
@@ -135,11 +141,12 @@ const DashboardLayout = () => {
   }, [loadProfile]);
 
   const displayName = user ? `${user.first_name} ${user.last_name}` : null;
-  const orgName = user?.organization?.name ?? null;
+  const orgName = user?.organization?.club_display_name || user?.organization?.name || null;
   const statusInfo = user ? STATUS_MAP[memberAccountStatus(user)] ?? null : null;
   const mobileNavItems = useMemo(
     (): MobileDashboardNavItem[] => [
       { key: "home", label: "Riepilogo", to: "/dashboard", exact: true, icon: "home" as const },
+      { key: "cards", label: "Tessere", to: "/dashboard/tessere", icon: "cards" as const },
       { key: "bookings", label: "Prenotazioni", to: "/dashboard/prenotazioni", activeMatch: ["/dashboard/prenotazioni"], icon: "book" as const },
       { key: "documents", label: "Documenti", to: "/dashboard/documenti", activeMatch: ["/dashboard/documenti"], icon: "docs" as const },
       { key: "profile", label: "Profilo", to: "/dashboard/profilo", activeMatch: ["/dashboard/profilo"], icon: "user" as const },
@@ -187,7 +194,7 @@ const DashboardLayout = () => {
                   </div>
                   {orgName && (
                     <p className="truncate text-[11px] font-medium text-neutral-500 tracking-normal opacity-80 mt-1 leading-none">
-                      {orgName}
+                      <Link to="/dashboard/tessere" title="Cambia club">{orgName} · Cambia club</Link>
                     </p>
                   )}
                 </div>
@@ -205,9 +212,10 @@ const DashboardLayout = () => {
                   />
                 </Link>
                 <div className="w-px h-6 bg-neutral-200/60"></div>
-                <h1 className="truncate text-sm font-bold tracking-tight text-neutral-900">
-                  {displayName ?? "Area riservata"}
-                </h1>
+                <Link to="/dashboard/tessere" className="member-mobile-identity" aria-label={`Cambia club: ${orgName || "Le mie tessere"}`}>
+                  <h1 className="truncate text-sm font-bold tracking-tight text-neutral-900">{displayName ?? "Area riservata"}</h1>
+                  <span>{orgName || "Le mie tessere"} <span aria-hidden="true">⌄</span></span>
+                </Link>
               </div>
             </div>
           </div>

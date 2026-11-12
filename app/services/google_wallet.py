@@ -15,6 +15,7 @@ import requests
 from app.config import settings
 from app.models import Member, Organization
 from app.services.card_verification import build_card_verification_token
+from app.services.card_identity import card_namespace, card_number_label
 from app.services.member_activity import is_member_active
 from app.services.member_membership import (
     membership_type_label,
@@ -275,6 +276,7 @@ def _build_member_verify_url(member: Member, backend_base_url: str) -> str:
         org_id=member.org_id,
         card_number=member.card_no,
         card_year=member.card_year,
+        card_namespace=card_namespace(member),
     )
     return f"{backend_base_url}/api/cards/verify/{token}"
 
@@ -329,7 +331,7 @@ def _build_generic_object_payload(*, member: Member, class_id: str, object_id: s
     organization_label = _organization_label(org)
     full_name = _member_full_name(member)
     card_year = int(member.card_year or datetime.utcnow().year)
-    card_number = int(member.card_no or 0)
+    card_number = card_number_label(member) or "0"
     member_state = _member_state(member)
     membership_type = resolve_member_membership_type(member)
     membership_label = membership_type_label(membership_type)

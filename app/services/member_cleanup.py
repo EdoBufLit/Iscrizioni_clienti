@@ -22,6 +22,7 @@ from app.models import (
     TemporaryMembershipPurchase,
 )
 from app.services.card_allocation import release_card_number
+from app.services.card_identity import card_namespace
 from app.services.member_sessions import replace_member_password
 
 
@@ -129,6 +130,7 @@ def cleanup_deleted_member_traces(
             org_id=member.org_id,
             year=member.card_year,
             card_no=member.card_no,
+            card_namespace=card_namespace(member),
             batch_id=member.batch_id,
         )
         if purge_deleted_member_identifiers(member) or credentials_cleared:

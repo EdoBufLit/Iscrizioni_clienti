@@ -24,6 +24,7 @@ from app.models import (
     TokenType,
 )
 from app.services.card_allocation import allocate_next_card, release_card_number
+from app.services.card_identity import DIGITAL_CARD_NAMESPACE, card_namespace, card_number_for_render
 from app.services.annual_memberships import (
     as_rome_datetime,
     cancel_current_annual_membership_term,
@@ -169,6 +170,7 @@ def _build_card_links(
         org_id=member.org_id,
         card_number=member.card_no,
         card_year=member.card_year,
+        card_namespace=card_namespace(member),
     )
     verification_url = f"{backend_base}/api/cards/verify/{token}"
     download_url = f"{backend_base}/api/cards/{token}/download.pdf"
@@ -239,6 +241,7 @@ def _cleanup_deleted_conflicts(
             org_id=org_id,
             year=member.card_year,
             card_no=member.card_no,
+            card_namespace=card_namespace(member),
             batch_id=member.batch_id,
         )
         member.email = None
@@ -441,6 +444,7 @@ def issue_member_from_integration(
             year=card_year,
         )
         member.card_no = allocation.card_no
+        member.card_namespace = DIGITAL_CARD_NAMESPACE
         member.batch_id = allocation.batch_id
         member.card_year = allocation.year
         member.numbering_scope_id = allocation.numbering_scope_id
@@ -556,7 +560,7 @@ def issue_member_from_integration(
                 organization_name=org.name,
                 club_display_name=club_display_name,
                 organization_slug=org.slug,
-                card_number=member.card_no,
+                card_number=card_number_for_render(member),
                 card_year=member.card_year,
                 card_status="attiva",
                 membership_type_label=membership_label,
@@ -607,7 +611,7 @@ def issue_member_from_integration(
             organization_name=org.name,
             club_display_name=club_display_name,
             organization_slug=org.slug,
-            card_number=member.card_no,
+            card_number=card_number_for_render(member),
             card_year=member.card_year,
             verification_url=verification_url,
             download_url=download_url,

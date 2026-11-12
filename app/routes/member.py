@@ -2,19 +2,20 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Form, status, Up
 from fastapi.responses import RedirectResponse, FileResponse
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, EmailStr, Field, TypeAdapter
-from sqlalchemy import func, update
+from sqlalchemy import func, update, or_, and_
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime, timedelta
 from typing import Literal
 from zoneinfo import ZoneInfo
 from app.db import get_db
-from app.models import Booking, Form as FormModel, Member, TokenType, MemberDocument, MemberStatus, PaymentMethod, Organization, AdminUser, AdminRole, DocStatus, SignupSource, MemberContactChange
+from app.models import Booking, Form as FormModel, Member, MemberAccount, TokenType, MemberDocument, MemberStatus, PaymentMethod, Organization, AdminUser, AdminRole, DocStatus, SignupSource, MemberContactChange
+from app.services.member_accounts import link_member_to_account, lock_account, member_login_email, verify_member_password
 from app.services.email_outbox import build_email_payload, enqueue_email
 from app.services.email_sender import build_sender_payload
 from app.services.member_access_email import build_member_access_email_html
 from app.services.system_email_layout import build_system_email_html
 from app.utils import hash_token
-from app.security import MIN_MEMBER_PASSWORD_LENGTH, get_password_hash, verify_password
+from app.security import MIN_MEMBER_PASSWORD_LENGTH, get_password_hash
 from app.config import settings
 from app.middleware import get_client_ip
 from app.services.security_rate_limits import enforce_auth_rate_limit
@@ -25,8 +26,10 @@ from app.services.member_sessions import (
     issue_member_auth_token,
     replace_member_password,
     resolve_member_session,
+    resolve_account_session,
 )
 from app.services.card_verification import build_card_verification_token
+from app.services.card_identity import DIGITAL_CARD_NAMESPACE, card_namespace, card_number_label
 from app.services.google_wallet import (
     GoogleWalletApiError,
     GoogleWalletConfigError,
@@ -99,6 +102,12 @@ class MemberContactChangeBody(BaseModel):
 
 class MemberContactChangeConfirmBody(BaseModel):
     token: str = Field(..., min_length=20, max_length=512)
+
+
+class MemberCardLinkBody(BaseModel):
+    org_slug: str = Field(..., min_length=1, max_length=200)
+    card_number: str | int
+    password: str = Field(..., min_length=1, max_length=1024)
 
 
 _EMAIL_ADAPTER = TypeAdapter(EmailStr)
@@ -175,11 +184,13 @@ def _enqueue_member_password_reset(
     *,
     now: datetime,
 ) -> None:
+    destination = member_login_email(member)
     token_str, _token = issue_member_auth_token(
         db,
         member=member,
         purpose=TokenType.PASSWORD_RESET,
         expires_at=now + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES),
+        recipient_email=destination,
     )
     db.flush()
 
@@ -192,7 +203,7 @@ def _enqueue_member_password_reset(
     enqueue_email(
         db,
         email_type="member_password_reset",
-        to_email=member.email,
+        to_email=destination,
         subject="Recupero password Area Riservata - ASSO.N.A.M.",
         payload=build_email_payload(
             text_body=(
@@ -376,7 +387,8 @@ def _queue_contact_change_confirmation(
     frontend_base = settings.FRONTEND_URL.rstrip("/") or settings.BASE_URL.rstrip("/")
     link = f"{frontend_base}/conferma-contatto?token={raw_token}"
     target_email = normalized_value if change_request.field == "email" else member.email
-    field_label = "indirizzo email" if change_request.field == "email" else "numero di telefono"
+    field_label = "indirizzo email per questa associazione" if change_request.field == "email" else "numero di telefono"
+    login_note = " L'email di accesso al tuo account personale resta invariata." if change_request.field == "email" and member.account_id is not None else ""
     enqueue_email(
         db,
         email_type="member_contact_change_confirmation",
@@ -384,7 +396,7 @@ def _queue_contact_change_confirmation(
         subject=f"Conferma il nuovo {field_label} - ASSONAM",
         payload=build_email_payload(
             text_body=(
-                f"Hai richiesto di modificare il tuo {field_label}.\n\n"
+                f"Hai richiesto di modificare il tuo {field_label}.{login_note}\n\n"
                 f"Per confermare, apri questo link e premi Conferma: {link}\n\n"
                 "Il link è monouso e scade tra 24 ore. Se non hai richiesto tu la modifica, "
                 "non confermare e contatta la tua associazione."
@@ -392,7 +404,7 @@ def _queue_contact_change_confirmation(
             html_body=build_system_email_html(
                 title=f"Conferma il nuovo {field_label}", eyebrow="Sicurezza account",
                 organization_name=resolve_club_display_name(member.organization),
-                body=f"Hai richiesto di modificare il tuo {field_label}. Usa il pulsante qui sotto per aprire la pagina di conferma. La modifica verrà applicata soltanto dopo la tua conferma.",
+                body=f"Hai richiesto di modificare il tuo {field_label}.{login_note} Usa il pulsante qui sotto per aprire la pagina di conferma. La modifica verrà applicata soltanto dopo la tua conferma.",
                 cta_url=link, cta_label="Conferma il nuovo contatto",
                 footer="Il link è personale, monouso e scade tra 24 ore. Se non hai richiesto tu la modifica, non confermare e contatta la tua associazione.",
             ),
@@ -422,7 +434,7 @@ def _queue_email_change_security_notice(
         payload=build_email_payload(
             text_body=body,
             html_body=build_system_email_html(
-                title="Indirizzo email aggiornato", eyebrow="Sicurezza account",
+                title="Email di contatto aggiornata", eyebrow="Contatti associazione",
                 organization_name=resolve_club_display_name(member.organization), body=body,
                 footer="Comunicazione di sicurezza della tua area socio. Se non riconosci la modifica, contatta subito la tua associazione.",
             ),
@@ -445,6 +457,7 @@ def _queue_email_change_authorization(
         return
     frontend_base = settings.FRONTEND_URL.rstrip("/") or settings.BASE_URL.rstrip("/")
     link = f"{frontend_base}/conferma-contatto?token={raw_token}&action=authorize"
+    login_note = " L'email di accesso al tuo account personale resta invariata." if member.account_id is not None else ""
     enqueue_email(
         db,
         email_type="member_email_change_authorization",
@@ -452,7 +465,7 @@ def _queue_email_change_authorization(
         subject="Autorizza la modifica del tuo indirizzo email - ASSONAM",
         payload=build_email_payload(
             text_body=(
-                "È stata richiesta la modifica dell'indirizzo email della tua area riservata.\n\n"
+                f"È stata richiesta la modifica dell'indirizzo email di contatto per questa associazione.{login_note}\n\n"
                 f"Per autorizzarla dalla casella attuale, apri questo link e premi Autorizza: {link}\n\n"
                 "La modifica sarà applicata soltanto dopo questa autorizzazione e la conferma "
                 "separata inviata al nuovo indirizzo. Il link è monouso e scade tra 24 ore. "
@@ -461,7 +474,7 @@ def _queue_email_change_authorization(
             html_body=build_system_email_html(
                 title="Autorizza la modifica dell’email", eyebrow="Sicurezza account",
                 organization_name=resolve_club_display_name(member.organization),
-                body="È stata richiesta la modifica dell’indirizzo email della tua area riservata. Autorizzala dalla casella attuale con il pulsante qui sotto. La modifica sarà applicata soltanto dopo questa autorizzazione e la conferma separata inviata al nuovo indirizzo.",
+                body=f"È stata richiesta la modifica dell’indirizzo email di contatto per questa associazione.{login_note} Autorizzala dalla casella attuale con il pulsante qui sotto. La modifica sarà applicata soltanto dopo questa autorizzazione e la conferma separata inviata al nuovo indirizzo.",
                 cta_url=link, cta_label="Autorizza la modifica",
                 footer="Il link è personale, monouso e scade tra 24 ore. Se non hai richiesto tu la modifica, non autorizzare e contatta la tua associazione.",
             ),
@@ -769,7 +782,8 @@ def confirm_member_contact_change(
             member=member,
             subject="Indirizzo email modificato - ASSONAM",
             body=(
-                "L'indirizzo email della tua area riservata è stato modificato. "
+                "L'indirizzo email di contatto per questa associazione è stato modificato. "
+                + ("L'email di accesso al tuo account personale resta invariata. " if member.account_id is not None else "") +
                 "Se non riconosci questa operazione, contatta immediatamente la tua associazione."
             ),
             dedupe_key=f"member-email-change-confirmed:{change_request.id}",
@@ -1099,6 +1113,14 @@ def submit_member_booking_note(
     return {"booking": serialize_member_booking(booking)}
 
 
+def _preferred_login_member(db: Session, member: Member) -> Member:
+    if member.account_id is None or member.account is None or member.account.preferred_member_id is None:
+        return member
+    preferred = db.query(Member).filter(Member.id == member.account.preferred_member_id,
+                                        Member.account_id == member.account_id, Member.deleted_at.is_(None)).first()
+    return preferred if can_access_member_account(preferred) else member
+
+
 @router.post("/api/auth/login")
 def api_auth_login(request: Request, email: str = Form(...), password: str = Form(default=""), db: Session = Depends(get_db)):
     """
@@ -1111,7 +1133,8 @@ def api_auth_login(request: Request, email: str = Form(...), password: str = For
     now = datetime.utcnow()
     matching_members = (
         db.query(Member)
-        .filter(func.lower(Member.email) == email_norm)
+        .outerjoin(MemberAccount, Member.account_id == MemberAccount.id)
+        .filter(or_(func.lower(MemberAccount.email) == email_norm, and_(Member.account_id.is_(None), func.lower(Member.email) == email_norm)))
         .order_by(Member.id.desc())
         .all()
     )
@@ -1130,18 +1153,24 @@ def api_auth_login(request: Request, email: str = Form(...), password: str = For
         raise HTTPException(status_code=403, detail=_ACCOUNT_NOT_ACTIVE_DETAIL)
 
     # Password-based login
-    if password and member and member.password_hash and verify_password(password, member.password_hash):
-        establish_member_session(request, member)
-        audit.member_verified(member_id=member.id, ip=get_client_ip(request))
-        return {"status": "ok", "message": "Login successful.", "authenticated": True}
+    if password:
+        proved = next((candidate for candidate in matching_members if can_access_member_account(candidate) and verify_member_password(candidate, password)), None)
+        if proved is not None:
+            proved = _preferred_login_member(db, proved)
+            establish_member_session(request, proved)
+            db.commit()
+            audit.member_verified(member_id=proved.id, ip=get_client_ip(request))
+            return {"status": "ok", "message": "Login successful.", "authenticated": True}
 
     # Magic-link fallback
     if member:
+        member = _preferred_login_member(db, member)
         token_str, _token = issue_member_auth_token(
             db,
             member=member,
             purpose=TokenType.LOGIN_MAGIC_LINK,
             expires_at=now + timedelta(minutes=settings.LOGIN_TOKEN_EXPIRE_MINUTES),
+            recipient_email=email_norm,
         )
         db.flush()
 
@@ -1193,7 +1222,8 @@ def api_auth_password_reset_request(
     now = datetime.utcnow()
     matching_members = (
         db.query(Member)
-        .filter(func.lower(Member.email) == email_norm)
+        .outerjoin(MemberAccount, Member.account_id == MemberAccount.id)
+        .filter(or_(func.lower(MemberAccount.email) == email_norm, and_(Member.account_id.is_(None), func.lower(Member.email) == email_norm)))
         .order_by(Member.id.desc())
         .all()
     )
@@ -1378,6 +1408,8 @@ def api_auth_change_password(
     member = get_authenticated_member(request, db)
     if not member:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    if member.account_id is not None and resolve_account_session(request, db) is None:
+        raise HTTPException(status_code=401, detail="Accedi al tuo account personale per cambiare la password.")
     if len(new_password) < MIN_MEMBER_PASSWORD_LENGTH:
         raise HTTPException(status_code=400, detail=f"La password deve avere almeno {MIN_MEMBER_PASSWORD_LENGTH} caratteri.")
     # Capture the authenticated epoch before acquiring the credential-write
@@ -1388,6 +1420,7 @@ def api_auth_change_password(
         member_id=member.id,
         expected_version=expected_version,
         password_hash=get_password_hash(new_password),
+        expected_account_version=request.session.get("member_account_auth_version"),
     )
     establish_member_session(request, member)
     db.commit()
@@ -1399,16 +1432,107 @@ def api_auth_me(request: Request, db: Session = Depends(get_db)):
     member = get_authenticated_member(request, db)
     if not member:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    if member.account_id is None and request.session.get("member_account_scope") != "membership":
+        establish_member_session(request, member)
+        db.commit()
+    if member.card_no is not None and member.card_year is None:
+        # Preserve the existing selected-card legacy backfill: without the
+        # persisted year the public verifier cannot match its generated QR.
+        member.card_year = member.joined_at.year if member.joined_at else datetime.utcnow().year
+        db.commit()
+
+    result = _serialize_member_profile(request, member)
+    account = resolve_account_session(request, db)
+    result["account"] = {"id": account.id, "email": account.email} if account else None
+    return result
+
+
+@router.get("/api/member/cards")
+def list_my_cards(request: Request, db: Session = Depends(get_db)):
+    member = resolve_member_session(request, db)
+    if member is not None and member.account_id is None and request.session.get("member_account_scope") != "membership":
+        establish_member_session(request, member)
+        db.commit()
+    account = resolve_account_session(request, db)
+    if account is not None:
+        members = db.query(Member).filter(Member.account_id == account.id, Member.deleted_at.is_(None)).options(joinedload(Member.organization)).order_by(Member.id).all()
+    elif member is not None:
+        # An association-scoped proof cannot enumerate the personal account.
+        members = [member]
+    else:
+        raise HTTPException(status_code=401, detail="Accedi alla tua area riservata.")
+    items = []
+    for item in members:
+        profile = _serialize_member_profile(request, item)
+        profile.pop("account", None)
+        profile["can_select"] = can_access_member_account(item)
+        items.append(profile)
+    return {"account": {"id": account.id, "email": account.email} if account else None,
+            "selected_member_id": member.id if member else None, "items": items}
+
+
+@router.post("/api/member/cards/{member_id}/select")
+def select_my_card(member_id: int, request: Request, db: Session = Depends(get_db)):
+    account = resolve_account_session(request, db)
+    if account is None:
+        raise HTTPException(status_code=401, detail="Accedi al tuo account personale.")
+    expected_version = request.session.get("member_account_auth_version")
+    account = lock_account(db, account.id)
+    if account is None or account.auth_version != expected_version:
+        raise HTTPException(status_code=401, detail="Sessione scaduta. Accedi nuovamente.")
+    member = db.query(Member).filter(Member.id == member_id, Member.account_id == account.id, Member.deleted_at.is_(None)).populate_existing().with_for_update().first()
+    if member is None:
+        raise HTTPException(status_code=404, detail="Tessera non disponibile.")
+    if not can_access_member_account(member):
+        raise HTTPException(status_code=403, detail="Questa iscrizione non è ancora disponibile per l'accesso.")
+    account.preferred_member_id = member.id
+    establish_member_session(request, member)
+    audit.log_operation(db, action="member.card_selected", entity_type="member", entity_id=member.id,
+                        actor_member_id=member.id, actor_role="member", org_id=member.org_id,
+                        metadata={"account_id": account.id}, ip=get_client_ip(request))
+    db.commit()
+    return {"status": "ok", "member_id": member.id}
+
+
+@router.post("/api/member/cards/link")
+def link_my_card(payload: MemberCardLinkBody, request: Request, db: Session = Depends(get_db)):
+    enforce_auth_rate_limit(db, client_ip=get_client_ip(request))
+    current = resolve_member_session(request, db)
+    account = resolve_account_session(request, db)
+    if account is None:
+        raise HTTPException(status_code=401, detail="Accedi al tuo account personale.")
+    raw_number = str(payload.card_number).strip()
+    if not raw_number.isascii() or not raw_number.isdigit() or len(raw_number) > 12:
+        raise HTTPException(status_code=400, detail="Non è stato possibile verificare la tessera con i dati indicati.")
+    target = db.query(Member).join(Organization, Member.org_id == Organization.id).filter(
+        Organization.slug == payload.org_slug.strip(), Member.card_no == int(raw_number),
+        Member.card_namespace == DIGITAL_CARD_NAMESPACE, Member.deleted_at.is_(None)).first()
+    if target is None:
+        raise HTTPException(status_code=400, detail="Non è stato possibile verificare la tessera con i dati indicati.")
+    already_linked = target.account_id == account.id
+    target = link_member_to_account(db, account=account, member=target, password=payload.password,
+                                    expected_account_version=request.session.get("member_account_auth_version"))
+    if current is None:
+        current = target
+    current._account_auth_proved = True
+    establish_member_session(request, current)
+    if not already_linked:
+        audit.log_operation(db, action="member.card_linked", entity_type="member", entity_id=target.id,
+                            actor_member_id=current.id, actor_role="member", org_id=target.org_id,
+                            metadata={"account_id": account.id, "proof": "password"}, ip=get_client_ip(request))
+    db.commit()
+    return {"status": "ok", "member_id": target.id}
+
+
+def _serialize_member_profile(request: Request, member: Member) -> dict:
 
     org = member.organization
     status_raw = member.status.value if isinstance(member.status, MemberStatus) else (str(member.status) if member.status is not None else "")
     card_year = member.card_year
 
     if member.card_no is not None and card_year is None:
-        # Backfill legacy rows that predate card_year.
+        # A display fallback must not rewrite historical cards during listing.
         card_year = member.joined_at.year if member.joined_at else datetime.utcnow().year
-        member.card_year = card_year
-        db.commit()
 
     backend_base = settings.BASE_URL.rstrip("/") if settings.BASE_URL else str(request.base_url).rstrip("/")
     verification_url = None
@@ -1418,6 +1542,7 @@ def api_auth_me(request: Request, db: Session = Depends(get_db)):
             org_id=member.org_id,
             card_number=member.card_no,
             card_year=card_year,
+            card_namespace=card_namespace(member),
         )
         verification_url = f"{backend_base}/api/cards/verify/{token}"
 
@@ -1437,6 +1562,8 @@ def api_auth_me(request: Request, db: Session = Depends(get_db)):
         "payment_method": _serialize_payment_method(member.payment_method),
         "status": status_raw,
         "card_no": member.card_no,
+        "card_number_label": card_number_label(member),
+        "card_namespace": card_namespace(member),
         "card_status": card_status,
         "card_year": card_year,
         "membership_type": membership_type,
@@ -1445,6 +1572,8 @@ def api_auth_me(request: Request, db: Session = Depends(get_db)):
         "card_verification_url": verification_url,
         "card": {
             "number": member.card_no,
+            "number_label": card_number_label(member),
+            "card_namespace": card_namespace(member),
             "status": card_status,
             "year": card_year,
             "verification_url": verification_url,

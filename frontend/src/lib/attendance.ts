@@ -5,6 +5,8 @@ export type AttendanceMemberOption = {
   name: string;
   email: string | null;
   card_no: number | null;
+  card_namespace?: string | null;
+  card_number_label?: string | null;
   card_year: number | null;
   membership_type: "annual" | "temporary";
   is_active: boolean;

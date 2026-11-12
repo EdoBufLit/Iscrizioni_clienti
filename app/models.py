@@ -2173,10 +2173,29 @@ class CardBatch(Base):
     )
 
 
+class MemberAccount(Base):
+    """Personal login identity; association records keep their own data/history.
+
+    Email is deliberately not globally unique: a shared household mailbox is
+    not evidence that two legacy association memberships are the same person.
+    """
+
+    __tablename__ = "member_accounts"
+
+    id = Column(Integer, primary_key=True)
+    email = Column(String, nullable=True, index=True)
+    password_hash = Column(String, nullable=True)
+    preferred_member_id = Column(Integer, nullable=True)
+    auth_version = Column(Integer, nullable=False, default=1, server_default="1")
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    members = relationship("Member", back_populates="account", passive_deletes=True)
+
+
 class Member(Base):
     __tablename__ = "members"
 
     id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("member_accounts.id", ondelete="SET NULL"), nullable=True, index=True)
     org_id = Column(Integer, ForeignKey("organizations.id"))
     first_name = Column(String)
     last_name = Column(String)
@@ -2204,6 +2223,7 @@ class Member(Base):
     status = Column(SafeMemberStatusType(), default=MemberStatus.PENDING_DOCS.value)
 
     card_no = Column(Integer, nullable=True)
+    card_namespace = Column(String(24), nullable=False, default="digital", server_default="digital")
     card_year = Column(Integer, nullable=True)
     membership_type = Column(String, nullable=True)
     valid_from = Column(DateTime, nullable=True)
@@ -2277,6 +2297,7 @@ class Member(Base):
     deleted_at = Column(DateTime, nullable=True)
     deleted_by_admin_id = Column(Integer, ForeignKey("admin_users.id"), nullable=True)
 
+    account = relationship("MemberAccount", back_populates="members")
     organization = relationship("Organization", back_populates="members")
     numbering_scope = relationship(
         "NumberingScope",
@@ -2325,7 +2346,7 @@ class Member(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("org_id", "card_no", name="uix_org_card"),
+        UniqueConstraint("org_id", "card_namespace", "card_no", name="uix_org_card"),
         UniqueConstraint(
             "org_id",
             "signup_source",
@@ -2417,6 +2438,7 @@ class AnnualMembershipTerm(Base):
     fee_amount = Column(Numeric(10, 2), nullable=True)
     currency = Column(String, nullable=False, default="EUR", server_default="EUR")
     card_no = Column(Integer, nullable=True)
+    card_namespace = Column(String(24), nullable=False, default="digital", server_default="digital")
     card_year = Column(Integer, nullable=True)
     batch_id = Column(
         Integer,
@@ -2468,6 +2490,7 @@ class AnnualMembershipTerm(Base):
             "uq_annual_membership_terms_active_org_year_card",
             "org_id",
             "card_year",
+            "card_namespace",
             "card_no",
             unique=True,
             sqlite_where=status.notin_(
@@ -3016,6 +3039,8 @@ class Token(Base):
     purpose = Column(Enum(TokenType))
     token_hash = Column(String, index=True)
     auth_version = Column(Integer, nullable=True)
+    account_id = Column(Integer, nullable=True)
+    account_auth_version = Column(Integer, nullable=True)
     expires_at = Column(DateTime)
     used_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

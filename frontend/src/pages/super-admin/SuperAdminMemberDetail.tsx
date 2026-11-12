@@ -395,7 +395,7 @@ const SuperAdminMemberDetailPage = () => {
                         <td className="px-4 py-3 text-sm font-semibold text-neutral-900">
                           {member.card_no ? (
                             <span className="font-mono">
-                              {member.card_no}
+                              {member.card_number_label ?? member.card_no}
                               {member.card_year ? ` / ${member.card_year}` : ""}
                             </span>
                           ) : (
@@ -528,7 +528,7 @@ const SuperAdminMemberDetailPage = () => {
                 <div className="flex items-start justify-between gap-4">
                   <dt className="text-neutral-500">Numero tessera</dt>
                   <dd className="text-right font-mono text-neutral-900">
-                    {selectedMember.card_no ? `${selectedMember.card_no}${selectedMember.card_year ? ` / ${selectedMember.card_year}` : ""}` : "—"}
+                    {selectedMember.card_no ? `${selectedMember.card_number_label ?? selectedMember.card_no}${selectedMember.card_year ? ` / ${selectedMember.card_year}` : ""}` : "—"}
                   </dd>
                 </div>
                 <div className="flex items-start justify-between gap-4">

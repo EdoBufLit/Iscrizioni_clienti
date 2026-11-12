@@ -12,6 +12,7 @@ import {
   isCameraAllowedByDocumentPolicy,
 } from "../lib/cameraAccess";
 import { extractMemberCardVerificationToken } from "../lib/memberCardQr";
+import { displayCardNumber } from "../lib/cardIdentity";
 
 type ScanOutcome = {
   tone: "success" | "duplicate" | "error";
@@ -348,7 +349,7 @@ export default function AttendanceStationScanner() {
                 </p>
                 {scanOutcome.item ? (
                   <p className="mt-4 text-sm font-semibold opacity-75">
-                    Tessera {scanOutcome.item.card_no} /{" "}
+                    Tessera {displayCardNumber(scanOutcome.item)} /{" "}
                     {scanOutcome.item.card_year}
                   </p>
                 ) : null}

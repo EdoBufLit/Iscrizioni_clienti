@@ -14,6 +14,7 @@ from app.config import settings
 from app.db import get_db
 from app.models import IntegrationApiKey, Member, Organization, SignupSource
 from app.services.card_verification import build_card_verification_token
+from app.services.card_identity import card_namespace
 from app.services.member_activity import is_member_active
 from app.services.integration_issuer import (
     IssueMemberCommand,
@@ -227,6 +228,7 @@ def _build_card_links(member: Member, backend_base_url: str) -> dict[str, str]:
         org_id=member.org_id,
         card_number=member.card_no,
         card_year=member.card_year,
+        card_namespace=card_namespace(member),
     )
     verify_url = f"{backend_base_url}/api/cards/verify/{card_verification_token}"
     download_pdf_url = f"{backend_base_url}/api/cards/{card_verification_token}/download.pdf"
