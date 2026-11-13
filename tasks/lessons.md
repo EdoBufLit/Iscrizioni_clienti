@@ -3,6 +3,8 @@
 - Quando il cliente chiede fedelta esatta a mockup admin, non basta un re-skin: prima della consegna servono screenshot viewport-to-viewport delle superfici critiche, inclusi drawer/modali fixed. Inoltre le integrazioni esistenti nel dettaglio (es. SumUp) vanno preservate esplicitamente nella nuova IA e verificate nello screenshot.
 # Lessons
 
+- 13 novembre 2026: una ricerca soci va verificata cambiando lo stato mentre il nome e gia compilato e ripetendo le azioni in ordine inverso, in Super Admin e Org Admin. Non basta provare la query finale o un link diretto: includere cache calda, ritardo debounce, risposte fuori ordine e Tutti con tessere temporanee scadute.
+
 - 13 novembre 2026: se un socio risulta in verifica ma l'Org Admin non vede la richiesta, non concludere dalla sola query backend o dalla pagina Magazzino. Ricostruire il percorso Richieste effettivamente usato, i filtri frontend, l'ordinamento e la paginazione, e verificare il profilo identificato prima di attribuire il problema alla navigazione dell'utente.
 - 13 novembre 2026: lo scanner deve spiegare perche un ingresso e rifiutato: QR non ASSONAM/non valido, tessera non trovata, scaduta, non attiva o di altra associazione. Conservare la causa restituita dal backend in entrambi gli scanner, senza rivelare dati del socio di un altro club.
 

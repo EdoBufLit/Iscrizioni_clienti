@@ -18,6 +18,7 @@ from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 
 from app.db import get_db
 from app.services.enrollment_qr import build_enrollment_qr
+from app.services.member_search import member_name_search_match, normalize_member_search
 from app.models import (
     AdminUser,
     AdminRole,
@@ -2037,7 +2038,7 @@ def super_admin_member_registry(
 
     current_time = datetime.utcnow()
     status_filter = (status or "").strip().lower()
-    search_term = (q or "").strip()
+    search_term = normalize_member_search(q)
 
     query = db.query(Member).options(joinedload(Member.organization)).filter(
         Member.deleted_at.is_(None)
@@ -2050,8 +2051,7 @@ def super_admin_member_registry(
         pattern = f"%{search_term}%"
         query = query.filter(
             or_(
-                Member.first_name.ilike(pattern),
-                Member.last_name.ilike(pattern),
+                member_name_search_match(search_term),
                 Member.email.ilike(pattern),
                 Member.fiscal_code.ilike(pattern),
                 cast(Member.card_no, String).ilike(pattern),

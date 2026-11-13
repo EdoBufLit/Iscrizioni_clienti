@@ -27,12 +27,17 @@ def _contains(column, value: str):
     return column.ilike(f"%{_like_literal(value)}%", escape="\\")
 
 
+def member_name_search_match(search: str):
+    """Match every search word against either name field, in any order."""
+    return and_(*(
+        or_(_contains(Member.first_name, term), _contains(Member.last_name, term))
+        for term in search.split()
+    ))
+
+
 def _exact_match(search: str):
     return or_(
-        and_(*(
-            or_(_contains(Member.first_name, term), _contains(Member.last_name, term))
-            for term in search.split()
-        )),
+        member_name_search_match(search),
         _contains(Member.email, search),
         _contains(Member.fiscal_code, search),
         _contains(cast(Member.card_no, String), search),

@@ -1,3 +1,21 @@
+## Plan (Ricerca e filtri soci Super Admin/Org Admin - Nov 13, 2026)
+- [x] Riprodurre ricerca prima del cambio stato, cambio stato prima della ricerca, Tutti/Scaduti, reset e risposte fuori ordine nei due ruoli.
+- [x] Confrontare API live READ ONLY, cache e stato frontend per distinguere filtri errati da risultati obsoleti.
+- [x] Correggere la causa con impatto minimo e test di regressione che riproducono la sequenza segnalata.
+- [ ] Verificare build reale nei due ruoli, suite pertinenti, review indipendente e pubblicazione su Main con smoke live.
+
+### Specifica e verifica del piano
+- Lavorare su Main; nessuna modifica anagrafica, di stato o delle regole di validita per rendere visibili i risultati.
+- Ricerca e filtro devono comporsi in qualunque ordine; Tutti include scaduti non eliminati secondo il contratto del ruolo. Risposte/cache obsolete non possono sovrascrivere la combinazione corrente.
+- Analisi parallela Super Admin e Org Admin; backend e verifica live curati dall'agente principale. Screenshot utente letto come evidenza del guasto.
+
+### Review
+- Riproduzione live READ ONLY: Super Admin restituisce il socio con solo nome o cognome, ma zero risultati con nome+cognome anche parziale, sia Tutti sia Scaduti. Org Admin restituisce correttamente tutte le combinazioni; Attivi esclude correttamente la tessera temporanea scaduta.
+- Backend Super Admin ora applica ciascuna parola a nome/cognome, riusando il predicato Org Admin gia esistente; spazi normalizzati e filtri associazione/stato preservati. Test endpoint rosso prima del fix, verde dopo.
+- Frontend Super Admin: risposte/errori/finally obsoleti non sovrascrivono registro o dettaglio; cambio filtro durante debounce attende il testo corrente. Sette regressioni rosse prima del fix; nove test nuovi verdi dopo. Org Admin verificato con tre nuove regressioni (nome mantenuto, debounce, cache calda), senza modificare i sorgenti corretti.
+- Suite frontend completa: 521 test su 81 file; backend pertinente: 89 test. Build produzione, TypeScript e review indipendente superati.
+- Browser sulla build reale con database sintetico: otto scenari (Super/Org Admin, 390/1440px, chiaro/scuro), ricerca composta, entrambi gli ordini nome/stato, Tutti con scaduto e risposta Attivi vuota consegnata dopo Scaduti senza sovrascrivere il risultato. Nessun errore JavaScript; screenshot verificati. Rilascio in corso.
+
 ## Plan (CLUB FUTURA: Cristian non visibile e lettore QR - Nov 13, 2026)
 - [x] Verificare in sola lettura il caso Cristian, lo stato della domanda/tessera e i filtri Org Admin; riprodurre la causa senza approvare automaticamente iscrizioni.
 - [x] Analizzare in parallelo acquisizione QR e verifica tessera/presenze, identificando errori riproducibili e compatibilita dei dispositivi.

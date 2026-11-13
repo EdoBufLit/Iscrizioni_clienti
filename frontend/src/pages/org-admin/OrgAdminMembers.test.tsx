@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrgAdminMember, OrgAdminMembersResponse } from "../../lib/api";
 import OrgAdminMembers from "./OrgAdminMembers";
 import OrgAdminDashboard from "./OrgAdminDashboard";
+import { membersCacheKey } from "../../lib/dashboardCacheKeys";
+import { invalidateSwrCache, withSwrCache } from "../../lib/swrCache";
 
 const mocks = vi.hoisted(() => ({
   fetchMembers: vi.fn(),
@@ -76,6 +78,13 @@ async function searchFor(value: string) {
   await waitFor(() => expect(mocks.fetchMembers).toHaveBeenCalledWith(expect.objectContaining({ q: value })));
 }
 
+async function filterExpired() {
+  fireEvent.click(screen.getByRole("button", { name: /Filtri/ }));
+  const sheet = await screen.findByRole("dialog", { name: "Filtri e ordinamento" });
+  fireEvent.click(within(sheet).getByRole("button", { name: "Scaduti" }));
+  fireEvent.keyDown(window, { key: "Escape" });
+}
+
 function RequestNavigation() {
   const navigate = useNavigate();
   return <>
@@ -86,11 +95,65 @@ function RequestNavigation() {
 
 describe("OrgAdminMembers search", () => {
   beforeEach(() => {
+    invalidateSwrCache();
     vi.clearAllMocks();
     mocks.fetchMembers.mockReset().mockResolvedValue(response());
     mocks.fetchMetrics.mockResolvedValue(null);
     mocks.fetchSettings.mockResolvedValue(null);
     mocks.fetchReferrals.mockResolvedValue(null);
+  });
+
+  it("refreshes an existing name search when its status changes without retyping", async () => {
+    const expired = { ...member(72, "Cristian Collaudo", "exact"), status: "EXPIRED", is_active: false };
+    mocks.fetchMembers.mockImplementation(async ({ q, status }) => q === "cristian col" && status === "expired" ? response(expired) : response());
+    render(<MemoryRouter initialEntries={["/org-admin/soci?status=all"]}><OrgAdminMembers /></MemoryRouter>);
+    await screen.findByText("Nessun risultato");
+    await searchFor("cristian col");
+    await filterExpired();
+    expect(await screen.findByRole("row", { name: /Cristian Collaudo/ })).toBeInTheDocument();
+    expect(mocks.fetchMembers).toHaveBeenLastCalledWith(expect.objectContaining({ q: "cristian col", status: "expired", offset: 0 }));
+    expect(screen.getByRole("searchbox", { name: "Cerca soci" })).toHaveValue("cristian col");
+  });
+
+  it("keeps the new status when the pending name debounce completes", async () => {
+    const expired = { ...member(72, "Cristian Collaudo", "exact"), status: "EXPIRED", is_active: false };
+    mocks.fetchMembers.mockImplementation(async ({ q, status }) => q === "cristian col" && status === "expired" ? response(expired) : response());
+    render(<MemoryRouter initialEntries={["/org-admin/soci?status=all"]}><OrgAdminMembers /></MemoryRouter>);
+    await screen.findByText("Nessun risultato");
+    vi.useFakeTimers();
+    try {
+      fireEvent.change(screen.getByRole("searchbox", { name: "Cerca soci" }), { target: { value: "cristian col" } });
+      fireEvent.click(screen.getByRole("button", { name: /Filtri/ }));
+      const sheet = screen.getByRole("dialog", { name: "Filtri e ordinamento" });
+      fireEvent.click(within(sheet).getByRole("button", { name: "Scaduti" }));
+      fireEvent.keyDown(window, { key: "Escape" });
+      await act(async () => vi.advanceTimersByTimeAsync(320));
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(await screen.findByRole("row", { name: /Cristian Collaudo/ })).toBeInTheDocument();
+    expect(mocks.fetchMembers).toHaveBeenLastCalledWith(expect.objectContaining({ q: "cristian col", status: "expired" }));
+    expect(mocks.fetchMembers.mock.calls.some(([params]) => params.q === "cristian col" && params.status === "all")).toBe(false);
+  });
+
+  it("updates a warm empty result after refresh and ignores the older status refresh", async () => {
+    const query = "cristian col";
+    const params = { q: query, order: "joined_at_desc", limit: 25, offset: 0 };
+    for (const status of ["all", "expired"]) {
+      await withSwrCache(membersCacheKey({ ...params, status }), -1, async () => response());
+    }
+    const older = deferredResponse();
+    const current = deferredResponse();
+    mocks.fetchMembers.mockImplementation(async input => withSwrCache(membersCacheKey(input), 30_000, () => input.status === "expired" ? current.promise : older.promise));
+    render(<MemoryRouter initialEntries={[`/org-admin/soci?status=all&q=${query}`]}><OrgAdminMembers /></MemoryRouter>);
+    await screen.findByText("Nessun risultato");
+    await filterExpired();
+    await waitFor(() => expect(mocks.fetchMembers).toHaveBeenLastCalledWith(expect.objectContaining({ status: "expired", q: query })));
+    await act(async () => current.resolve(response({ ...member(72, "Cristian Collaudo", "exact"), status: "EXPIRED", is_active: false })));
+    expect(await screen.findByRole("row", { name: /Cristian Collaudo/ })).toBeInTheDocument();
+    await act(async () => older.resolve(response()));
+    expect(screen.getByRole("row", { name: /Cristian Collaudo/ })).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "Cerca soci" })).toHaveValue(query);
   });
 
   it("opens pending requests from a new URL while the member list is already mounted", async () => {

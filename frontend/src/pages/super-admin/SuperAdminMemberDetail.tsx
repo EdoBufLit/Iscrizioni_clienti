@@ -134,6 +134,10 @@ const SuperAdminMemberDetailPage = () => {
     if (!profile) return;
     setRegistryLoading(true);
     setError("");
+    // Wait for the text currently displayed in the search field. A status
+    // change during the debounce must not issue a request for an older name.
+    if (searchInput.trim() !== searchQuery) return;
+    let cancelled = false;
     fetchSuperAdminMemberRegistry({
       orgId: selectedOrgId ?? undefined,
       q: searchQuery || undefined,
@@ -143,17 +147,22 @@ const SuperAdminMemberDetailPage = () => {
       offset: (page - 1) * PAGE_SIZE,
     })
       .then((data) => {
+        if (cancelled) return;
         setRegistry(data);
       })
       .catch((err) => {
+        if (cancelled) return;
         if (err instanceof AuthError) {
           navigate("/super-admin/login", { replace: true });
           return;
         }
         setError(err instanceof Error ? err.message : "Errore caricamento libro soci.");
       })
-      .finally(() => setRegistryLoading(false));
-  }, [navigate, order, page, profile, searchQuery, selectedOrgId, status]);
+      .finally(() => {
+        if (!cancelled) setRegistryLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [navigate, order, page, profile, searchInput, searchQuery, selectedOrgId, status]);
 
   useEffect(() => {
     if (!registry?.items.length) {
@@ -171,20 +180,30 @@ const SuperAdminMemberDetailPage = () => {
   useEffect(() => {
     if (!selectedMemberId) {
       setSelectedMember(null);
+      setDetailLoading(false);
+      setDetailError("");
       return;
     }
+    let cancelled = false;
+    setSelectedMember(null);
     setDetailLoading(true);
     setDetailError("");
     fetchSuperAdminMemberDetail(selectedMemberId)
-      .then(setSelectedMember)
+      .then((data) => {
+        if (!cancelled) setSelectedMember(data);
+      })
       .catch((err) => {
+        if (cancelled) return;
         if (err instanceof AuthError) {
           navigate("/super-admin/login", { replace: true });
           return;
         }
         setDetailError(err instanceof Error ? err.message : "Errore caricamento dettaglio socio.");
       })
-      .finally(() => setDetailLoading(false));
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false);
+      });
+    return () => { cancelled = true; };
   }, [navigate, selectedMemberId]);
 
   const selectedOrganizationName = useMemo(() => {

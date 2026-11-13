@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid
 
 import pytest
@@ -90,3 +90,39 @@ def test_super_admin_member_registry_filters_by_association_and_status(client, d
     search_payload = search_res.json()
     assert search_payload["total"] == 1
     assert search_payload["items"][0]["id"] == members[0].id
+
+
+@pytest.mark.parametrize("status,expected_count", [(None, 1), ("expired", 1), ("active", 0)])
+def test_super_admin_search_combines_name_words_with_membership_status(client, db, status, expected_count):
+    suffix = uuid.uuid4().hex[:8]
+    org = Organization(name=f"Registro collaudo {suffix}", slug=f"registry-search-{suffix}", is_active=True)
+    other = Organization(name=f"Altro collaudo {suffix}", slug=f"registry-search-other-{suffix}", is_active=True)
+    db.add_all([org, other])
+    db.flush()
+    now = datetime.utcnow()
+    members = [Member(org_id=club.id, first_name="Cristian", last_name="Collaudo",
+        email=f"registry-search-{club.id}-{suffix}@example.test", status=MemberStatus.ACTIVE,
+        card_no=606060, card_year=now.year, membership_type="temporary",
+        valid_from=now-timedelta(days=2), valid_until=now-timedelta(days=1), joined_at=now-timedelta(days=2))
+        for club in (org, other)]
+    db.add_all(members)
+    db.commit()
+    assert client.post("/api/super-admin/auth/login", json={"email":"admin@assonam.it","password":"admin"}).status_code == 200
+    for search in ("cristian col", "Cristian Collaudo", "  Cristian   Collaudo  ", "Collaudo Cristian"):
+        params = {"org_id":org.id,"q":search,"limit":25,"offset":0}
+        if status is not None:
+            params["status"] = status
+        response = client.get("/api/super-admin/members", params=params)
+        assert response.status_code == 200, response.text
+        result = response.json()
+        assert result["total"] == expected_count, (search,status,result["total"])
+        assert [item["id"] for item in result["items"]] == ([members[0].id] if expected_count else [])
+        if expected_count:
+            assert result["items"][0]["status"] == "EXPIRED"
+            assert result["items"][0]["workflow_status"] == "active"
+    if status is None:
+        # Preserve the existing association/contact/card search entry points.
+        for search in (org.name, members[0].email, "606060"):
+            response = client.get("/api/super-admin/members", params={"org_id":org.id,"q":search})
+            assert response.status_code == 200, response.text
+            assert [item["id"] for item in response.json()["items"]] == [members[0].id]
