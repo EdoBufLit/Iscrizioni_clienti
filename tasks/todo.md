@@ -2,7 +2,7 @@
 - [x] Riprodurre ricerca prima del cambio stato, cambio stato prima della ricerca, Tutti/Scaduti, reset e risposte fuori ordine nei due ruoli.
 - [x] Confrontare API live READ ONLY, cache e stato frontend per distinguere filtri errati da risultati obsoleti.
 - [x] Correggere la causa con impatto minimo e test di regressione che riproducono la sequenza segnalata.
-- [ ] Verificare build reale nei due ruoli, suite pertinenti, review indipendente e pubblicazione su Main con smoke live.
+- [x] Verificare build reale nei due ruoli, suite pertinenti, review indipendente e pubblicazione su Main con smoke live.
 
 ### Specifica e verifica del piano
 - Lavorare su Main; nessuna modifica anagrafica, di stato o delle regole di validita per rendere visibili i risultati.
@@ -15,6 +15,8 @@
 - Frontend Super Admin: risposte/errori/finally obsoleti non sovrascrivono registro o dettaglio; cambio filtro durante debounce attende il testo corrente. Sette regressioni rosse prima del fix; nove test nuovi verdi dopo. Org Admin verificato con tre nuove regressioni (nome mantenuto, debounce, cache calda), senza modificare i sorgenti corretti.
 - Suite frontend completa: 521 test su 81 file; backend pertinente: 89 test. Build produzione, TypeScript e review indipendente superati.
 - Browser sulla build reale con database sintetico: otto scenari (Super/Org Admin, 390/1440px, chiaro/scuro), ricerca composta, entrambi gli ordini nome/stato, Tutti con scaduto e risposta Attivi vuota consegnata dopo Scaduti senza sovrascrivere il risultato. Nessun errore JavaScript; screenshot verificati. Rilascio in corso.
+- Rilascio `9b2ab57c8cc2fe9ff4cc966fb5d6f5dd03c9cb52` su Main completato; pipeline 43504776211 riuscita, Final canary passato alle 21:54:17 Europe/Rome. 34 controlli HTTPS con hash asset identici alla build, sette servizi healthy, zero restart/OOM e schema invariato. Disco 48%, inode 11%, due volumi persistenti, cache build assente.
+- Verifica produzione finale READ ONLY: 30 combinazioni di ruolo, ambito associazione, ricerca e stato corrette, incluse ricerca parziale/completa/invertita e tutte le associazioni Super Admin. Il profilo segnalato appare in Tutti/Scaduti ed e escluso da Attivi. Nessuna modifica di dati reali; server QA fermato, output preesistente preservato.
 
 ## Plan (CLUB FUTURA: Cristian non visibile e lettore QR - Nov 13, 2026)
 - [x] Verificare in sola lettura il caso Cristian, lo stato della domanda/tessera e i filtri Org Admin; riprodurre la causa senza approvare automaticamente iscrizioni.
