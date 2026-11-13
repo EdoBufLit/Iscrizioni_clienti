@@ -6723,14 +6723,14 @@ Specifica: collegare il template WhatsApp alla pubblicazione Super Admin usando 
 - [x] Verificare template/stato e configurazione Twilio in sola lettura; confermare piano e prerequisiti di rilascio.
 - [x] Implementare coda/invio WhatsApp e test di rollback, replay, errori provider e isolamento destinatari.
 - [x] Conservare il deep link dopo login email/codice/MFA e verificare la navigazione.
-- [ ] Eseguire review indipendente, test mirati, build e migrazione; configurare e pubblicare tramite pipeline esistente.
-- [ ] Verificare produzione e assenza di invii del campione; documentare esito, limiti e stato approvazione.
+- [x] Eseguire review indipendente, test mirati, build e migrazione; configurare e pubblicare tramite pipeline esistente.
+- [x] Verificare produzione e assenza di invii del campione; documentare esito, limiti e stato approvazione.
 
 Estensione richiesta durante il lavoro: permettere a Org Admin e Super Admin di correggere dal dettaglio socio una tessera temporanea scelta per errore, convertendola in annuale. Conservare identita socio/account, numero/anno/namespace tessera, pagamenti e magazzino; rispettare permessi e stato, audit e conflitti con acquisti/rinnovi in corso. Nessuna modifica a profili reali per il collaudo.
 
 - [x] Verificare conversione esistente e introdurre azione chiara nei dettagli di entrambi i ruoli.
 - [x] Verificare scadenza, storico annuale, stock, pagamenti aperti, audit e autorizzazioni con dati sintetici.
-- [ ] Includere la correzione nel rilascio e documentare il comportamento finale.
+- [x] Includere la correzione nel rilascio e documentare il comportamento finale.
 
 ### Review implementazione e collaudo locale
 
@@ -6741,3 +6741,10 @@ Estensione richiesta durante il lavoro: permettere a Org Admin e Super Admin di 
 - La segnalazione Crediti tessere e stata annullata dall'utente durante il lavoro: nessuna modifica a quella funzionalita o ai suoi pagamenti reali.
 - Collaudo definitivo prima del rilascio: 578 test frontend e build produzione passati; 14 scenari browser sulla build reale (sei WhatsApp/accesso e otto correzione soci), screenshot verificati. QA PostgreSQL extra: 17 controlli su correzioni concorrenti e acquisti nei due ordini, un solo audit/termine e rollback, senza provider. Container QA rimossi e volumi persistenti invariati.
 - Suite backend finale: 1350 passati e 14 saltati. Ultimo guard aggiuntivo contro attivazione anticipata di tessera con annualita futura verificato successivamente nel file dedicato: 32 test passati. Nessun ulteriore cambiamento frontend dopo build/collaudo. Review indipendente di QR e Wallet senza blocchi.
+
+### Review rilascio completato
+
+- Pubblicato commit applicativo `4872a35e8be41c0699c4f04d1b6dcfffd3802cd8` su Main. [Pipeline 43515039404](https://github.com/EdoBufLit/Iscrizioni_clienti/actions/runs/43515039404) conclusa con build, deploy e canary riusciti.
+- Produzione: 44 controlli HTTPS/asset con hash identici alla build locale, schema `20261113_01_central_whatsapp`, sette servizi principali healthy senza restart/OOM. Anche video worker ed Evolution healthy; risorse controllate: disco54%, inode14%, due volumi persistenti e zero cache build.
+- Verificati in web e worker il SID esatto, lo stesso mittente, credenziali presenti e client Twilio inizializzabile senza invio. Cicli nuova coda osservati senza errori. Query PostgreSQL READ ONLY: campione ID1 presente con zero destinatari/notifiche/email/job WhatsApp; coda totale vuota. Nessun test reale alle associazioni, nessuna correzione di soci reali. Server QA locale fermato.
+- Documentazione finale in docs/central_whatsapp_release_2026-11-13.md e docs/member_membership_correction_2026-11-13.md; evidenze private e report in output/central-whatsapp-20261113.

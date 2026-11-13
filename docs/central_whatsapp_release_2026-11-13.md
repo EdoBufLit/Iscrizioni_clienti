@@ -26,4 +26,6 @@ La migrazione `20261113_01_central_whatsapp` è additiva e non genera notifiche 
 
 ## Esito finale
 
-Frontend finale: 578 test passati, TypeScript e build produzione riusciti. Rilascio e verifiche produzione da completare insieme alla correzione del tipo tessera richiesta durante il lavoro.
+Pubblicato il commit `4872a35e8be41c0699c4f04d1b6dcfffd3802cd8` su Main con [pipeline riuscita e canary superato](https://github.com/EdoBufLit/Iscrizioni_clienti/actions/runs/43515039404). Backend completo:1350 test passati e14 saltati, piu32 test mirati successivi all'ultimo guard sulle annualita future. Frontend:578 test passati, TypeScript e build produzione riusciti.
+
+Produzione verificata con44 controlli HTTPS/asset e hash identici alla build: schema aggiornato, sette servizi principali healthy senza restart/OOM, video worker ed Evolution healthy. SID e mittente verificati in web/worker, client Twilio pronto senza effettuare invii e nuova coda elaborata senza errori. Query READ ONLY conferma campione ID1 con zero destinatari, email, notifiche o job WhatsApp; coda totale vuota. Disco54%, inode14%, due volumi e zero cache build. Nessun invio reale di prova.

@@ -27,4 +27,6 @@ Il QR firmato della tessera corrente conserva lo stesso token e riconosce il ter
 - Browser sulla build reale: otto scenari Org Admin/Super Admin, 390/1440px, chiaro/scuro, temporanea scaduta a runtime e domanda pending. Conferma, risposta API, mantenimento identita/quote/workflow e aggiornamento del dettaglio verificati; nessun errore JavaScript o overflow. Screenshot verificati.
 - Frontend completo: 578 test passati; TypeScript e build produzione riusciti. Review indipendente finale su QR, Wallet, storico e autorizzazioni senza blocchi.
 
-Rilascio e verifica produzione in corso. Nessuna correzione viene applicata a profili reali come prova.
+Pubblicato insieme alle comunicazioni WhatsApp nel commit `4872a35e8be41c0699c4f04d1b6dcfffd3802cd8`; [build/deploy e canary completati](https://github.com/EdoBufLit/Iscrizioni_clienti/actions/runs/43515039404). Suite backend completa1350 passati/14 saltati; ulteriori32 test del file correzione passati dopo il guard finale contro l'attivazione anticipata di tessere emesse con anno futuro. I pending con anno futuro ma senza numero conservano il workflow senza emissione.
+
+Produzione verificata: asset della nuova UI pubblicati e identici alla build, servizi sani e schema allineato. Nessun socio reale modificato per il collaudo; server e container QA fermati e volumi verificati.
