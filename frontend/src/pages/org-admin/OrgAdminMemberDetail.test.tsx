@@ -14,6 +14,7 @@ const apiMocks = vi.hoisted(() => ({
   updateProfile: vi.fn(),
   sendOnboarding: vi.fn(),
   resendCorrection: vi.fn(),
+  correctType: vi.fn(),
 }));
 
 vi.mock("../../lib/api", async original => ({
@@ -27,6 +28,7 @@ vi.mock("../../lib/api", async original => ({
   sendOrgAdminMemberOnboarding: (...args: unknown[]) => apiMocks.sendOnboarding(...args),
   resendOrgAdminDocumentCorrection: (...args: unknown[]) => apiMocks.resendCorrection(...args),
   updateOrgAdminMemberProfile: (...args: unknown[]) => apiMocks.updateProfile(...args),
+  correctOrgAdminMemberMembershipType: (...args: unknown[]) => apiMocks.correctType(...args),
 }));
 
 vi.mock("../../lib/accounting", () => ({
@@ -96,6 +98,19 @@ describe("OrgAdminMemberDetail", () => {
     apiMocks.fetchMember.mockResolvedValue(makeMember());
   });
   afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+  it("corregge una temporanea scaduta dal dettaglio anche quando i tipi personalizzati sono disattivati", async () => {
+    apiMocks.fetchMember.mockResolvedValue(makeMember({ membership_type: "temporary", can_correct_membership_type: true, status: "EXPIRED", is_active: false }));
+    apiMocks.correctType.mockResolvedValue(makeMember({ membership_type: "annual", can_correct_membership_type: false }));
+    renderDetail();
+    fireEvent.click(await screen.findByRole("button", { name: "Correggi tipo tessera" }));
+    expect(apiMocks.correctType).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Conferma annuale" }));
+    await waitFor(() => expect(apiMocks.correctType).toHaveBeenCalledWith(42));
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Correzione tipo tessera" })).not.toBeInTheDocument());
+    expect(apiMocks.updateProfile).not.toHaveBeenCalled();
+    expect(apiMocks.createManualPayment).not.toHaveBeenCalled();
+  });
 
   it("offre il rinnovo annuale dello stesso socio scaduto senza riaprire l'attivazione", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });

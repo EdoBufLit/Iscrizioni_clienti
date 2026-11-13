@@ -140,6 +140,7 @@ export default function SuperAdminCommunications() {
         subtitle="Un filo diretto con le associazioni affiliate. Scrivi, scegli i destinatari e condividi gli aggiornamenti." />
       {sent && <div role="status" className="central-comms__alert">
         <strong>Comunicazione pubblicata.</strong> {sent.recipient_count} associazioni raggiunte nell'area riservata · {sent.email_count} email programmate.
+        {sent.whatsapp_status_counts && <p className="mt-1">WhatsApp: {whatsappStatusSummary(sent.whatsapp_status_counts)}</p>}
       </div>}
       <SuperAdminTabs items={[{ key: "compose", label: "Nuova comunicazione", icon: "edit" }, { key: "sent", label: "Inviate", icon: "send" }]}
         active={tab} onSelect={(value) => { if (!sending && !previewing) setTab(value); }} />
@@ -169,6 +170,12 @@ export default function SuperAdminCommunications() {
               <div><strong>{review.preview.admin_count}</strong><span>Amministratori</span></div>
               <div><strong>{review.preview.email_count}</strong><span>Email</span></div>
             </div>
+            {review.preview.whatsapp_configured === true && <div className="mb-4" aria-label="Avvisi WhatsApp dell'invio">
+              <p className="text-sm font-semibold">{review.preview.whatsapp_count ?? 0} {review.preview.whatsapp_count === 1 ? "avviso WhatsApp programmato" : "avvisi WhatsApp programmati"}</p>
+              <p className="central-comms__muted mt-1">Un avviso per associazione, al numero WhatsApp registrato, con il link alla comunicazione.</p>
+              {(review.preview.whatsapp_skipped_count ?? 0) > 0 && <p className="central-comms__muted mt-2">{review.preview.whatsapp_skipped_count} {review.preview.whatsapp_skipped_count === 1 ? "associazione esclusa" : "associazioni escluse"} da WhatsApp: numero non disponibile o nessun amministratore attivo.</p>}
+            </div>}
+            {review.preview.whatsapp_configured === false && <p className="central-comms__muted mb-4">WhatsApp non attivo per questo invio. La comunicazione sarà pubblicata nell'area riservata e le email saranno programmate.</p>}
             {review.preview.without_admin_count > 0 && <div className="central-comms__alert mb-4">
               {review.preview.without_admin_count} associazioni senza amministratori attivi: il messaggio resterà nell'area riservata, ma non riceveranno email né notifiche personali.
             </div>}
@@ -216,11 +223,12 @@ export default function SuperAdminCommunications() {
             {error && <div role="alert" className="central-comms__alert central-comms__alert--error m-5">{error}</div>}
           </form>
           <aside className="central-comms__aside hidden xl:block">
-            <p className="sa-eyebrow">Un messaggio, tre punti di contatto</p>
+            <p className="sa-eyebrow">Un messaggio, più punti di contatto</p>
             <h2 className="mt-3 text-xl font-bold tracking-tight">Vicini alle associazioni.</h2>
             <div className="central-comms__channel"><SuperAdminIcon name="book" /><div><strong className="text-sm">Area riservata</strong><p className="central-comms__muted mt-1">Una copia sempre consultabile nelle Comunicazioni ASSONAM.</p></div></div>
             <div className="central-comms__channel"><SuperAdminIcon name="eye" /><div><strong className="text-sm">Notifica in alto</strong><p className="central-comms__muted mt-1">La campanella segnala il nuovo messaggio agli amministratori.</p></div></div>
             <div className="central-comms__channel"><SuperAdminIcon name="mail" /><div><strong className="text-sm">Email agli amministratori</strong><p className="central-comms__muted mt-1">Il testo completo e un collegamento diretto all'area riservata.</p></div></div>
+            {recipients.some((org) => org.whatsapp_available) && <div className="central-comms__channel"><SuperAdminIcon name="send" /><div><strong className="text-sm">Avviso WhatsApp</strong><p className="central-comms__muted mt-1">Al numero dell'associazione, con il link alla comunicazione. Rivedi i destinatari prima dell'invio.</p></div></div>}
           </aside>
         </div>
       ))}
@@ -238,7 +246,14 @@ export default function SuperAdminCommunications() {
               </button>)}</div>}
             {history && history.total_pages > 1 && <div className="central-comms__section flex items-center justify-between gap-3"><SuperAdminActionButton disabled={page <= 1 || historyLoading} onClick={() => setPage(page - 1)}>Precedente</SuperAdminActionButton><span className="central-comms__muted">{page} / {history.total_pages}</span><SuperAdminActionButton disabled={page >= history.total_pages || historyLoading} onClick={() => setPage(page + 1)}>Successiva</SuperAdminActionButton></div>}
           </section>
-          {selected && <section className="central-comms__panel"><div className="central-comms__section"><div className="flex items-center justify-between gap-3 mb-4"><SuperAdminStatusChip tone="success">Pubblicata</SuperAdminStatusChip><SuperAdminActionButton onClick={() => { ++detailRequest.current; setDetailLoading(null); setSelected(null); }}>Chiudi dettaglio</SuperAdminActionButton></div><CommunicationMessage item={selected} /><p className="central-comms__muted mt-4">{communicationDate(selected.created_at)} · {selected.created_by_email}</p></div><div className="central-comms__section"><h3 className="central-comms__heading">Associazioni destinatarie ({selected.recipient_count})</h3><ul className="central-comms__recipients">{selected.recipients?.map((org) => <li className="central-comms__recipient" key={org.id}><div><strong>{org.organization_name}</strong><span className="central-comms__muted">{org.email_count} email programmate</span></div></li>)}</ul></div></section>}
+          {selected && <section className="central-comms__panel"><div className="central-comms__section"><div className="flex items-center justify-between gap-3 mb-4"><SuperAdminStatusChip tone="success">Pubblicata</SuperAdminStatusChip><SuperAdminActionButton onClick={() => { ++detailRequest.current; setDetailLoading(null); setSelected(null); }}>Chiudi dettaglio</SuperAdminActionButton></div><CommunicationMessage item={selected} /><p className="central-comms__muted mt-4">{communicationDate(selected.created_at)} · {selected.created_by_email}</p></div>
+            {selected.whatsapp_status_counts && <div className="central-comms__section" role="region" aria-label="Stato avvisi WhatsApp">
+              <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="central-comms__heading">Avvisi WhatsApp</h3><SuperAdminActionButton disabled={detailLoading !== null} onClick={() => void openSent(selected.id)}>{detailLoading === selected.id ? "Aggiornamento…" : "Aggiorna esiti"}</SuperAdminActionButton></div>
+              <p className="text-sm mt-2">{whatsappStatusSummary(selected.whatsapp_status_counts)}</p>
+              {(selected.whatsapp_status_counts.accepted ?? 0) > 0 && <p className="central-comms__muted mt-2">La consegna al destinatario non è ancora confermata.</p>}
+              {(selected.whatsapp_status_counts.uncertain ?? 0) > 0 && <p className="central-comms__muted mt-2">Gli avvisi con esito da verificare richiedono un controllo prima di un nuovo invio.</p>}
+            </div>}
+            <div className="central-comms__section"><h3 className="central-comms__heading">Associazioni destinatarie ({selected.recipient_count})</h3><ul className="central-comms__recipients">{selected.recipients?.map((org) => <li className="central-comms__recipient" key={org.id}><div><strong>{org.organization_name}</strong><span className="central-comms__muted">{org.email_count} email programmate</span></div></li>)}</ul></div></section>}
         </div>
       </>}
     </div>
@@ -247,4 +262,16 @@ export default function SuperAdminCommunications() {
 
 function CommunicationMessage({ item }: { item: Pick<CommunicationDraft, "subject" | "body" | "document"> }) {
   return <article className="central-comms__message"><div className="central-comms__sender"><SuperAdminIcon name="mail" />ASSONAM</div><h2>{item.subject}</h2><CommunicationContent body={item.body} document={item.document} /></article>;
+}
+
+function whatsappStatusSummary(counts: Record<string, number>) {
+  const states: Array<[number, string, string]> = [
+    [(counts.queued ?? 0) + (counts.retry ?? 0), "avviso in attesa", "avvisi in attesa"],
+    [counts.sending ?? 0, "in elaborazione", "in elaborazione"],
+    [counts.accepted ?? 0, "accettato dal servizio", "accettati dal servizio"],
+    [counts.failed ?? 0, "non inviato", "non inviati"],
+    [counts.uncertain ?? 0, "con esito da verificare", "con esito da verificare"],
+    [counts.skipped ?? 0, "escluso", "esclusi"],
+  ];
+  return states.filter(([count]) => count > 0).map(([count, singular, plural]) => `${count} ${count === 1 ? singular : plural}`).join(" · ") || "Nessun avviso programmato.";
 }

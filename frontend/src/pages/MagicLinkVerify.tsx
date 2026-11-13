@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { verifyMemberToken, verifyOrgAdminToken } from "../lib/api";
+import { orgAdminLoginUrl, safeOrgAdminNext } from "../lib/orgAdminNavigation";
 
 const resolveSafeNextPath = (raw: string | null): string | null => {
   const value = (raw ?? "").trim();
@@ -14,6 +15,7 @@ const MagicLinkVerify = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [errorMessage, setErrorMessage] = useState("");
+  const orgAdminVerification = useRef<{ key: string; promise: ReturnType<typeof verifyOrgAdminToken> } | null>(null);
 
   useEffect(() => {
     const token = searchParams.get("token");
@@ -25,18 +27,27 @@ const MagicLinkVerify = () => {
       return;
     }
 
+    let active = true;
     const verify = async () => {
       try {
         if (role === "org_admin") {
-          const result = await verifyOrgAdminToken(token);
+          const orgAdminNext = safeOrgAdminNext(searchParams.get("next"));
+          // Share the one-use Org Admin exchange across StrictMode effects.
+          // The ref lives only in this component and is keyed by token+target.
+          const key = JSON.stringify([token, orgAdminNext]);
+          if (orgAdminVerification.current?.key !== key) {
+            orgAdminVerification.current = { key, promise: verifyOrgAdminToken(token, orgAdminNext ?? undefined) };
+          }
+          const result = await orgAdminVerification.current.promise;
+          if (!active) return;
           if (result.mfa_required && result.challenge) {
             navigate(
-              `/org-admin/callback?mfa_challenge=${encodeURIComponent(result.challenge)}`,
+              `/org-admin/callback?${new URLSearchParams({ mfa_challenge: result.challenge, ...(orgAdminNext ? { next: orgAdminNext } : {}) })}`,
               { replace: true },
             );
             return;
           }
-          navigate("/org-admin", { replace: true });
+          navigate(orgAdminNext || safeOrgAdminNext(result.redirect_to) || "/org-admin", { replace: true });
           return;
         }
         if (role === "member") {
@@ -46,11 +57,14 @@ const MagicLinkVerify = () => {
         }
         setErrorMessage("Link non valido: ruolo non specificato.");
       } catch {
-        setErrorMessage("Il link di accesso non è valido o è scaduto.");
+        if (role !== "org_admin" || active) {
+          setErrorMessage("Il link di accesso non è valido o è scaduto.");
+        }
       }
     };
 
     void verify();
+    return () => { active = false; };
   }, [navigate, searchParams]);
 
   if (errorMessage) {
@@ -62,7 +76,7 @@ const MagicLinkVerify = () => {
             <h1 className="section-heading">Link non valido</h1>
             <p className="mt-4 text-sm leading-7 text-neutral-600" role="alert">{errorMessage}</p>
             <div className="mt-7">
-              <Link className="btn-primary px-6 py-2.5" to="/login">
+              <Link className="btn-primary px-6 py-2.5" to={searchParams.get("role") === "org_admin" ? orgAdminLoginUrl(safeOrgAdminNext(searchParams.get("next")) || "/org-admin") : "/login"}>
                 Torna al login
               </Link>
             </div>

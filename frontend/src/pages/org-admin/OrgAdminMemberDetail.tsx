@@ -10,6 +10,7 @@ import {
   sendOrgAdminMemberOnboarding,
   resendOrgAdminDocumentCorrection,
   updateOrgAdminMemberProfile,
+  correctOrgAdminMemberMembershipType,
   type OrgAdminMemberActivity,
   type OrgAdminMemberDetail,
   type OrgAdminMemberDocument,
@@ -17,6 +18,7 @@ import {
   type UpdateOrgAdminMemberProfileInput,
 } from "../../lib/api";
 import ModalShell from "../../components/ui/ModalShell";
+import MembershipTypeCorrection from "../../components/MembershipTypeCorrection";
 import MemberDetailHeader, { type MemberDetailTab } from "./components/MemberDetailHeader";
 import MemberPaymentsPanel from "./components/MemberPaymentsPanel";
 import { displayMemberName, documentMeta, formatMemberDate, lifecycleMeta, paymentMeta, paymentMethodLabel as humanPaymentMethod, workflowMeta } from "./components/memberDetailPresentation";
@@ -97,6 +99,7 @@ function MemberDetailContent() {
   const ACTION_LABELS: Record<string, string> = {
     "member.manual_create": "Socio creato",
     "member.update": "Socio modificato",
+    "member.membership_type.correct": "Tipo tessera corretto in annuale",
     "member.access_sent": "Accesso inviato",
     "member_doc.review": "Documento revisionato",
     "member.document.resubmit": "Documento reinviato",
@@ -791,6 +794,12 @@ function MemberDetailContent() {
   return <div className="container-shell org-admin-mobile-page member-detail">
     <Link to="/org-admin/soci" className="member-detail-back"><span aria-hidden="true">←</span> Soci</Link>
     <MemberDetailHeader member={member} activeTab={activeTab} onTabChange={setActiveTab} onEdit={openProfile} onShowCard={showCard} />
+    {member.can_correct_membership_type && <section className="member-detail-panel" aria-label="Correzione tipo tessera"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2>Tipo tessera: temporanea</h2><p className="member-detail-hint">Se scelta per errore, puoi correggerla in annuale.</p></div><MembershipTypeCorrection key={member.id} member={member} onCorrect={async () => {
+      const updated = await correctOrgAdminMemberMembershipType(member.id);
+      setMember(current => current?.id === updated.id ? updated : current);
+      setPaymentRevision(value => value + 1);
+      showToast({ tone: "success", title: "Tipo tessera", message: "Tessera corretta in annuale." });
+    }} /></div></section>}
     {canRenewAnnual && <section className="member-detail-panel" aria-label="Rinnovo tessera annuale">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div><h2>Tessera {member.card_year} scaduta</h2><p className="member-detail-hint">Rinnova lo stesso socio: anagrafica, accesso, documenti e storico restano conservati.</p></div>

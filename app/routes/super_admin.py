@@ -53,6 +53,7 @@ from app.utils import generate_token, hash_token, save_upload_file
 from app.config import settings
 from app.log_redaction import hash_identifier, redact_for_log
 from app.middleware import get_client_ip
+from app.services.member_membership_correction import MembershipTypeCorrectionBody, can_correct_membership_type, correct_temporary_membership_to_annual
 from app.services.security_rate_limits import enforce_auth_rate_limit
 from app import audit
 from app.services.association_delete import delete_association_and_release_range
@@ -2196,6 +2197,8 @@ def super_admin_member_detail(
         "card_namespace": card_namespace(member),
         "card_number_label": card_number_label(member),
         "card_year": member.card_year,
+        "membership_type": "temporary" if member.membership_type == "temporary" else "annual",
+        "can_correct_membership_type": can_correct_membership_type(member),
         "joined_at": member.joined_at.isoformat() if member.joined_at else None,
         "member_type": member.member_type,
         "internal_notes": member.internal_notes,
@@ -2208,6 +2211,17 @@ def super_admin_member_detail(
         if member.organization
         else None,
     }
+
+
+@router.patch("/members/{member_id}/membership-type")
+def correct_super_admin_member_membership_type(
+    request: Request, member_id: int, body: MembershipTypeCorrectionBody,
+    db: Session = Depends(get_db),
+):
+    admin = _require_super_admin(request, db)
+    correct_temporary_membership_to_annual(db, member_id=member_id, actor=admin, request=request)
+    db.commit()
+    return super_admin_member_detail(request=request, member_id=member_id, db=db)
 
 
 def _enqueue_org_admin_welcome_invite(

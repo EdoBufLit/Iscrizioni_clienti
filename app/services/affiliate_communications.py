@@ -8,7 +8,7 @@ from datetime import datetime
 
 from fastapi import HTTPException, Request
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from app.models import (
     AdminRole, AdminUser, AffiliateCommunication, AffiliateCommunicationRead,
@@ -16,6 +16,10 @@ from app.models import (
     OrgAdminNotificationType,
 )
 from app.services.email_outbox import build_email_payload, enqueue_email
+from app.services.central_communication_whatsapp import (
+    central_whatsapp_is_configured, central_whatsapp_summary, enqueue_central_whatsapp,
+    whatsapp_available,
+)
 from app.services.org_admin_notifications import (
     _resolve_frontend_base_url, _unique_org_admin_recipient_emails,
 )
@@ -60,6 +64,7 @@ def serialize_recipient(org: Organization, admins: list[AdminUser]) -> dict:
         "id": org.id, "name": org.name, "slug": org.slug,
         "admin_count": len(admins),
         "email_count": len(_unique_org_admin_recipient_emails(admins)),
+        "whatsapp_available": whatsapp_available(org, admins),
     }
 
 
@@ -71,6 +76,9 @@ def preview_audience(db: Session, organizations: list[Organization]) -> dict:
         "admin_count": sum(item["admin_count"] for item in recipients),
         "email_count": sum(item["email_count"] for item in recipients),
         "without_admin_count": sum(item["admin_count"] == 0 for item in recipients),
+        "whatsapp_configured": central_whatsapp_is_configured(),
+        "whatsapp_count": sum(item["whatsapp_available"] for item in recipients),
+        "whatsapp_skipped_count": sum(not item["whatsapp_available"] for item in recipients),
         "recipients": recipients,
     }
 
@@ -89,6 +97,7 @@ def serialize_communication(item: AffiliateCommunication) -> dict:
         "recipient_count": item.recipient_count, "email_count": item.email_count,
         "notification_count": item.notification_count,
         "created_by_email": item.created_by_email,
+        **central_whatsapp_summary(object_session(item), item.id),
     }
 
 
@@ -140,6 +149,7 @@ def send_communication(
                 communication_id=message.id, organization_id=org.id,
                 organization_name=org.name, admin_count=len(admins), email_count=len(recipients),
             ))
+            enqueue_central_whatsapp(db, communication_id=message.id, org=org, admins=admins)
             for recipient_admin in admins:
                 db.add(OrgAdminNotification(
                     admin_user_id=recipient_admin.id, org_id=org.id,

@@ -1,6 +1,7 @@
 import { membersCacheKey, quotesCacheKey } from "./dashboardCacheKeys";
 import { observeAuthIdentity, publishAuthChange } from "./authCacheSync";
 import { clearMemberSnapshot } from "./memberSnapshot";
+import { safeOrgAdminNext } from "./orgAdminNavigation";
 import { invalidateSwrCache, withSwrCache } from "./swrCache";
 export { invalidateSwrCache, readCachedApi, subscribeApiCache } from "./swrCache";
 
@@ -863,9 +864,12 @@ export type OrgAdminProfile = {
 
 export async function requestOrgAdminMagicLink(
   email: string,
+  next?: string,
 ): Promise<{ ok: boolean }> {
   const body = new FormData();
   body.append("email", email);
+  const destination = safeOrgAdminNext(next);
+  if (destination) body.append("next", destination);
   const res = await fetch("/api/org-admin/auth/magic-link", {
     method: "POST",
     body,
@@ -884,18 +888,19 @@ export type OrgAdminLoginVerification = {
 
 export async function verifyOrgAdminToken(
   token: string,
+  next?: string,
 ): Promise<OrgAdminLoginVerification> {
   // Use default redirect behavior to ensure cookies are set correctly by the browser
-  const res = await fetch(
-    `/api/org-admin/auth/verify?token=${encodeURIComponent(token)}`
-  );
+  const destination = safeOrgAdminNext(next);
+  const query = new URLSearchParams({ token, ...(destination ? { next: destination } : {}) });
+  const res = await fetch(`/api/org-admin/auth/verify?${query}`);
 
   // If successful, the backend redirects to the dashboard (200 OK HTML)
   // If failed, it returns 400 or similar
   if (!res.ok) throw new Error("Invalid or expired token");
   const contentType = res.headers.get("content-type") || "";
   if (contentType.includes("application/json")) return res.json();
-  return { ok: true, redirect_to: "/org-admin" };
+  return { ok: true, redirect_to: destination || "/org-admin" };
 }
 
 export async function fetchMemberBookings(): Promise<MemberBookingsResponse> {
@@ -927,10 +932,13 @@ export async function submitMemberBookingNote(
 export async function verifyOrgAdminCode(
   email: string,
   code: string,
+  next?: string,
 ): Promise<OrgAdminLoginVerification> {
   const body = new FormData();
   body.append("email", email);
   body.append("code", code);
+  const destination = safeOrgAdminNext(next);
+  if (destination) body.append("next", destination);
   const res = await fetch("/api/org-admin/auth/verify-code", {
     method: "POST",
     body,
@@ -943,11 +951,12 @@ export async function verifyOrgAdminMfa(
   challenge: string,
   code: string,
   useRecoveryCode = false,
+  next?: string,
 ): Promise<OrgAdminLoginVerification> {
   const res = await fetch("/api/org-admin/auth/mfa/verify", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ challenge, code, use_recovery_code: useRecoveryCode }),
+    body: JSON.stringify({ challenge, code, use_recovery_code: useRecoveryCode, next: safeOrgAdminNext(next) ?? undefined }),
   });
   if (!res.ok) throw new Error("Invalid authentication code");
   return res.json();
@@ -4376,6 +4385,7 @@ export type OrgAdminMemberActivity = {
 };
 
 export type OrgAdminMemberDetail = {
+  can_correct_membership_type?: boolean;
   id: number;
   first_name: string;
   last_name: string;
@@ -4689,6 +4699,8 @@ export type SuperAdminSessionInfo = {
 };
 
 export type SuperAdminMemberDetail = {
+  membership_type?: "annual" | "temporary" | null;
+  can_correct_membership_type?: boolean;
   id: number;
   first_name: string;
   last_name: string;
@@ -7062,6 +7074,22 @@ export async function updateOrgAdminMemberProfile(
   if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Errore salvataggio anagrafica"));
   return res.json();
 }
+
+async function correctMemberMembershipType<T>(scope: "org-admin" | "super-admin", memberId: number): Promise<T> {
+  const res = await fetch(`/api/${scope}/members/${memberId}/membership-type`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ membership_type: "annual" }),
+  });
+  if (res.status === 401) throw new AuthError("Sessione scaduta. Accedi nuovamente.");
+  if (!res.ok) throw new Error(await parseApiErrorDetail(res, "Impossibile correggere il tipo tessera."));
+  return res.json();
+}
+
+export const correctOrgAdminMemberMembershipType = (memberId: number) =>
+  correctMemberMembershipType<OrgAdminMemberDetail>("org-admin", memberId);
+
+export const correctSuperAdminMemberMembershipType = (memberId: number) =>
+  correctMemberMembershipType<SuperAdminMemberDetail>("super-admin", memberId);
 
 export async function sendOrgAdminMemberCardEmail(
   memberId: number,

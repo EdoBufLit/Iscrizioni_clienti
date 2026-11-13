@@ -3,6 +3,7 @@ import { useNavigate, useOutletContext } from "react-router-dom";
 import {
   AuthError,
   fetchSuperAdminMemberDetail,
+  correctSuperAdminMemberMembershipType,
   fetchSuperAdminMemberRegistry,
   fetchSuperAdminOrganizations,
   type SuperAdminMemberDetail,
@@ -15,6 +16,7 @@ import {
   SuperAdminPageHeader,
   SuperAdminToolbar,
 } from "./components/SuperAdminPrimitives";
+import MembershipTypeCorrection from "../../components/MembershipTypeCorrection";
 
 const PAGE_SIZE = 25;
 
@@ -94,6 +96,8 @@ const SuperAdminMemberDetailPage = () => {
 
   const [error, setError] = useState("");
   const [detailError, setDetailError] = useState("");
+  const [registryRevision, setRegistryRevision] = useState(0);
+  const [correctionMessage, setCorrectionMessage] = useState("");
 
   const [selectedOrgId, setSelectedOrgId] = useState<number | null>(null);
   const [searchInput, setSearchInput] = useState("");
@@ -162,7 +166,7 @@ const SuperAdminMemberDetailPage = () => {
         if (!cancelled) setRegistryLoading(false);
       });
     return () => { cancelled = true; };
-  }, [navigate, order, page, profile, searchInput, searchQuery, selectedOrgId, status]);
+  }, [navigate, order, page, profile, searchInput, searchQuery, selectedOrgId, status, registryRevision]);
 
   useEffect(() => {
     if (!registry?.items.length) {
@@ -235,6 +239,7 @@ const SuperAdminMemberDetailPage = () => {
         title="Libro Soci"
         subtitle="Registro digitale dei soci, navigabile per associazione con filtri gestionali e dettaglio dedicato."
       />
+      {correctionMessage && <p role="status" className="surface px-5 py-3 text-sm">{correctionMessage}</p>}
 
       <section className="sa-kpi-grid">
         <SuperAdminKpiCard label="Totale soci" value={registry?.kpis.total ?? 0} hint="Tutti gli stati" icon="users" tone="success" />
@@ -554,11 +559,19 @@ const SuperAdminMemberDetailPage = () => {
                   <dt className="text-neutral-500">Data iscrizione</dt>
                   <dd className="text-right font-medium text-neutral-900">{formatDate(selectedMember.joined_at)}</dd>
                 </div>
+                <div className="flex items-start justify-between gap-4"><dt className="text-neutral-500">Tipo tessera</dt><dd className="text-right font-medium text-neutral-900">{selectedMember.membership_type === "temporary" ? "Temporanea" : "Annuale"}</dd></div>
                 <div className="flex items-start justify-between gap-4">
                   <dt className="text-neutral-500">Workflow</dt>
                   <dd className="text-right font-medium text-neutral-900">{getWorkflowLabel(selectedMember.workflow_status)}</dd>
                 </div>
               </dl>
+
+              <MembershipTypeCorrection key={selectedMember.id} member={selectedMember} onCorrect={async () => {
+                const updated = await correctSuperAdminMemberMembershipType(selectedMember.id);
+                setSelectedMember(current => current?.id === updated.id ? updated : current);
+                setCorrectionMessage("Tipo tessera corretto in annuale. Registro e filtri aggiornati.");
+                setRegistryRevision(value => value + 1);
+              }} />
 
               {selectedMember.internal_notes ? (
                 <div className="rounded-2xl border border-neutral-200 bg-white px-4 py-4">

@@ -64,6 +64,15 @@ describe("Comunicazioni ASSONAM nell'area associazione", () => {
     expect(screen.getByText("0 da leggere")).toBeInTheDocument();
   });
 
+  it("conserva il deep link quando la sessione scade prima di aprire il messaggio", async () => {
+    vi.mocked(api.fetchReceivedCommunications).mockRejectedValue(new notifications.AuthError("Sessione scaduta"));
+    showPage("?message=12");
+    await waitFor(() => {
+      const query = screen.getByLabelText("Percorso corrente").textContent || "";
+      expect(new URLSearchParams(query).get("next")).toBe("/org-admin/comunicazioni-assonam?message=12");
+    });
+  });
+
   it("non segna come letto una risposta di dettaglio diventata obsoleta", async () => {
     let resolve!: (value: { item: api.ReceivedCommunication }) => void;
     vi.mocked(api.fetchReceivedCommunication).mockImplementationOnce(() => new Promise((done) => { resolve = done; }));

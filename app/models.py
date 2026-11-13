@@ -1383,6 +1383,32 @@ class AffiliateCommunicationRead(Base):
     read_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
 
+class AffiliateCommunicationWhatsApp(Base):
+    """One transactional WhatsApp notification per published message and club."""
+
+    __tablename__ = "affiliate_communication_whatsapp"
+    __table_args__ = (
+        UniqueConstraint("communication_id", "organization_id", name="uq_central_whatsapp_recipient"),
+        Index("ix_central_whatsapp_dispatch", "status", "next_attempt_at", "created_at"),
+    )
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    communication_id = Column(Integer, ForeignKey("affiliate_communications.id", ondelete="CASCADE"), nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    organization_name = Column(String, nullable=False)
+    to_phone = Column(String(32), nullable=True)
+    from_phone = Column(String(32), nullable=True)
+    content_sid = Column(String(34), nullable=True)
+    status = Column(String(16), nullable=False, default="queued", server_default="queued")
+    attempts = Column(Integer, nullable=False, default=0, server_default="0")
+    next_attempt_at = Column(DateTime, nullable=False, default=datetime.utcnow, server_default=sa.func.now())
+    last_error = Column(String(80), nullable=True)
+    provider_message_id = Column(String(34), nullable=True)
+    accepted_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, server_default=sa.func.now())
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, server_default=sa.func.now())
+
+
 class OrgAdminNotification(Base):
     __tablename__ = "org_admin_notifications"
 

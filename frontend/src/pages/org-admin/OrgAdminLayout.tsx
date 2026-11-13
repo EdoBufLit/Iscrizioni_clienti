@@ -1,5 +1,5 @@
 import { prefetchDashboardRoute } from "../../lib/apiPrefetch";
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   AuthError,
@@ -10,6 +10,7 @@ import {
   type VersionInfo,
 } from "../../lib/api";
 import { applySeo } from "../../lib/seo";
+import { orgAdminLoginUrl } from "../../lib/orgAdminNavigation";
 import Skeleton from "../../components/ui/Skeleton";
 import MobileDashboardNav, { type MobileDashboardNavItem } from "../../components/ui/MobileDashboardNav";
 import { OnboardingTour, ReviewGuideButton } from "../../components/onboarding";
@@ -253,6 +254,8 @@ const OrgAdminLayout = () => {
   const [ver, setVer] = useState<VersionInfo | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const currentLocation = useRef(location);
+  currentLocation.current = location;
   const { capabilities } = useStatePlatformCapabilities();
 
   useEffect(() => {
@@ -264,7 +267,8 @@ const OrgAdminLayout = () => {
       .then(setAdmin)
       .catch((err) => {
         if (err instanceof AuthError) {
-          navigate("/org-admin/login", { replace: true });
+          const target = currentLocation.current;
+          navigate(orgAdminLoginUrl(`${target.pathname}${target.search}${target.hash}`), { replace: true });
         }
       })
       .finally(() => setLoading(false));

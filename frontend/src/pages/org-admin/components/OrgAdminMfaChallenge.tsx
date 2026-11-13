@@ -3,10 +3,11 @@ import { verifyOrgAdminMfa } from "../../../lib/api";
 
 type Props = {
   challenge: string;
+  nextPath?: string;
   onSuccess: (redirectTo: string) => void;
 };
 
-const OrgAdminMfaChallenge = ({ challenge, onSuccess }: Props) => {
+const OrgAdminMfaChallenge = ({ challenge, nextPath, onSuccess }: Props) => {
   const [code, setCode] = useState("");
   const [useRecoveryCode, setUseRecoveryCode] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -23,7 +24,7 @@ const OrgAdminMfaChallenge = ({ challenge, onSuccess }: Props) => {
     setError("");
     setSubmitting(true);
     try {
-      const result = await verifyOrgAdminMfa(challenge, normalizedCode, useRecoveryCode);
+      const result = await verifyOrgAdminMfa(challenge, normalizedCode, useRecoveryCode, nextPath);
       onSuccess(result.redirect_to || "/org-admin");
     } catch {
       setError("Codice non valido o scaduto. Riprova o usa un codice di recupero.");

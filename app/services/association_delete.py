@@ -16,6 +16,7 @@ from app.models import (
     AffiliateCommunication,
     AffiliateCommunicationRead,
     AffiliateCommunicationRecipient,
+    AffiliateCommunicationWhatsApp,
     Booking,
     CardBatch,
     CardMovement,
@@ -149,6 +150,9 @@ def _purge_association_dependencies(db: Session, *, org: Organization) -> None:
 
     # Retain the central message's audience snapshot after removing the tenant.
     # Explicit cleanup also supports SQLite installations without FK enforcement.
+    db.query(AffiliateCommunicationWhatsApp).filter(
+        AffiliateCommunicationWhatsApp.organization_id == org.id
+    ).delete(synchronize_session=False)
     db.query(AffiliateCommunicationRecipient).filter(
         AffiliateCommunicationRecipient.organization_id == org.id
     ).update({AffiliateCommunicationRecipient.organization_id: None}, synchronize_session=False)

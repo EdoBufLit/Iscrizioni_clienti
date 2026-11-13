@@ -238,6 +238,7 @@ def test_authentication_tenant_isolation_and_individual_read_state(client, db):
     inbox = client.get("/api/org-admin/communications/inbox").json()
     assert inbox["total"] == inbox["unread_count"] == 1
     assert "recipients" not in inbox["items"][0] and "created_by_email" not in inbox["items"][0]
+    assert not any(key.startswith("whatsapp_") for key in inbox["items"][0])
     response = client.post(f"/api/org-admin/communications/inbox/{item['id']}/read")
     assert response.status_code == 200, response.text
     assert response.json()["item"]["is_read"] is True

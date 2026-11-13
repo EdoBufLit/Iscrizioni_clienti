@@ -290,6 +290,9 @@ class Settings:
     TWILIO_LOW_CARDS_FLOW_SID: str = os.getenv("TWILIO_LOW_CARDS_FLOW_SID", "")
     TWILIO_ALERT_FLOW_SID: str = os.getenv("TWILIO_ALERT_FLOW_SID", "")
     TWILIO_WHATSAPP_FROM: str = os.getenv("TWILIO_WHATSAPP_FROM", "")
+    TWILIO_CENTRAL_COMMUNICATION_CONTENT_SID: str = os.getenv(
+        "TWILIO_CENTRAL_COMMUNICATION_CONTENT_SID", ""
+    )
     ASSONAM_WHATSAPP_BOT_NUMBER: str = os.getenv("ASSONAM_WHATSAPP_BOT_NUMBER", "")
     TWILIO_SMS_FROM: str = os.getenv("TWILIO_SMS_FROM", "")
     ADMIN_PHONE_E164: str = os.getenv("ADMIN_PHONE_E164", "")

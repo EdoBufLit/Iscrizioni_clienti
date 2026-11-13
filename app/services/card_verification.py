@@ -190,7 +190,17 @@ def resolve_card_verification_membership(
         TemporaryMembershipPurchase.card_no == payload["card_number"],
         TemporaryMembershipPurchase.card_year == payload["card_year"],
     ).order_by(TemporaryMembershipPurchase.id.desc()).first() if namespace == DIGITAL_CARD_NAMESPACE else None
-    if temporary is not None:
+    # An administrative correction retains the signed card identity. Its
+    # current annual term is authoritative; the old temporary purchase remains
+    # an immutable historical record with its original expiration.
+    current_annual_identity = bool(
+        term is not None
+        and resolve_member_membership_type(member) == MembershipType.ANNUAL.value
+        and member.card_no == payload["card_number"]
+        and member.card_year == payload["card_year"]
+        and resolve_card_namespace(member) == namespace
+    )
+    if temporary is not None and not current_annual_identity:
         checked_utc = checked_at.replace(tzinfo=timezone.utc) if checked_at.tzinfo is None else checked_at.astimezone(timezone.utc)
         expires = temporary.valid_until
         if expires is not None:

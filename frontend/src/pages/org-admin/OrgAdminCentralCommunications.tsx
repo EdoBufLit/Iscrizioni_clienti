@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { AuthError } from "../../lib/api";
+import { orgAdminLoginUrl } from "../../lib/orgAdminNavigation";
 import {
   communicationDate, fetchReceivedCommunication, fetchReceivedCommunications,
   markCommunicationRead, notifyCommunicationRead, NOTIFICATIONS_UPDATED_EVENT,
@@ -13,6 +14,9 @@ import "../central-communications.css";
 
 export default function OrgAdminCentralCommunications() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const currentLocation = useRef(location);
+  currentLocation.current = location;
   const [params, setParams] = useSearchParams();
   const requestedId = Number(params.get("message"));
   const selectedId = Number.isInteger(requestedId) && requestedId > 0 ? requestedId : null;
@@ -31,7 +35,10 @@ export default function OrgAdminCentralCommunications() {
   const readLock = useRef(false);
 
   const describeError = useCallback((err: unknown) => {
-    if (err instanceof AuthError) navigate("/org-admin/login", { replace: true });
+    if (err instanceof AuthError) {
+      const target = currentLocation.current;
+      navigate(orgAdminLoginUrl(`${target.pathname}${target.search}${target.hash}`), { replace: true });
+    }
     return err instanceof Error ? err.message : "Impossibile caricare le comunicazioni.";
   }, [navigate]);
 

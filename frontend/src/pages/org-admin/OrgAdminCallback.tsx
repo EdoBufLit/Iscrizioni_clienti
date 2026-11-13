@@ -1,13 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { verifyOrgAdminToken } from "../../lib/api";
 import OrgAdminMfaChallenge from "./components/OrgAdminMfaChallenge";
+import { orgAdminLoginUrl, safeOrgAdminNext } from "../../lib/orgAdminNavigation";
 
 const OrgAdminCallback = () => {
   const [searchParams] = useSearchParams();
+  const nextPath = safeOrgAdminNext(searchParams.get("next"));
   const navigate = useNavigate();
   const [error, setError] = useState(false);
   const [mfaChallenge, setMfaChallenge] = useState(() => searchParams.get("mfa_challenge") || "");
+  const verification = useRef<{ key: string; promise: ReturnType<typeof verifyOrgAdminToken> } | null>(null);
 
   useEffect(() => {
     if (mfaChallenge) return;
@@ -17,18 +20,27 @@ const OrgAdminCallback = () => {
       return;
     }
 
-    verifyOrgAdminToken(token)
+    let active = true;
+    // StrictMode replays effects. Share this component's one-use exchange,
+    // while keeping tokens out of a global cache and ignoring stale results.
+    const key = JSON.stringify([token, nextPath]);
+    if (verification.current?.key !== key) {
+      verification.current = { key, promise: verifyOrgAdminToken(token, nextPath ?? undefined) };
+    }
+    verification.current.promise
       .then((result) => {
+        if (!active) return;
         if (result.mfa_required && result.challenge) {
           setMfaChallenge(result.challenge);
           return;
         }
-        navigate("/org-admin", { replace: true });
+        navigate(nextPath || safeOrgAdminNext(result.redirect_to) || "/org-admin", { replace: true });
       })
       .catch(() => {
-        setError(true);
+        if (active) setError(true);
       });
-  }, [searchParams, navigate, mfaChallenge]);
+    return () => { active = false; };
+  }, [searchParams, navigate, mfaChallenge, nextPath]);
 
   if (mfaChallenge) {
     return (
@@ -36,7 +48,8 @@ const OrgAdminCallback = () => {
         <div className="container-shell">
           <OrgAdminMfaChallenge
             challenge={mfaChallenge}
-            onSuccess={(redirectTo) => navigate(redirectTo, { replace: true })}
+            nextPath={nextPath ?? undefined}
+            onSuccess={(redirectTo) => navigate(nextPath || safeOrgAdminNext(redirectTo) || "/org-admin", { replace: true })}
           />
         </div>
       </section>
@@ -57,7 +70,7 @@ const OrgAdminCallback = () => {
                 link dalla pagina di accesso.
               </p>
               <div className="mt-6">
-                <Link className="btn-primary" to="/org-admin/login">
+                <Link className="btn-primary" to={orgAdminLoginUrl(nextPath || "/org-admin")}>
                   Torna al login
                 </Link>
               </div>

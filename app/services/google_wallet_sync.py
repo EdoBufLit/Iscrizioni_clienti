@@ -65,7 +65,7 @@ def wallet_identity(member):
     else:
         persisted = member.google_wallet_object_id
         record = db.query(GoogleWalletPass).filter_by(object_id=persisted).first() if db is not None and persisted else None
-        if persisted and ".tmp." not in persisted and (record is None or record.kind == "annual"):
+        if persisted and ((record is not None and record.kind == "annual") or (record is None and ".tmp." not in persisted)):
             object_id = persisted
         else:
             record = (db.query(GoogleWalletPass).filter_by(member_id=member.id, kind="annual", revoked=False)

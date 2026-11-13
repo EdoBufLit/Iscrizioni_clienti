@@ -6,6 +6,7 @@ import os
 import random
 import re
 import secrets
+from urllib.parse import urlencode
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, Body, Header, Query
 from fastapi.responses import StreamingResponse, FileResponse, Response
 from sqlalchemy import func, or_, case, and_, select, cast, String
@@ -19,6 +20,8 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, TypeAdapter, field_
 from fastapi import UploadFile, File
 from app.db import get_db
 from app.services.enrollment_qr import build_enrollment_qr
+from app.services.org_admin_navigation import safe_org_admin_next
+from app.services.member_membership_correction import MembershipTypeCorrectionBody, can_correct_membership_type, correct_temporary_membership_to_annual
 from app.models import (
     AdminUser,
     AdminRole,
@@ -344,6 +347,7 @@ class OrgAdminMfaVerifyBody(BaseModel):
     challenge: str = Field(min_length=20, max_length=512)
     code: str = Field(min_length=4, max_length=64)
     use_recovery_code: bool = False
+    next: str | None = Field(default=None, max_length=2048)
 
 
 class OrgAdminMfaCodeBody(BaseModel):
@@ -1846,6 +1850,7 @@ def _build_org_member_detail_payload(
         "card_number_label": card_number_label(member),
         "card_year": member.card_year,
         "membership_type": resolve_member_membership_type(member),
+        "can_correct_membership_type": can_correct_membership_type(member),
         "membership_type_label": membership_type_label(
             resolve_member_membership_type(member)
         ),
@@ -1952,6 +1957,7 @@ def _build_org_member_detail_payload(
 def request_magic_link(
     request: Request,
     email: str = Form(...),
+    next_path: str | None = Form(default=None, alias="next"),
     db: Session = Depends(get_db),
 ):
     """
@@ -2038,6 +2044,9 @@ def request_magic_link(
             frontend_base = str(request.base_url).rstrip("/")
 
         link = f"{frontend_base}/auth/verify?token={token_str}&role=org_admin"
+        destination = safe_org_admin_next(next_path)
+        if destination:
+            link += "&" + urlencode({"next": destination})
         logger.info(
             "Generated org-admin magic link: %s", redact_url(link)
         )
@@ -2111,6 +2120,7 @@ def request_magic_link(
 def verify_magic_link(
     request: Request,
     token: str,
+    next_path: str | None = Query(default=None, alias="next"),
     db: Session = Depends(get_db),
 ):
     """Verify a magic-link token and create an org-admin session."""
@@ -2215,7 +2225,7 @@ def verify_magic_link(
 
     from fastapi.responses import RedirectResponse
 
-    response = RedirectResponse(url="/org-admin", status_code=302)
+    response = RedirectResponse(url=safe_org_admin_next(next_path) or "/org-admin", status_code=302)
     set_org_admin_session_cookie(response, persistent_token)
     return response
 
@@ -2226,6 +2236,7 @@ def verify_magic_code(
     response: Response,
     email: str = Form(...),
     code: str = Form(...),
+    next_path: str | None = Form(default=None, alias="next"),
     db: Session = Depends(get_db),
 ):
     """Verify a short org-admin login code without leaving the app/PWA."""
@@ -2318,7 +2329,7 @@ def verify_magic_code(
     request.session["org_admin_id"] = admin.id
     audit.org_admin_verified(admin_id=admin.id, org_id=admin.org_id, ip=client_ip)
     set_org_admin_session_cookie(response, persistent_token)
-    return {"ok": True, "redirect_to": "/org-admin"}
+    return {"ok": True, "redirect_to": safe_org_admin_next(next_path) or "/org-admin"}
 
 
 @auth_router.post("/mfa/verify")
@@ -2402,7 +2413,7 @@ def verify_org_admin_mfa(
     set_org_admin_session_cookie(response, persistent_token)
     return {
         "ok": True,
-        "redirect_to": "/org-admin",
+        "redirect_to": safe_org_admin_next(body.next) or "/org-admin",
         "recovery_codes_remaining": count_remaining_recovery_codes(db, admin.id),
         "session_id": persistent_session.id,
     }
@@ -6476,6 +6487,19 @@ def get_member_detail(
     )
 
 
+@router.patch("/members/{member_id}/membership-type")
+def correct_member_membership_type(
+    request: Request, member_id: int, body: MembershipTypeCorrectionBody,
+    db: Session = Depends(get_db),
+):
+    admin = _get_current_org_admin(request, db)
+    if not admin:
+        raise HTTPException(401, "Not authenticated")
+    member = correct_temporary_membership_to_annual(db, member_id=member_id, actor=admin, request=request)
+    db.commit()
+    return _build_org_member_detail_payload(db=db, admin=admin, member=member, request=request)
+
+
 @router.patch("/members/{member_id}/profile")
 def update_member_profile(
     request: Request,
@@ -6561,6 +6585,15 @@ def update_member_profile(
                 detail="Esiste già un socio con questa email per la tua associazione.",
             )
 
+    membership_type_corrected = (
+        body.membership_type is not None
+        and resolve_member_membership_type(member) == "temporary"
+        and membership_type == "annual"
+    )
+    if membership_type_corrected:
+        # Lock and validate the financial workflow before changing identity data.
+        member = correct_temporary_membership_to_annual(db, member_id=member.id, actor=admin, request=request)
+
     changed_fields: list[str] = []
 
     def apply_change(field_name: str, new_value):
@@ -6580,23 +6613,17 @@ def update_member_profile(
     apply_change("internal_notes", internal_notes)
 
     current_membership_type = resolve_member_membership_type(member)
-    if body.membership_type is not None and current_membership_type != membership_type:
-        from app.services.annual_memberships import (
-            cancel_current_annual_membership_term,
-            reactivate_current_annual_membership_term,
-        )
-
-        if current_membership_type == "annual" and membership_type == "temporary":
-            cancel_current_annual_membership_term(db, member, now=datetime.utcnow())
+    if membership_type_corrected:
+        changed_fields.extend(["membership_type", "valid_until"])
+        if membership_fee_snapshot is not None:
+            apply_change("membership_fee_snapshot", membership_fee_snapshot)
+    elif body.membership_type is not None and current_membership_type != membership_type:
+        from app.services.annual_memberships import cancel_current_annual_membership_term
+        cancel_current_annual_membership_term(db, member, now=datetime.utcnow())
         apply_membership_defaults(
-            member=member,
-            org=admin.organization,
-            membership_type=membership_type,
-            reference_time=member.joined_at or datetime.utcnow(),
-            membership_fee_snapshot=membership_fee_snapshot,
+            member=member, org=admin.organization, membership_type=membership_type,
+            reference_time=member.joined_at or datetime.utcnow(), membership_fee_snapshot=membership_fee_snapshot,
         )
-        if membership_type == "annual":
-            reactivate_current_annual_membership_term(db, member, now=datetime.utcnow())
         changed_fields.extend(["membership_type", "valid_from", "valid_until", "membership_fee_snapshot"])
     elif membership_fee_snapshot is not None and member.membership_fee_snapshot != membership_fee_snapshot:
         member.membership_fee_snapshot = membership_fee_snapshot

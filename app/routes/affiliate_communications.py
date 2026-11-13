@@ -141,7 +141,10 @@ def _inbox_query(db: Session, admin: AdminUser):
 def _serialize_inbox(item: AffiliateCommunication, read_at: datetime | None) -> dict:
     # Audience counts and sender account details belong to the central admin only.
     result = serialize_communication(item)
-    for key in ("audience", "recipient_count", "email_count", "notification_count", "created_by_email"):
+    for key in (
+        "audience", "recipient_count", "email_count", "notification_count", "created_by_email",
+        "whatsapp_count", "whatsapp_skipped_count", "whatsapp_status_counts",
+    ):
         result.pop(key)
     result.update(is_read=read_at is not None, read_at=read_at.isoformat() + "Z" if read_at else None)
     return result

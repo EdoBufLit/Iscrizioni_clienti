@@ -205,6 +205,17 @@ def test_reservation_worker_interval_is_carried_in_private_deploy_configuration(
     })
 
 
+def test_central_whatsapp_template_is_carried_to_application_and_worker() -> None:
+    key = "TWILIO_CENTRAL_COMMUNICATION_CONTENT_SID"
+    sample = "HX" + "a" * 32
+    assert f"{key}={sample}\n" in build_app_env({key: sample})
+    assert f"{key}=\n" in build_app_env({})
+    compose = (REPO_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    assert f"{key}: ${{{key}:-}}" in compose
+    workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+    assert f"{key}: ${{{{ vars.{key} }}}}" in workflow
+
+
 def test_wallet_worker_is_started_and_checked_by_standard_rollout() -> None:
     source = REMOTE_SCRIPT_PATH.read_text(encoding="utf-8")
     for line in source.splitlines():

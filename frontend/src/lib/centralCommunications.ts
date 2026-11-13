@@ -10,6 +10,7 @@ export type CommunicationRecipient = {
   slug: string;
   admin_count: number;
   email_count: number;
+  whatsapp_available?: boolean;
 };
 
 export type CommunicationDraft = {
@@ -25,6 +26,9 @@ export type CommunicationPreview = {
   admin_count: number;
   email_count: number;
   without_admin_count: number;
+  whatsapp_configured?: boolean;
+  whatsapp_count?: number;
+  whatsapp_skipped_count?: number;
   recipients: CommunicationRecipient[];
 };
 
@@ -39,6 +43,9 @@ export type CentralCommunication = {
   recipient_count: number;
   email_count: number;
   notification_count: number;
+  whatsapp_count?: number;
+  whatsapp_skipped_count?: number;
+  whatsapp_status_counts?: Record<string, number>;
   created_by_email: string;
   is_read?: boolean;
   read_at?: string | null;

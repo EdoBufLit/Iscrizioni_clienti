@@ -1,10 +1,13 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { requestOrgAdminMagicLink, fetchWhoAmI, verifyOrgAdminCode } from "../../lib/api";
 import OrgAdminMfaChallenge from "./components/OrgAdminMfaChallenge";
+import { safeOrgAdminNext } from "../../lib/orgAdminNavigation";
 
 const OrgAdminLogin = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const nextPath = safeOrgAdminNext(searchParams.get("next"));
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
@@ -15,12 +18,16 @@ const OrgAdminLogin = () => {
   const [mfaChallenge, setMfaChallenge] = useState("");
 
   useEffect(() => {
+    let active = true;
     fetchWhoAmI()
       .then((w) => {
-        if (w.authenticated && w.redirect_to) navigate(w.redirect_to, { replace: true });
+        if (active && w.authenticated && w.redirect_to) {
+          navigate(w.role === "org_admin" ? nextPath || "/org-admin" : w.redirect_to, { replace: true });
+        }
       })
       .catch(() => {});
-  }, [navigate]);
+    return () => { active = false; };
+  }, [navigate, nextPath]);
 
   const canSubmit = email.trim().length > 0 && !submitting;
 
@@ -30,7 +37,7 @@ const OrgAdminLogin = () => {
     setError("");
     setSubmitting(true);
     try {
-      await requestOrgAdminMagicLink(email.trim());
+      await requestOrgAdminMagicLink(email.trim(), nextPath ?? undefined);
       setSent(true);
     } catch {
       setError("Si è verificato un errore. Riprova più tardi.");
@@ -48,12 +55,12 @@ const OrgAdminLogin = () => {
     setCodeError("");
     setVerifyingCode(true);
     try {
-      const result = await verifyOrgAdminCode(email.trim(), normalizedAccessCode);
+      const result = await verifyOrgAdminCode(email.trim(), normalizedAccessCode, nextPath ?? undefined);
       if (result.mfa_required && result.challenge) {
         setMfaChallenge(result.challenge);
         return;
       }
-      navigate(result.redirect_to || "/org-admin", { replace: true });
+      navigate(nextPath || safeOrgAdminNext(result.redirect_to) || "/org-admin", { replace: true });
     } catch {
       setCodeError("Codice non valido o scaduto. Richiedi una nuova email e riprova.");
     } finally {
@@ -95,7 +102,8 @@ const OrgAdminLogin = () => {
             <div className="flex items-center px-6 py-10 sm:px-10">
               <OrgAdminMfaChallenge
                 challenge={mfaChallenge}
-                onSuccess={(redirectTo) => navigate(redirectTo, { replace: true })}
+                nextPath={nextPath ?? undefined}
+                onSuccess={(redirectTo) => navigate(nextPath || safeOrgAdminNext(redirectTo) || "/org-admin", { replace: true })}
               />
             </div>
             {imagePanel}

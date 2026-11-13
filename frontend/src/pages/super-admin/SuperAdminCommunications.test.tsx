@@ -77,6 +77,70 @@ describe("Comunicazioni del super admin", () => {
     expect(api.sendCommunication).not.toHaveBeenCalled();
   });
 
+  it("mostra avvisi WhatsApp ed esclusioni prima della conferma e lo stato in attesa dopo la pubblicazione", async () => {
+    vi.mocked(api.previewCommunication).mockResolvedValue({
+      recipients, organization_count: 2, admin_count: 1, email_count: 1, without_admin_count: 1,
+      whatsapp_configured: true, whatsapp_count: 1, whatsapp_skipped_count: 1,
+    });
+    vi.mocked(api.sendCommunication).mockResolvedValue({ item: {
+      ...sentItem, recipient_count: 2, whatsapp_count: 1, whatsapp_skipped_count: 1,
+      whatsapp_status_counts: { queued: 1, skipped: 1 },
+    }, replayed: false });
+    showPage();
+    await fillDraft();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Circolo Lago" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rivedi e invia" }));
+    const summary = await screen.findByLabelText("Avvisi WhatsApp dell'invio");
+    expect(summary).toHaveTextContent("1 avviso WhatsApp programmato");
+    expect(summary).toHaveTextContent("1 associazione esclusa da WhatsApp");
+    expect(summary).toHaveTextContent("Un avviso per associazione");
+    expect(api.sendCommunication).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Invia a 2 associazioni" }));
+    expect(await screen.findByText("WhatsApp: 1 avviso in attesa · 1 escluso")).toBeInTheDocument();
+    expect(screen.queryByText(/consegnat/i)).not.toBeInTheDocument();
+  });
+
+  it("distingue WhatsApp non attivo da un invio configurato con zero numeri disponibili", async () => {
+    vi.mocked(api.previewCommunication).mockResolvedValueOnce({
+      recipients: [recipients[0]], organization_count: 1, admin_count: 1, email_count: 1, without_admin_count: 0,
+      whatsapp_configured: false, whatsapp_count: 0, whatsapp_skipped_count: 1,
+    }).mockResolvedValueOnce({
+      recipients: [recipients[0]], organization_count: 1, admin_count: 1, email_count: 1, without_admin_count: 0,
+      whatsapp_configured: true, whatsapp_count: 0, whatsapp_skipped_count: 1,
+    });
+    showPage();
+    await reviewDraft();
+    expect(screen.getByText(/WhatsApp non attivo per questo invio/)).toBeInTheDocument();
+    expect(screen.queryByLabelText("Avvisi WhatsApp dell'invio")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Modifica messaggio o destinatari" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rivedi e invia" }));
+    const summary = await screen.findByLabelText("Avvisi WhatsApp dell'invio");
+    expect(summary).toHaveTextContent("0 avvisi WhatsApp programmati");
+    expect(summary).toHaveTextContent("1 associazione esclusa da WhatsApp");
+    expect(screen.queryByText(/WhatsApp non attivo per questo invio/)).not.toBeInTheDocument();
+    expect(api.sendCommunication).not.toHaveBeenCalled();
+  });
+
+  it("mostra nello storico gli esiti WhatsApp senza confondere presa in carico e consegna", async () => {
+    vi.mocked(api.fetchSentCommunication).mockResolvedValueOnce({ item: {
+      ...sentItem, whatsapp_count: 1, whatsapp_skipped_count: 0, whatsapp_status_counts: { queued: 1 },
+    } }).mockResolvedValue({ item: {
+      ...sentItem, whatsapp_count: 9, whatsapp_skipped_count: 2,
+      whatsapp_status_counts: { queued: 2, retry: 1, sending: 1, accepted: 3, failed: 1, uncertain: 1, skipped: 2 },
+    } });
+    showPage();
+    fireEvent.click(screen.getByRole("tab", { name: "Inviate" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Nuova stagione/ }));
+    const summary = await screen.findByRole("region", { name: "Stato avvisi WhatsApp" });
+    expect(summary).toHaveTextContent("1 avviso in attesa");
+    fireEvent.click(within(summary).getByRole("button", { name: "Aggiorna esiti" }));
+    await waitFor(() => expect(summary).toHaveTextContent("3 accettati dal servizio"));
+    expect(summary).toHaveTextContent("3 avvisi in attesa · 1 in elaborazione · 3 accettati dal servizio · 1 non inviato · 1 con esito da verificare · 2 esclusi");
+    expect(summary).toHaveTextContent("La consegna al destinatario non è ancora confermata.");
+    expect(summary).toHaveTextContent("richiedono un controllo prima di un nuovo invio");
+    expect(api.sendCommunication).not.toHaveBeenCalled();
+  });
+
   it("blocca modifiche e doppio click mentre prepara l'anteprima", async () => {
     let resolve!: (value: api.CommunicationPreview) => void;
     vi.mocked(api.previewCommunication).mockImplementation(() => new Promise((done) => { resolve = done; }));

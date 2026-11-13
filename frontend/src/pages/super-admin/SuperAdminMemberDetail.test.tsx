@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   registry: vi.fn(),
   detail: vi.fn(),
   organizations: vi.fn(),
+  correctType: vi.fn(),
 }));
 
 vi.mock("react-router-dom", () => ({
@@ -21,6 +22,7 @@ vi.mock("../../lib/api", () => ({
   fetchSuperAdminMemberRegistry: mocks.registry,
   fetchSuperAdminMemberDetail: mocks.detail,
   fetchSuperAdminOrganizations: mocks.organizations,
+  correctSuperAdminMemberMembershipType: mocks.correctType,
 }));
 
 const expiredMember = {
@@ -87,11 +89,30 @@ describe("Super Admin member registry filters and requests", () => {
     mocks.organizations.mockReset().mockResolvedValue({ items: [] });
     mocks.registry.mockReset().mockResolvedValue(registry());
     mocks.detail.mockReset().mockImplementation(async (id: number) => id === expiredMember.id ? expiredMember : activeMember);
+    mocks.correctType.mockReset();
   });
 
   afterEach(() => {
     cleanup();
     vi.useRealTimers();
+  });
+
+  it("ricarica il filtro Scaduti dopo una correzione in annuale e mostra l'esito anche se il socio esce dal filtro", async () => {
+    mocks.detail.mockResolvedValue({ ...expiredMember, membership_type: "temporary", can_correct_membership_type: true });
+    mocks.correctType.mockImplementation(async () => {
+      mocks.registry.mockResolvedValue(registry([], 0));
+      return { ...expiredMember, membership_type: "annual", can_correct_membership_type: false, status: "ACTIVE", is_active: true };
+    });
+    render(<SuperAdminMemberDetailPage />);
+    await flush(); setStatus("expired"); await flush();
+    fireEvent.click(screen.getByRole("button", { name: "Correggi tipo tessera" }));
+    fireEvent.click(screen.getByRole("button", { name: "Conferma annuale" }));
+    await flush();
+    expect(mocks.correctType).toHaveBeenCalledWith(expiredMember.id);
+    expect(mocks.registry).toHaveBeenLastCalledWith(expect.objectContaining({ status: "expired" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Tipo tessera corretto in annuale");
+    expect(table().queryByText(expiredMember.full_name)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Correggi tipo tessera" })).not.toBeInTheDocument();
   });
 
   it.each(["name-first", "status-first"])("keeps an expired member searchable when applying filters %s", async (order) => {

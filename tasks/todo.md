@@ -6684,3 +6684,60 @@ Specifica approvata dall'utente: un account personale collega piu iscrizioni ai 
 - Applicata una sola volta l'eccezione autorizzata: account1 collega Golden Age socio2927 tessera27635/2026 e Frutta socio7182/term6947 tessera28696*/2026. Namespace cartaceo separato, quota nuova0, nessuna email o nuova evidenza di pagamento/consensi/documenti.
 - Verifica reale READ ONLY: elenco esatto di due tessere selezionabili, selezione Golden preesistente conservata; tutti e tre i QR (Golden, Frutta*, altro titolare digitale28696) HTTP200 validi; PDFcartaceo200, due pagine. Golden/Wallet/storico/altro titolare e lotti verificati invariati. Dry-run successivo riconosce lo stesso import, senza ripeterlo.
 - QA remoto e server locale chiusi. Documentazione completata; nessuna operazione ulteriore sui dati reali.
+# Piano — link WhatsApp per comunicazioni ASSONAM (13 novembre 2026)
+
+Perimetro: verificare il link da configurare nel template mostrato e come si collega all'invio delle comunicazioni centrali; analisi senza invii reali o modifiche alla configurazione Twilio.
+
+- [x] Confermare branch Main e leggere istruzioni e lezioni rilevanti.
+- [x] Verificare percorso comunicazione, accesso dopo login e integrazione Twilio esistente.
+- [x] Verificare le regole ufficiali per URL e variabili del template WhatsApp.
+- [x] Indicare configurazione esatta, prerequisiti di invio e limiti nella review.
+
+### Review link WhatsApp comunicazioni
+
+- URL consigliato per la singola comunicazione: `https://assonam.it/org-admin/comunicazioni-assonam?message={{2}}`; `{{1}}` nome associazione, `{{2}}` ID della comunicazione, con esempio di un ID esistente per l'approvazione. Lo screenshot omette lo schema https e Twilio segnala URL non valido. In alternativa il percorso fisso senza query apre l'archivio.
+- Confermato il percorso nel router e nel servizio `communication_href`; il frontend legge `message` e apre il dettaglio autorizzato. Gli otto test esistenti di OrgAdminCentralCommunications sono passati, incluso il deep link e aggiornamento dello stato letto.
+- Documentazione primaria verificata con analisi indipendente: Twilio Content Call to Action, Content Template Builder, Using Variables with Content API ed errore 92007. La variabile URL deve essere finale; gli invii usano ContentSid e ContentVariables JSON. Fonti: https://www.twilio.com/docs/content/twilio-call-to-action e https://www.twilio.com/docs/content/create-templates-with-the-content-template-builder.
+- Invio centrale attuale: pubblicazione, destinatari, campanella ed email outbox transazionali; nessun invio Twilio. L'alert tessere usa invece Twilio Studio e `Organization.whatsapp_e164`. Per attivare il nuovo avviso occorre collegare il template approvato (Content SID HX) allo stesso mittente/destinatario e preservare idempotenza e transazione.
+- Limite rilevato: OrgAdminLayout e dettaglio mandano al login senza conservare la destinazione; OrgAdminLogin segue il redirect dashboard. Il ritorno alla specifica comunicazione dopo autenticazione richiede un adeguamento. Nessuna modifica applicativa, invio reale, accesso a credenziali o modifica Twilio eseguiti.
+
+# Piano — campione comunicazione per template WhatsApp (13 novembre 2026)
+
+Vincolo utente: non inviare messaggi alle associazioni. Cercare prima una comunicazione esistente in produzione, in sola lettura; creare un campione soltanto se necessario e se isolabile senza destinatari, email, notifiche o WhatsApp.
+
+- [x] Verificare comunicazioni esistenti e ID utilizzabili con query READ ONLY.
+- [x] Se necessario, verificare e creare il solo campione isolato senza invii.
+- [x] Fornire ID/link verificati e registrare esito e assenza di invii nella review.
+
+### Review campione template WhatsApp
+
+- Prima lettura produzione PostgreSQL in REPEATABLE READ/READ ONLY con rollback: nessuna comunicazione centrale esistente.
+- Su richiesta esplicita dell'utente creato soltanto il record tecnico ID `1`, oggetto `[TEST] Campione tecnico per template WhatsApp`, audience selected senza destinatari, chiave idempotente `whatsapp-template-sample-20261113`. Inserimento SQL parametrizzato in transazione senza chiamare API di pubblicazione, servizi email/Twilio o worker. Controllati prima i vincoli, l'assenza di trigger custom e la presenza del super admin attivo. Review indipendente conferma che nessun worker invia automaticamente record di questa tabella.
+- Verifica dentro la transazione e nuova connessione READ ONLY dopo commit: una sola comunicazione, tutti i contatori a zero e zero righe destinatari, notifiche, letture o email outbox collegate. Nessun messaggio inviato alle associazioni.
+- Campioni da compilare in Twilio: variabile 1 `Associazione di esempio`, variabile 2 `1`. Record consultabile esclusivamente nello storico Super Admin. Il link Org Admin non rende leggibile il campione senza un destinatario autorizzato: non si tratta di un test di consegna o accesso dall'area associazione. Nessuna modifica applicativa o deploy.
+
+# Piano — notifiche WhatsApp per comunicazioni centrali (13 novembre 2026)
+
+Specifica: collegare il template WhatsApp alla pubblicazione Super Admin usando lo stesso mittente e il numero WhatsApp gia registrato per l'associazione. Una notifica per associazione destinataria con nome e ID comunicazione; coda transazionale, idempotenza, tracciamento errori e nessun invio prima del commit. Conservare email, campanella e flussi tessere/ordini. Il campione ID 1 resta senza destinatari e non deve generare invii retroattivi. Preservare il deep link attraverso il login Org Admin. Nessuna prova reale ai numeri delle associazioni; verificare con dati sintetici e provider simulato.
+
+- [x] Verificare template/stato e configurazione Twilio in sola lettura; confermare piano e prerequisiti di rilascio.
+- [x] Implementare coda/invio WhatsApp e test di rollback, replay, errori provider e isolamento destinatari.
+- [x] Conservare il deep link dopo login email/codice/MFA e verificare la navigazione.
+- [ ] Eseguire review indipendente, test mirati, build e migrazione; configurare e pubblicare tramite pipeline esistente.
+- [ ] Verificare produzione e assenza di invii del campione; documentare esito, limiti e stato approvazione.
+
+Estensione richiesta durante il lavoro: permettere a Org Admin e Super Admin di correggere dal dettaglio socio una tessera temporanea scelta per errore, convertendola in annuale. Conservare identita socio/account, numero/anno/namespace tessera, pagamenti e magazzino; rispettare permessi e stato, audit e conflitti con acquisti/rinnovi in corso. Nessuna modifica a profili reali per il collaudo.
+
+- [x] Verificare conversione esistente e introdurre azione chiara nei dettagli di entrambi i ruoli.
+- [x] Verificare scadenza, storico annuale, stock, pagamenti aperti, audit e autorizzazioni con dati sintetici.
+- [ ] Includere la correzione nel rilascio e documentare il comportamento finale.
+
+### Review implementazione e collaudo locale
+
+- Template reale trovato via API Twilio in sola lettura: SID confermato dall'utente, stato approved, categoria assegnata MARKETING. Variabile GitHub Actions del SID configurata e verificata; mittente, Messaging Service e webhook non modificati.
+- Coda WhatsApp transazionale, replay/rollback senza duplicati, claim concorrenti, errori ambigui senza retry cieco, stati reali nel Super Admin. PostgreSQL16 isolato: 29 controlli passati, con tre worker e un solo provider simulato. Prima suite backend completa: 1314 passati e 14 saltati.
+- Accesso al deep link con codice, email in nuova scheda e MFA; guard contro destinazioni esterne e route auth anche mixed case. Due rilievi della review corretti e testati: case sensitivity e doppio consumo token in StrictMode.
+- Correzione temporanea in annuale con endpoint condivisi e conferma nei due ruoli, inclusi pending senza emissione, acquisti aperti bloccati, identita/stock/account/pagamenti preservati e audit idempotente. QR esistente segue la tessera annuale corrente senza cambiare token; ledger temporaneo e vecchi QR rimangono storici. Wallet conserva object_id corrente e pass storici. Review indipendente finale senza blocchi.
+- La segnalazione Crediti tessere e stata annullata dall'utente durante il lavoro: nessuna modifica a quella funzionalita o ai suoi pagamenti reali.
+- Collaudo definitivo prima del rilascio: 578 test frontend e build produzione passati; 14 scenari browser sulla build reale (sei WhatsApp/accesso e otto correzione soci), screenshot verificati. QA PostgreSQL extra: 17 controlli su correzioni concorrenti e acquisti nei due ordini, un solo audit/termine e rollback, senza provider. Container QA rimossi e volumi persistenti invariati.
+- Suite backend finale: 1350 passati e 14 saltati. Ultimo guard aggiuntivo contro attivazione anticipata di tessera con annualita futura verificato successivamente nel file dedicato: 32 test passati. Nessun ulteriore cambiamento frontend dopo build/collaudo. Review indipendente di QR e Wallet senza blocchi.
