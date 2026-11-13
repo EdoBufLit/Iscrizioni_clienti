@@ -203,7 +203,7 @@ def test_org_admin_qr_check_in_rejects_invalid_and_inactive_cards(client, db):
         json={"qr_value": _card_url(inactive_member)},
     )
     assert inactive.status_code == 409
-    assert inactive.json()["detail"] == "Tessera non attiva"
+    assert inactive.json()["detail"] == "Tessera scaduta"
 
 
 def test_active_booking_requires_current_confirmed_event_and_own_member(db):

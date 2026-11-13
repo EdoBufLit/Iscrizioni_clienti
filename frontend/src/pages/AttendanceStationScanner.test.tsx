@@ -217,4 +217,39 @@ describe("AttendanceStationScanner", () => {
     act(() => decoded({ getText: () => "https://assonam.it/api/cards/verify/member-token.signature" }));
     expect(mocks.checkIn).not.toHaveBeenCalled();
   });
+
+  it("explains that an unrelated QR is not an ASSONAM card without checking in", async () => {
+    render(<AttendanceStationScanner />);
+    await screen.findByText("Club Futura");
+    fireEvent.click(screen.getByRole("button", { name: "Avvia scanner" }));
+    await screen.findByRole("button", { name: "Ferma fotocamera" });
+    const decoded = mocks.decodeFromStream.mock.calls[0][2];
+    act(() => decoded({ getText: () => "https://example.org/menu" }));
+    const outcome = await screen.findByRole("alert");
+    expect(outcome).toHaveTextContent("QR non ASSONAM");
+    expect(outcome).toHaveTextContent(
+      "Questo QR non è una tessera ASSONAM. Inquadra il QR presente sulla tessera socio.",
+    );
+    expect(mocks.checkIn).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Ferma fotocamera" })).toBeInTheDocument();
+  });
+
+  it.each([
+    "Tessera scaduta",
+    "Tessera non trovata",
+    "Tessera di un’altra associazione",
+    "QR non valido o non emesso da ASSONAM",
+  ])("preserves the card verification result: %s", async (message) => {
+    mocks.checkIn.mockRejectedValue(new Error(message));
+    render(<AttendanceStationScanner />);
+    await screen.findByText("Club Futura");
+    fireEvent.click(screen.getByRole("button", { name: "Avvia scanner" }));
+    await screen.findByRole("button", { name: "Ferma fotocamera" });
+    const decoded = mocks.decodeFromStream.mock.calls[0][2];
+    await act(async () => decoded({ getText: () => "https://assonam.it/api/cards/verify/member-token.signature" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(message);
+    expect(screen.queryByText("Ingresso registrato")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ferma fotocamera" })).toBeInTheDocument();
+    expect(mocks.checkIn).toHaveBeenCalledExactlyOnceWith("member-token.signature");
+  });
 });

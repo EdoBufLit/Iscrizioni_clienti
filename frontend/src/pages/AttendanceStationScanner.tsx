@@ -11,7 +11,7 @@ import {
   cameraAccessErrorMessage,
   isCameraAllowedByDocumentPolicy,
 } from "../lib/cameraAccess";
-import { extractMemberCardVerificationToken } from "../lib/memberCardQr";
+import { extractMemberCardVerificationToken, UNRECOGNIZED_MEMBER_CARD_QR_MESSAGE } from "../lib/memberCardQr";
 import { createMemberCardQrReader, isRetryableQrScanError } from "../lib/qrScanner";
 import { displayCardNumber } from "../lib/cardIdentity";
 
@@ -106,8 +106,8 @@ export default function AttendanceStationScanner() {
       if (!token) {
         setScanOutcome({
           tone: "error",
-          title: "QR non riconosciuto",
-          message: "Inquadra il QR presente su una tessera ASSO.N.A.M.",
+          title: "QR non ASSONAM",
+          message: UNRECOGNIZED_MEMBER_CARD_QR_MESSAGE,
         });
         return;
       }
@@ -225,12 +225,12 @@ export default function AttendanceStationScanner() {
     }
   }, [registerPresence, stopScanner]);
 
-  const outcomeClasses =
+  const outcomeColor =
     scanOutcome?.tone === "success"
-      ? "border-emerald-300 bg-emerald-50 text-emerald-950"
+      ? "var(--theme-success)"
       : scanOutcome?.tone === "duplicate"
-        ? "border-amber-300 bg-amber-50 text-amber-950"
-        : "border-rose-300 bg-rose-50 text-rose-950";
+        ? "var(--theme-warning)"
+        : "var(--theme-danger)";
 
   return (
     <main className="attendance-station-page min-h-[100svh] bg-[#eef5f2] text-slate-950">
@@ -357,21 +357,25 @@ export default function AttendanceStationScanner() {
 
             {scanOutcome ? (
               <section
-                className={`rounded-[1.25rem] border p-5 sm:p-6 ${outcomeClasses}`}
+                className="rounded-[1.25rem] border p-5 text-[var(--theme-text)] sm:p-6"
+                style={{
+                  borderColor: `color-mix(in srgb, ${outcomeColor} 40%, var(--theme-border))`,
+                  backgroundColor: `color-mix(in srgb, ${outcomeColor} 10%, var(--theme-surface-solid))`,
+                }}
                 role={scanOutcome.tone === "error" ? "alert" : "status"}
                 aria-live="assertive"
               >
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] opacity-70">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--theme-text-muted)]">
                   Esito scansione
                 </p>
-                <h2 className="mt-2 text-2xl font-semibold">
+                <h2 className="mt-2 text-2xl font-semibold" style={{ color: outcomeColor }}>
                   {scanOutcome.title}
                 </h2>
-                <p className="mt-2 text-base leading-7 opacity-85">
+                <p className="mt-2 text-base leading-7">
                   {scanOutcome.message}
                 </p>
                 {scanOutcome.item ? (
-                  <p className="mt-4 text-sm font-semibold opacity-75">
+                  <p className="mt-4 text-sm font-semibold text-[var(--theme-text-muted)]">
                     Tessera {displayCardNumber(scanOutcome.item)} /{" "}
                     {scanOutcome.item.card_year}
                   </p>

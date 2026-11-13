@@ -1,5 +1,8 @@
 const VERIFICATION_PATH_MARKER = "/api/cards/verify/";
 
+export const UNRECOGNIZED_MEMBER_CARD_QR_MESSAGE =
+  "Questo QR non è una tessera ASSONAM. Inquadra il QR presente sulla tessera socio.";
+
 export const extractMemberCardVerificationToken = (
   qrValue?: string | null,
 ): string | null => {

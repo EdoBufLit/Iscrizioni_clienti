@@ -22,6 +22,11 @@ from app.services.card_verification import (
     resolve_card_verification_membership,
 )
 from app.services.member_membership import resolve_member_membership_type
+from app.services.member_activity import (
+    MEMBER_INACTIVE_REASON_DELETED,
+    MEMBER_INACTIVE_REASON_EXPIRED,
+    MEMBER_INACTIVE_REASON_NOT_APPROVED,
+)
 from app.services.org_capacity import check_attendance_capacity
 
 
@@ -107,8 +112,10 @@ def check_in_member_from_qr(
 
     token = extract_card_verification_token(qr_value)
     payload = parse_card_verification_token(token) if token else None
-    if not payload or payload["org_id"] != org_id:
-        raise HTTPException(status_code=404, detail="QR tessera non riconosciuto")
+    if not payload:
+        raise HTTPException(status_code=404, detail="QR non valido o non emesso da ASSONAM")
+    if payload["org_id"] != org_id:
+        raise HTTPException(status_code=404, detail="Tessera di un’altra associazione")
 
     checked_at = datetime.utcnow()
     member, annual_term, inactive_reason = resolve_card_verification_membership(
@@ -117,9 +124,23 @@ def check_in_member_from_qr(
         checked_at=checked_at,
     )
     if member is None:
-        raise HTTPException(status_code=404, detail="QR tessera non riconosciuto")
+        raise HTTPException(status_code=404, detail="Tessera non trovata")
     if inactive_reason:
-        raise HTTPException(status_code=409, detail="Tessera non attiva")
+        if inactive_reason == MEMBER_INACTIVE_REASON_DELETED:
+            message = "Tessera non trovata"
+        elif annual_term is None and (
+            member.card_no != payload["card_number"]
+            or member.card_year != payload["card_year"]
+            or card_namespace(member) != payload.get("card_namespace", DIGITAL_CARD_NAMESPACE)
+        ):
+            message = "Tessera non trovata"
+        elif inactive_reason == MEMBER_INACTIVE_REASON_EXPIRED:
+            message = "Tessera scaduta"
+        elif inactive_reason == MEMBER_INACTIVE_REASON_NOT_APPROVED:
+            message = "Tessera non ancora attiva o non approvata"
+        else:
+            message = "Tessera non attiva"
+        raise HTTPException(status_code=409, detail=message)
 
     attendance_date = as_rome_datetime(checked_at).date()
     existing = existing_attendance(

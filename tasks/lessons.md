@@ -4,6 +4,7 @@
 # Lessons
 
 - 13 novembre 2026: se un socio risulta in verifica ma l'Org Admin non vede la richiesta, non concludere dalla sola query backend o dalla pagina Magazzino. Ricostruire il percorso Richieste effettivamente usato, i filtri frontend, l'ordinamento e la paginazione, e verificare il profilo identificato prima di attribuire il problema alla navigazione dell'utente.
+- 13 novembre 2026: lo scanner deve spiegare perche un ingresso e rifiutato: QR non ASSONAM/non valido, tessera non trovata, scaduta, non attiva o di altra associazione. Conservare la causa restituita dal backend in entrambi gli scanner, senza rivelare dati del socio di un altro club.
 
 - Sep 21, 2026: per allineare il marchio su Google Wallet verificare anche i valori espliciti salvati nell'organizzazione, non solo i fallback. Nei popup pubblici abbinare testo e sfondo allo stesso tema: un pannello chiaro fisso rompe gli override globali del testo in dark mode.
 

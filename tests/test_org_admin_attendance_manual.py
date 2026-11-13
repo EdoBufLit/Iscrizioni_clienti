@@ -273,7 +273,12 @@ def test_manual_check_in_rejects_inactive_members(client, context, reason):
     assert _search(client, member.email).json()["items"][0]["is_active"] is False
     response = _check_in(client, member)
     assert response.status_code == 409, response.text
-    assert response.json()["detail"] == "Tessera non attiva"
+    assert response.json()["detail"] == {
+        "expired": "Tessera scaduta",
+        "pending": "Tessera non ancora attiva o non approvata",
+        "no_card": "Tessera non attiva",
+        "old_year": "Tessera scaduta",
+    }[reason]
     assert db.query(MemberAttendance).filter_by(member_id=member.id).count() == 0
 
 

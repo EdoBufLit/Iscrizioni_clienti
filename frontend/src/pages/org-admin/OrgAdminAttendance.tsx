@@ -14,6 +14,7 @@ import {
 } from "../../lib/cameraAccess";
 import {
   extractMemberCardVerificationToken,
+  UNRECOGNIZED_MEMBER_CARD_QR_MESSAGE,
 } from "../../lib/memberCardQr";
 import { createMemberCardQrReader, isRetryableQrScanError } from "../../lib/qrScanner";
 import {
@@ -132,7 +133,7 @@ const OrgAdminAttendancePage = () => {
       if (!token) {
         stopScanner();
         navigator.vibrate?.([180, 80, 180]);
-        setScanError("Il QR non contiene una tessera ASSONAM riconoscibile.");
+        setScanError(UNRECOGNIZED_MEMBER_CARD_QR_MESSAGE);
         return;
       }
       scanLockedRef.current = true;

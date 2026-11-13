@@ -6,13 +6,15 @@
 - Il collegamento dashboard Richieste in verifica apre tutti i workflow pending conteggiati dal riepilogo.
 - Entrambi gli scanner usano TRY_HARDER di ZXing per leggere QR piccoli nei frame grandi. Riproduzione con payload tessera realistico, tre risoluzioni e 225 combinazioni: 142 frame decodificati prima, 225 dopo.
 - Gli errori che arrestano il decoder mostrano un messaggio e permettono di riavviarlo. Le callback obsolete non riattivano uno scanner fermato.
+- Gli esiti rifiutati distinguono QR esterno/non valido, tessera non trovata, scaduta, non ancora attiva e di altra associazione. I messaggi del backend sono conservati in entrambi gli scanner, con gli stessi codici HTTP e senza dati personali di altri club.
 - Nessun cambiamento alle regole di approvazione, validita, autorizzazione, stock o pagamento; nessuna migrazione. Dipendenza diretta ZXing dichiarata alla versione gia presente nel lockfile.
 
 ## Verifiche
 
-- Installazione pulita con npm 10.8.2 riuscita; 499 test frontend su 80 file e 24 test backend pertinenti superati. TypeScript, build produzione e review indipendente completati.
+- Installazione pulita con npm 10.8.2 riuscita; suite finale 509 test frontend su 80 file e 108 test backend pertinenti superati. TypeScript, build produzione e review indipendente completati.
 - Caso segnalato identificato con conferma dell'utente: profilo presente in produzione e restituito dalla vera route elenco con filtro pending. Controlli eseguiti in transazione PostgreSQL REPEATABLE READ/READ ONLY e rollback finale.
 - Browser sulla build produzione a 390 e 1440 px, chiaro/scuro: navigazione dashboard/richieste, nuova query su pagina gia montata, domanda senza documenti visibile; stream video sintetico con QR generato dal backend, decodifica ZXing effettiva e registrazione presenza sul backend locale, sia Org Admin sia postazione. Quattro scenari completati senza errori JS o overflow.
+- Sedici scenari aggiuntivi nel browser verificano QR esterno, tessera scaduta, assente e di altro club su entrambi gli scanner, chiaro/scuro, tramite acquisizione video sintetica e backend reale. Tutti mostrano la causa prevista, senza registrare presenze. Corretto anche il contrasto degli esiti nella postazione: minimo misurato 5.49:1 in chiaro e 7.13:1 in scuro.
 - Prove frontend con dati sintetici: nessuna approvazione, email, presenza o modifica anagrafica reale.
 
 ## Limiti

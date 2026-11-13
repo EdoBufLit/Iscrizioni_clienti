@@ -231,7 +231,7 @@ def test_station_pairing_check_in_is_scoped_idempotent_and_auditable(client, db)
         json={"qr_value": _card_url(inactive_member)},
     )
     assert inactive.status_code == 409
-    assert inactive.json()["detail"] == "Tessera non attiva"
+    assert inactive.json()["detail"] == "Tessera scaduta"
 
     foreign = client.post(
         "/api/attendance-stations/check-in",
