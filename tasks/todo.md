@@ -4,7 +4,7 @@
 - [x] Implementare correzioni minime con test di regressione sui flussi interessati.
 - [x] Distinguere chiaramente gli esiti QR non ASSONAM/non valido, tessera non trovata/scaduta/non approvata/di altra associazione, come richiesto durante il rilascio.
 - [x] Eseguire test, build e revisione finale; documentare risultati e limiti della verifica live.
-- [ ] Pubblicare le correzioni su Main e verificare pipeline, asset live e salute servizi.
+- [x] Pubblicare le correzioni su Main e verificare pipeline, asset live e salute servizi.
 
 ### Specifica e verifica del piano
 - Lavorare su `Main` con tracking `origin/Main`, preservando `output/` preesistente.
@@ -18,6 +18,8 @@
 - Installazione pulita npm 10.8.2 riuscita; intera suite frontend 499 test su 80 file, 24 test backend pertinenti, build produzione e review indipendente superati.
 - Browser sulla build di produzione e database sintetico: 390/1440 px, chiaro/scuro. Navigazione dashboard->richieste, sostituzione dei filtri su stessa route e domanda senza documenti visibile; acquisizione video sintetica via canvas.captureStream, vera decodifica ZXing e POST backend reale sia Org Admin sia postazione dedicata riusciti. Nessun errore JS o overflow; screenshot verificati. Rilascio iniziale `9e26671` avviato; integrazione messaggi QR richiesta successivamente in corso.
 - Integrazione messaggi: QR esterno esplicito, firma invalida/non ASSONAM, altra associazione, tessera non trovata/scaduta/non approvata distinti mantenendo codici HTTP e regole di ammissione. 18 nuovi casi backend sui due endpoint e 10 frontend; suite finale frontend 509 test, backend pertinente ampliato 108 test superati. Sedici scansioni browser reali di QR sintetici non ammessi, chiaro/scuro, mostrano il messaggio atteso e non registrano ingressi. Contrasto postazione corretto: minimo 5.49:1 chiaro, 7.13:1 scuro. Prima pipeline conclusa con successo; rilascio dell'integrazione in corso.
+- Rilascio concluso: `9e26671` e `f15e7ff` pubblicati su Main; pipeline 43480213471 e 43481696544 riuscite. Final canary passato alle 19:27:24 Europe/Rome. Verificati 38 controlli HTTPS con hash degli asset identici alla build e sette servizi healthy, zero restart/OOM; schema invariato. Disco 47%, inode 10%, due volumi persistenti, cache build assente.
+- Verifica finale produzione READ ONLY: la vera route restituisce la domanda identificata con `pending`; invalid/foreign/missing/expired mostrano i quattro messaggi previsti senza registrare presenze. Nessuna approvazione automatica o modifica dei dati reali. Limite: nessuna prova sul telefono fisico del club. Server QA locale fermato; output preesistente preservato.
 
 ## Plan (Analisi UI/UX, Responsiveness e Piano Operativo Assonam - Nov 03, 2026)
 - [x] 1. Analisi approfondita Org Admin (Layout, Dashboard, Soci & Dettaglio, Inviti, Tessere, Contabilità/Incassi, Prenotazioni, Impostazioni)

@@ -21,4 +21,10 @@
 
 La riproduzione dimostra i difetti corretti; non prova quali filtri fossero nella sessione originaria ne quale frame avesse impedito la lettura sul telefono del club. Non e stata eseguita una prova su quel dispositivo fisico.
 
-Evidenze locali private: `output/club-futura-20261113/`.
+## Rilascio
+
+- Commit applicativi `9e26671621b23521fddf042182a578e95f092a73` e `f15e7fff477f39cb54862c914fdc16c6f8a4603c` pubblicati su Main. [Pipeline finale 43481696544](https://github.com/EdoBufLit/Iscrizioni_clienti/actions/runs/43481696544) completata con build e deploy riusciti; Final canary passato alle 19:27:24 Europe/Rome.
+- 38 controlli HTTPS superati: hash asset identici alla build, incluse dipendenze lazy ZXing, pagine e protezioni API. Checkout e immagini esatti, sette servizi applicativi healthy con zero restart/OOM, revisione Alembic invariata `20261112_02_paper_cards`. Disco 47%, inode 10%, due volumi persistenti e cache build assente.
+- In produzione, controlli applicativi in transazione READ ONLY confermano richiesta restituita dal filtro pending e messaggi distinti per QR non valido, altro club, tessera assente e scaduta. Numero presenze invariato; nessuna approvazione o email reale. Server QA locale fermato.
+
+Evidenze locali private: `output/club-futura-20261113/`, inclusi `workflow-final-release.json`, `release-verification.json`, `live-errors-readonly.json` e report browser.
