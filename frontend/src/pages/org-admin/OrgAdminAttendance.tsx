@@ -15,6 +15,7 @@ import {
 import {
   extractMemberCardVerificationToken,
 } from "../../lib/memberCardQr";
+import { createMemberCardQrReader, isRetryableQrScanError } from "../../lib/qrScanner";
 import {
   EmptyState,
   SectionPanel,
@@ -202,20 +203,21 @@ const OrgAdminAttendancePage = () => {
         return;
       }
 
-      const { BrowserQRCodeReader } = await import("@zxing/browser");
+      const reader = await createMemberCardQrReader(250);
       if (scannerSession !== scannerSessionRef.current) {
         stopMediaStream(pendingStream);
         return;
       }
-      const reader = new BrowserQRCodeReader(undefined, {
-        delayBetweenScanAttempts: 250,
-      });
       const controls = await reader.decodeFromStream(
         pendingStream,
         video,
-        (result) => {
-          if (scannerSession === scannerSessionRef.current && result && !scanLockedRef.current) {
+        (result, error) => {
+          if (scannerSession !== scannerSessionRef.current) return;
+          if (result && !scanLockedRef.current) {
             void registerPresence(result.getText());
+          } else if (error && !isRetryableQrScanError(error)) {
+            stopScanner();
+            setScanError("Lettura QR interrotta. Riavvia la fotocamera e riprova.");
           }
         },
       );

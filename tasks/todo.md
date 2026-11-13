@@ -1,3 +1,22 @@
+## Plan (CLUB FUTURA: Cristian non visibile e lettore QR - Nov 13, 2026)
+- [x] Verificare in sola lettura il caso Cristian, lo stato della domanda/tessera e i filtri Org Admin; riprodurre la causa senza approvare automaticamente iscrizioni.
+- [x] Analizzare in parallelo acquisizione QR e verifica tessera/presenze, identificando errori riproducibili e compatibilita dei dispositivi.
+- [x] Implementare correzioni minime con test di regressione sui flussi interessati.
+- [x] Eseguire test, build e revisione finale; documentare risultati e limiti della verifica live.
+- [ ] Pubblicare le correzioni su Main e verificare pipeline, asset live e salute servizi.
+
+### Specifica e verifica del piano
+- Lavorare su `Main` con tracking `origin/Main`, preservando `output/` preesistente.
+- Distinguere domanda in attesa, socio e tessera emessa; preservare permessi tenant, decisioni amministrative e regole di validita.
+- Analisi delegata su due aree indipendenti (visibilita iscrizione e scanner); diagnosi live e integrazione curate dall'agente principale.
+
+### Review
+- Profilo identificato con conferma dell'utente: domanda ancora `pending_verification`, senza tessera e senza documenti. Query e serializer reali restituiscono il profilo con filtro `pending`, in transazione PostgreSQL REPEATABLE READ/READ ONLY; nessun dato reale modificato.
+- Riprodotto bug UI: navigando a richieste con la pagina Soci gia aperta restano attivi ricerca/documenti/accesso/pagina precedenti. Sincronizzazione URL corretta, inclusi Indietro e apertura revisione documenti. Il link dashboard usa ora `pending`, coerente con tutti i tre stati conteggiati.
+- Riprodotto limite decoder: 142/225 frame sintetici leggibili prima contro 225/225 con TRY_HARDER. Gestiti anche arresti fatali e callback tardive; versioni ZXing invariate.
+- Installazione pulita npm 10.8.2 riuscita; intera suite frontend 499 test su 80 file, 24 test backend pertinenti, build produzione e review indipendente superati.
+- Browser sulla build di produzione e database sintetico: 390/1440 px, chiaro/scuro. Navigazione dashboard->richieste, sostituzione dei filtri su stessa route e domanda senza documenti visibile; acquisizione video sintetica via canvas.captureStream, vera decodifica ZXing e POST backend reale sia Org Admin sia postazione dedicata riusciti. Nessun errore JS o overflow; screenshot verificati. Rilascio in corso.
+
 ## Plan (Analisi UI/UX, Responsiveness e Piano Operativo Assonam - Nov 03, 2026)
 - [x] 1. Analisi approfondita Org Admin (Layout, Dashboard, Soci & Dettaglio, Inviti, Tessere, Contabilità/Incassi, Prenotazioni, Impostazioni)
 - [x] 2. Analisi approfondita Area Socio (Dashboard, Profilo, Documenti, Prenotazioni, Onboarding, Card/Tessera digitale)

@@ -3,6 +3,8 @@
 - Quando il cliente chiede fedelta esatta a mockup admin, non basta un re-skin: prima della consegna servono screenshot viewport-to-viewport delle superfici critiche, inclusi drawer/modali fixed. Inoltre le integrazioni esistenti nel dettaglio (es. SumUp) vanno preservate esplicitamente nella nuova IA e verificate nello screenshot.
 # Lessons
 
+- 13 novembre 2026: se un socio risulta in verifica ma l'Org Admin non vede la richiesta, non concludere dalla sola query backend o dalla pagina Magazzino. Ricostruire il percorso Richieste effettivamente usato, i filtri frontend, l'ordinamento e la paginazione, e verificare il profilo identificato prima di attribuire il problema alla navigazione dell'utente.
+
 - Sep 21, 2026: per allineare il marchio su Google Wallet verificare anche i valori espliciti salvati nell'organizzazione, non solo i fallback. Nei popup pubblici abbinare testo e sfondo allo stesso tema: un pannello chiaro fisso rompe gli override globali del testo in dark mode.
 
 - Sep 21, 2026: nella conferma tesseramento Golden Age il logo deve essere libero da riquadri neri/grigi. Per un marchio oro trasparente verificare separatamente il contrasto su tema chiaro e scuro; eventuali adattamenti cromatici della pagina non devono modificare l'asset o le tessere gia approvate.

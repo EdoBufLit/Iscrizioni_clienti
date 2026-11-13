@@ -1,14 +1,16 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { Link, MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { OrgAdminMember, OrgAdminMembersResponse } from "../../lib/api";
 import OrgAdminMembers from "./OrgAdminMembers";
+import OrgAdminDashboard from "./OrgAdminDashboard";
 
 const mocks = vi.hoisted(() => ({
   fetchMembers: vi.fn(),
   fetchMetrics: vi.fn(),
   fetchSettings: vi.fn(),
+  fetchReferrals: vi.fn(),
   showToast: vi.fn(),
   admin: { organization: { name: "Club Futura", slug: "club-futura" } },
 }));
@@ -18,6 +20,7 @@ vi.mock("../../lib/api", () => ({
   fetchOrgAdminMembers: (...args: unknown[]) => mocks.fetchMembers(...args),
   fetchOrgAdminMetrics: () => mocks.fetchMetrics(),
   fetchOrgAdminMembershipSettings: () => mocks.fetchSettings(),
+  fetchOrgAdminReferralSummary: () => mocks.fetchReferrals(),
 }));
 
 vi.mock("./OrgAdminLayout", () => ({
@@ -73,12 +76,59 @@ async function searchFor(value: string) {
   await waitFor(() => expect(mocks.fetchMembers).toHaveBeenCalledWith(expect.objectContaining({ q: value })));
 }
 
+function RequestNavigation() {
+  const navigate = useNavigate();
+  return <>
+    <Link to="/org-admin/soci?status=pending">Apri richieste iscrizione</Link>
+    <button type="button" onClick={() => navigate(-1)}>Pagina precedente</button>
+  </>;
+}
+
 describe("OrgAdminMembers search", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.fetchMembers.mockReset().mockResolvedValue(response());
     mocks.fetchMetrics.mockResolvedValue(null);
     mocks.fetchSettings.mockResolvedValue(null);
+    mocks.fetchReferrals.mockResolvedValue(null);
+  });
+
+  it("opens pending requests from a new URL while the member list is already mounted", async () => {
+    const pending = { ...member(42, "Cristian Collaudo", "exact"), status: "PENDING", workflow_status: "pending_verification", is_active: false, card_no: null, card_number: null };
+    mocks.fetchMembers.mockImplementation(async ({ status }) => status === "pending" ? response(pending) : response());
+    render(<MemoryRouter initialEntries={["/org-admin/soci?status=review&docs=pending&access=with&q=Anna&page=2"]}>
+      <RequestNavigation />
+      <OrgAdminMembers />
+    </MemoryRouter>);
+    await waitFor(() => expect(mocks.fetchMembers).toHaveBeenCalledWith(expect.objectContaining({ status: "review", docs: "pending", access: "with", q: "Anna", offset: 25 })));
+    fireEvent.click(screen.getByRole("link", { name: "Apri richieste iscrizione" }));
+    await waitFor(() => expect(mocks.fetchMembers).toHaveBeenLastCalledWith(expect.objectContaining({ status: "pending", docs: undefined, access: undefined, q: undefined, offset: 0 })));
+    expect(await screen.findByRole("row", { name: /Cristian Collaudo/ })).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "Cerca soci" })).toHaveValue("");
+    fireEvent.click(screen.getByRole("button", { name: "Pagina precedente" }));
+    await waitFor(() => expect(mocks.fetchMembers).toHaveBeenLastCalledWith(expect.objectContaining({ status: "review", docs: "pending", access: "with", q: "Anna", offset: 25 })));
+    expect(screen.getByRole("searchbox", { name: "Cerca soci" })).toHaveValue("Anna");
+    expect(screen.queryByRole("row", { name: /Cristian Collaudo/ })).not.toBeInTheDocument();
+  });
+
+  it("opens all requests counted on the dashboard, including a member without documents or a card", async () => {
+    const pendingMembers = ["pending_verification", "pending_docs", "pending_cards"].map((workflow, index) => ({
+      ...member(42 + index, index === 0 ? "Cristian Collaudo" : `Richiesta Numero ${index}`, "exact"),
+      status: "PENDING", workflow_status: workflow, is_active: false, card_no: null, card_number: null,
+    }));
+    mocks.fetchMetrics.mockResolvedValue({ members_count: 3, active_members_count: 0, pending_requests_count: 3 });
+    mocks.fetchMembers.mockImplementation(async ({ status }) => response(...pendingMembers.filter(item => status === "pending" || item.workflow_status === status)));
+    render(<MemoryRouter initialEntries={["/org-admin"]}><Routes>
+      <Route path="/org-admin" element={<OrgAdminDashboard />} />
+      <Route path="/org-admin/soci" element={<OrgAdminMembers />} />
+    </Routes></MemoryRouter>);
+    const requests = await screen.findByRole("link", { name: /Richieste in verifica/ });
+    expect(within(requests).getByText("3")).toBeInTheDocument();
+    fireEvent.click(requests);
+    expect(await screen.findByRole("row", { name: /Cristian Collaudo/ })).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /Richiesta Numero 1/ })).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /Richiesta Numero 2/ })).toBeInTheDocument();
+    expect(mocks.fetchMembers).toHaveBeenLastCalledWith(expect.objectContaining({ status: "pending", docs: undefined, offset: 0 }));
   });
 
   it("uses global renewal metrics and does not display invented growth", async () => {

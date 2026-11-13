@@ -39,7 +39,7 @@ const CARD_META: {
     description: "Non ancora approvate e senza tessera.",
     icon: "M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
     format: (v) => (v === null ? "N/D" : String(v)),
-    href: "/org-admin/soci?status=pending_verification",
+    href: "/org-admin/soci?status=pending",
   },
   {
     key: "documents_pending_review",

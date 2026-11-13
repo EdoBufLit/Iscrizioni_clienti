@@ -12,6 +12,7 @@ import {
   isCameraAllowedByDocumentPolicy,
 } from "../lib/cameraAccess";
 import { extractMemberCardVerificationToken } from "../lib/memberCardQr";
+import { createMemberCardQrReader, isRetryableQrScanError } from "../lib/qrScanner";
 import { displayCardNumber } from "../lib/cardIdentity";
 
 type ScanOutcome = {
@@ -44,11 +45,13 @@ export default function AttendanceStationScanner() {
   const [scanOutcome, setScanOutcome] = useState<ScanOutcome | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const scannerControlsRef = useRef<IScannerControls | null>(null);
+  const scannerSessionRef = useRef(0);
   const scanLockedRef = useRef(false);
   const lastSeenValueRef = useRef("");
   const lastSeenAtRef = useRef(0);
 
   const stopScanner = useCallback(() => {
+    scannerSessionRef.current += 1;
     scannerControlsRef.current?.stop();
     scannerControlsRef.current = null;
     const stream = videoRef.current?.srcObject as MediaStream | null | undefined;
@@ -151,6 +154,7 @@ export default function AttendanceStationScanner() {
 
   const startScanner = useCallback(async () => {
     stopScanner();
+    const scannerSession = scannerSessionRef.current;
     setScanOutcome(null);
     setScannerState("starting");
     lastSeenValueRef.current = "";
@@ -177,22 +181,41 @@ export default function AttendanceStationScanner() {
         video: { facingMode: { ideal: "environment" } },
         audio: false,
       });
-      const { BrowserQRCodeReader } = await import("@zxing/browser");
-      const reader = new BrowserQRCodeReader(undefined, {
-        delayBetweenScanAttempts: 200,
-      });
+      if (scannerSession !== scannerSessionRef.current) {
+        stopMediaStream(pendingStream);
+        return;
+      }
+      const reader = await createMemberCardQrReader(200);
+      if (scannerSession !== scannerSessionRef.current) {
+        stopMediaStream(pendingStream);
+        return;
+      }
       const controls = await reader.decodeFromStream(
         pendingStream,
         video,
-        (result) => {
+        (result, error) => {
+          if (scannerSession !== scannerSessionRef.current) return;
           if (result) void registerPresence(result.getText());
+          else if (error && !isRetryableQrScanError(error)) {
+            stopScanner();
+            setScanOutcome({
+              tone: "error",
+              title: "Lettura QR interrotta",
+              message: "Riavvia la fotocamera e riprova.",
+            });
+          }
         },
       );
       pendingStream = null;
+      if (scannerSession !== scannerSessionRef.current) {
+        controls.stop();
+        return;
+      }
       scannerControlsRef.current = controls;
       setScannerState("scanning");
     } catch (error) {
       stopMediaStream(pendingStream);
+      if (scannerSession !== scannerSessionRef.current) return;
       stopScanner();
       setScanOutcome({
         tone: "error",

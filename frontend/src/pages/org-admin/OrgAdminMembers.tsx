@@ -104,6 +104,7 @@ const OrgAdminMembers = () => {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
+  const synchronizedSearch = useRef(searchParams.toString());
 
   const [error, setError] = useState(false);
   const membersRequestId = useRef(0);
@@ -264,6 +265,23 @@ const OrgAdminMembers = () => {
   }, [closeActionsSheet, closeFiltersSheet]);
 
   useEffect(() => {
+    const currentSearch = searchParams.toString();
+    // A navigation to this mounted page must replace the previous filters.
+    // Remember our own URL writes so typing/filter changes do not reset them.
+    if (currentSearch !== synchronizedSearch.current) {
+      synchronizedSearch.current = currentSearch;
+      setDebouncedSearch(searchParams.get("q") || "");
+      setStatus(searchParams.get("status") || "active");
+      setAccess(searchParams.get("access") || "");
+      setSource(searchParams.get("source") || "");
+      setDocs(searchParams.get("docs") || "");
+      setOrder(searchParams.get("order") || "joined_at_desc");
+      setPage(Math.max(1, Number(searchParams.get("page") || 1) || 1));
+      setReviewOpen(searchParams.get("review") === "documents");
+      setSelectedMemberId(null);
+      setSearchResetKey(value => value + 1);
+      return;
+    }
     const next = new URLSearchParams();
     if (debouncedSearch) next.set("q", debouncedSearch);
     if (status !== "active") next.set("status", status);
@@ -272,8 +290,12 @@ const OrgAdminMembers = () => {
     if (docs) next.set("docs", docs);
     if (order !== "joined_at_desc") next.set("order", order);
     if (page > 1) next.set("page", String(page));
-    setSearchParams(next, { replace: true });
-  }, [access, debouncedSearch, docs, order, page, setSearchParams, source, status]);
+    if (reviewOpen) next.set("review", "documents");
+    if (next.toString() !== currentSearch) {
+      synchronizedSearch.current = next.toString();
+      setSearchParams(next, { replace: true });
+    }
+  }, [access, debouncedSearch, docs, order, page, reviewOpen, searchParams, setSearchParams, source, status]);
 
   const isLoading = adminLoading || loading;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));

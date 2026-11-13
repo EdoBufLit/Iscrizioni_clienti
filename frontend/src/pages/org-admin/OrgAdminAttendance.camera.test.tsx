@@ -144,6 +144,35 @@ describe("OrgAdminAttendance camera startup", () => {
     expect(screen.getByText(/impostazioni del telefono/)).toBeInTheDocument();
   });
 
+  it("keeps looking for a QR after an unreadable frame, but allows restarting a failed decoder", async () => {
+    render(<OrgAdminAttendancePage />);
+    fireEvent.click(screen.getByRole("button", { name: "Avvia fotocamera" }));
+    await screen.findByRole("button", { name: "Ferma fotocamera" });
+    const decoded = mocks.decodeFromStream.mock.calls[0][2];
+
+    act(() => decoded(undefined, { getKind: () => "NotFoundException" }));
+    expect(screen.getByRole("button", { name: "Ferma fotocamera" })).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+    act(() => decoded(undefined, new DOMException("Video frame unavailable", "InvalidStateError")));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Lettura QR interrotta");
+    expect(screen.getByRole("button", { name: "Avvia fotocamera" })).toBeInTheDocument();
+    expect(mocks.scannerStop).toHaveBeenCalledTimes(1);
+    expect(mocks.checkIn).not.toHaveBeenCalled();
+  });
+
+  it("does not overwrite an immediate decoder failure with the scanning screen", async () => {
+    mocks.decodeFromStream.mockImplementation(async (_stream, _video, decoded) => {
+      decoded(undefined, new DOMException("Frame unavailable", "InvalidStateError"));
+      return { stop: mocks.scannerStop };
+    });
+    render(<OrgAdminAttendancePage />);
+    fireEvent.click(screen.getByRole("button", { name: "Avvia fotocamera" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Lettura QR interrotta");
+    expect(screen.getByRole("button", { name: "Avvia fotocamera" })).toBeInTheDocument();
+    expect(mocks.scannerStop).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps hardware stations out of the Live flow until opened from settings and shows immediate scan outcome", async () => {
     mocks.fetchAttendances.mockResolvedValue({
       total: 2,

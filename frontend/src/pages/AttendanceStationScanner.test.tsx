@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AttendanceStationAuthError } from "../lib/api";
 import AttendanceStationScanner from "./AttendanceStationScanner";
@@ -177,5 +177,44 @@ describe("AttendanceStationScanner", () => {
       ),
     ).toBeInTheDocument();
     expect(mocks.getUserMedia).not.toHaveBeenCalled();
+  });
+
+  it("shows a stopped decoder error instead of leaving a frozen scanning screen", async () => {
+    render(<AttendanceStationScanner />);
+    await screen.findByText("Club Futura");
+    fireEvent.click(screen.getByRole("button", { name: "Avvia scanner" }));
+    await screen.findByRole("button", { name: "Ferma fotocamera" });
+    const decoded = mocks.decodeFromStream.mock.calls[0][2];
+    act(() => decoded(undefined, { getKind: () => "ChecksumException" }));
+    expect(screen.getByRole("button", { name: "Ferma fotocamera" })).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    act(() => decoded(undefined, new Error("Decoder stopped")));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Lettura QR interrotta");
+    expect(screen.getByRole("button", { name: "Avvia scanner" })).toBeInTheDocument();
+    expect(mocks.scannerStop).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not overwrite an immediate decoder failure with the scanning screen", async () => {
+    mocks.decodeFromStream.mockImplementation(async (_stream, _video, decoded) => {
+      decoded(undefined, new DOMException("Frame unavailable", "InvalidStateError"));
+      return { stop: mocks.scannerStop };
+    });
+    render(<AttendanceStationScanner />);
+    await screen.findByText("Club Futura");
+    fireEvent.click(screen.getByRole("button", { name: "Avvia scanner" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Lettura QR interrotta");
+    expect(screen.getByRole("button", { name: "Avvia scanner" })).toBeInTheDocument();
+    expect(mocks.scannerStop).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores a delayed decoder callback after stopping the camera", async () => {
+    render(<AttendanceStationScanner />);
+    await screen.findByText("Club Futura");
+    fireEvent.click(screen.getByRole("button", { name: "Avvia scanner" }));
+    await screen.findByRole("button", { name: "Ferma fotocamera" });
+    const decoded = mocks.decodeFromStream.mock.calls[0][2];
+    fireEvent.click(screen.getByRole("button", { name: "Ferma fotocamera" }));
+    act(() => decoded({ getText: () => "https://assonam.it/api/cards/verify/member-token.signature" }));
+    expect(mocks.checkIn).not.toHaveBeenCalled();
   });
 });
